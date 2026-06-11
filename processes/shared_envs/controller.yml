@@ -1,0 +1,6 @@
+name: asv_controller
+channels:
+  - conda-forge
+dependencies:
+  - nextflow
+  - yq

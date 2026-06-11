@@ -1,0 +1,11 @@
+name: outlier_checker_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - scikit-learn
+  - scikit-bio
+  - hdbscan
