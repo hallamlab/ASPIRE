@@ -100,6 +100,18 @@ GREY_CORR_CMAP = mcolors.LinearSegmentedColormap.from_list(
     "voc_corr_greys",
     ["#1A1A1A", "#FAFAFA", "#1A1A1A"],
 )
+POSITIVE_CORR_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "voc_corr_positive_greys",
+    ["#FAFAFA", "#1A1A1A"],
+)
+NEGATIVE_CORR_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "voc_corr_negative_greys",
+    ["#1A1A1A", "#FAFAFA"],
+)
+VOC_ZSCORE_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "voc_zscore_blue_orange",
+    ["#2B6CB0", "#FAFAFA", "#E66100"],
+)
 
 GROUP_PART_ORDER = {
     "BAL": 0,
@@ -449,7 +461,21 @@ def apply_spieceasi_asv_filter(
     return mat, summary
 
 
-def correlation_results(left: pd.DataFrame, right: pd.DataFrame, left_label: str, right_label: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+def correlation_direction_mask(values: pd.DataFrame | pd.Series, direction: str) -> pd.DataFrame | pd.Series:
+    if direction == "positive":
+        return values > 0
+    if direction == "negative":
+        return values < 0
+    return pd.DataFrame(True, index=values.index, columns=values.columns) if isinstance(values, pd.DataFrame) else pd.Series(True, index=values.index)
+
+
+def correlation_results(
+    left: pd.DataFrame,
+    right: pd.DataFrame,
+    left_label: str,
+    right_label: str,
+    direction: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows: list[dict[str, object]] = []
     out = pd.DataFrame(index=left.columns, columns=right.columns, dtype=float)
     for left_col in left.columns:
@@ -472,11 +498,13 @@ def correlation_results(left: pd.DataFrame, right: pd.DataFrame, left_label: str
                 "p_value": pval,
                 "n": int(len(paired)),
             })
-    matrix = out.dropna(how="all").dropna(axis=1, how="all").fillna(0.0)
+    matrix = out.where(correlation_direction_mask(out, direction))
+    matrix = matrix.dropna(how="all").dropna(axis=1, how="all").fillna(0.0)
     long_df = pd.DataFrame(rows)
     if not long_df.empty:
         long_df["q_value"] = bh_adjust(long_df["p_value"])
         long_df["significant"] = long_df["q_value"] <= 0.05
+        long_df = long_df.loc[correlation_direction_mask(long_df["rho"], direction)].copy()
         long_df = long_df.sort_values(["q_value", "p_value", "rho"], ascending=[True, True, False]).reset_index(drop=True)
     return matrix, long_df
 
@@ -616,6 +644,21 @@ def zscore_columns(df: pd.DataFrame) -> pd.DataFrame:
     return scaled.fillna(0.0)
 
 
+def clustermap_scale(df: pd.DataFrame, correlation_direction: str) -> tuple[mcolors.Colormap, mpl.colors.Normalize, str | None, float | None, float | None]:
+    if correlation_direction == "positive":
+        return POSITIVE_CORR_CMAP, mpl.colors.Normalize(vmin=0, vmax=1), None, 0, 1
+    if correlation_direction == "negative":
+        return NEGATIVE_CORR_CMAP, mpl.colors.Normalize(vmin=-1, vmax=0), None, -1, 0
+    if correlation_direction == "data":
+        values = df.astype(float).to_numpy()
+        finite = values[np.isfinite(values)]
+        max_abs = float(np.max(np.abs(finite))) if finite.size else 1.0
+        if max_abs == 0:
+            max_abs = 1.0
+        return VOC_ZSCORE_CMAP, mpl.colors.Normalize(vmin=-max_abs, vmax=max_abs), 0, -max_abs, max_abs
+    return GREY_CORR_CMAP, mpl.colors.Normalize(vmin=-1, vmax=1), 0, -1, 1
+
+
 def save_clustermap(
     df: pd.DataFrame,
     output_stem: Path,
@@ -623,6 +666,8 @@ def save_clustermap(
     col_colors: pd.Series | pd.DataFrame | None = None,
     row_color_legend: list[tuple[str, str]] | None = None,
     row_color_legends: list[tuple[str, list[tuple[str, str]]]] | None = None,
+    correlation_direction: str = "both",
+    cbar_label: str = "Spearman rho",
 ) -> None:
     if df.empty:
         return
@@ -648,10 +693,13 @@ def save_clustermap(
     plot_col_colors = col_colors.to_frame() if isinstance(col_colors, pd.Series) else col_colors
     row_cluster = df.shape[0] > 1
     col_cluster = df.shape[1] > 1
+    cmap, norm, center, vmin, vmax = clustermap_scale(df, correlation_direction)
     grid = sns.clustermap(
         df.astype(float),
-        cmap=GREY_CORR_CMAP,
-        center=0,
+        cmap=cmap,
+        center=center,
+        vmin=vmin,
+        vmax=vmax,
         metric="correlation",
         method="average",
         figsize=(fig_width, fig_height),
@@ -672,12 +720,11 @@ def save_clustermap(
     grid.ax_heatmap.set_xticklabels(grid.ax_heatmap.get_xticklabels(), rotation=90, ha="center", va="top")
     grid.ax_heatmap.set_yticklabels(grid.ax_heatmap.get_yticklabels(), rotation=0, va="center")
 
-    norm = mpl.colors.Normalize(vmin=-1, vmax=1)
-    sm = plt.cm.ScalarMappable(cmap=GREY_CORR_CMAP, norm=norm)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar_ax = grid.fig.add_axes([cbar_left, 0.62, cbar_width_frac, 0.25])
     grid.fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
-    cbar_ax.set_ylabel("Spearman rho", rotation=90, va="center")
+    cbar_ax.set_ylabel(cbar_label, rotation=90, va="center", labelpad=18)
     legend_blocks = row_color_legends or []
     if row_color_legend:
         legend_title = str(row_colors.name) if isinstance(row_colors, pd.Series) and row_colors.name else "Annotation"
@@ -786,10 +833,10 @@ def q_to_stars(q_value: float) -> str:
 def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series, test_results: pd.DataFrame, output_stem: Path) -> None:
     if patient_matrix.empty:
         return
-    plot_df = patient_matrix.copy()
+    plot_df = zscore_columns(patient_matrix).copy()
     plot_df["patient_id"] = plot_df.index.astype(str)
     plot_df["case_status"] = patient_case.loc[plot_df.index].astype(str).values
-    plot_df = plot_df.melt(id_vars=["patient_id", "case_status"], var_name="voc", value_name="abundance").dropna()
+    plot_df = plot_df.melt(id_vars=["patient_id", "case_status"], var_name="voc", value_name="abundance_zscore").dropna()
     if plot_df.empty:
         return
 
@@ -800,7 +847,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
     g = sns.catplot(
         data=plot_df,
         x="case_status",
-        y="abundance",
+        y="abundance_zscore",
         hue="case_status",
         col="voc",
         col_wrap=n_cols,
@@ -808,7 +855,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
         order=["Control", "Cancer"],
         hue_order=["Control", "Cancer"],
         palette=CASE_STATUS_PALETTE,
-        sharey=False,
+        sharey=True,
         legend=False,
         height=3.2,
         aspect=1.0,
@@ -820,7 +867,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
         sns.stripplot(
             data=sub,
             x="case_status",
-            y="abundance",
+            y="abundance_zscore",
             order=["Control", "Cancer"],
             color="#222222",
             alpha=0.45,
@@ -833,14 +880,16 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
             stars = q_to_stars(q_value)
             ax.set_title(f"{voc}\nq={q_value:.3g}")
             if stars != "ns":
-                y_min = float(sub["abundance"].min())
-                y_max = float(sub["abundance"].max())
+                y_min = float(sub["abundance_zscore"].min())
+                y_max = float(sub["abundance_zscore"].max())
                 y_span = max(0.1, y_max - y_min)
                 bracket_y = y_max + 0.10 * y_span
                 ax.plot([0, 0, 1, 1], [bracket_y, bracket_y + 0.04 * y_span, bracket_y + 0.04 * y_span, bracket_y], color="#222222", lw=1.1)
                 ax.text(0.5, bracket_y + 0.05 * y_span, stars, ha="center", va="bottom", fontsize=11, fontweight="bold")
                 ax.set_ylim(y_min, bracket_y + 0.16 * y_span)
+        ax.axhline(0, color="#8A8A8A", lw=0.8, ls="--", zorder=0)
         ax.tick_params(axis="x", rotation=90)
+    g.set_axis_labels("", "VOC abundance z-score")
     for ax in axes[len(voc_order):]:
         ax.set_visible(False)
     handles = [Patch(facecolor=CASE_STATUS_PALETTE[label], edgecolor="#404040", linewidth=0.4, label=label) for label in ["Control", "Cancer"]]
@@ -854,7 +903,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
         fontsize=10,
         title_fontsize=11,
     )
-    g.fig.suptitle("Brush Patient-Level VOC Abundance by Case Status", y=1.01)
+    g.fig.suptitle("Brush Patient-Level VOC Abundance Z-Score by Case Status", y=1.01)
     g.fig.tight_layout(rect=(0, 0, 0.88, 1))
     for suffix in (".pdf", ".png"):
         g.fig.savefig(output_stem.with_suffix(suffix), dpi=600, bbox_inches="tight", pad_inches=0.55)
@@ -879,6 +928,7 @@ def main() -> None:
     parser.add_argument("--spieceasi-min-rel-abund", type=float, default=0.0)
     parser.add_argument("--spieceasi-min-prevalence", type=float, default=0.0)
     parser.add_argument("--spieceasi-remove-zero-var", type=str, default="true")
+    parser.add_argument("--correlation-direction", choices=["positive", "negative", "both"], default="positive")
     parser.add_argument("--indicspecies-glob", default="*_indicator_species*.tsv")
     args = parser.parse_args()
 
@@ -943,7 +993,9 @@ def main() -> None:
     else:
         brush_isa_annotations = isa_group_annotations
 
-    all_asv_corr, all_asv_long = correlation_results(asv_counts_t, voc_df, "asv", "voc")
+    all_asv_corr, all_asv_long = correlation_results(
+        asv_counts_t, voc_df, "asv", "voc", direction=args.correlation_direction
+    )
     all_asv_corr_display = relabel_asv_matrix(all_asv_corr, taxonomy_df)
     all_row_colors, all_color_key = build_asv_group_colors(list(all_asv_corr.index.astype(str)), isa_group_annotations, taxonomy_df)
     all_color_key.to_csv(outdir / "asv_isa_group_colors.tsv", sep="\t", index=False)
@@ -955,6 +1007,8 @@ def main() -> None:
         outdir / "asv_voc_clustermap",
         row_colors=all_row_colors,
         row_color_legend=legend_items_from_color_key(all_color_key),
+        correlation_direction=args.correlation_direction,
+        cbar_label=f"Spearman rho ({args.correlation_direction} only)" if args.correlation_direction != "both" else "Spearman rho",
     )
 
     brush_asv_ids = [
@@ -964,7 +1018,9 @@ def main() -> None:
     ]
     if brush_asv_ids:
         brush_asv_counts_t = asv_counts_t[brush_asv_ids]
-        brush_asv_corr, brush_asv_long = correlation_results(brush_asv_counts_t, voc_df, "asv", "voc")
+        brush_asv_corr, brush_asv_long = correlation_results(
+            brush_asv_counts_t, voc_df, "asv", "voc", direction=args.correlation_direction
+        )
         brush_asv_corr_display = relabel_asv_matrix(brush_asv_corr, taxonomy_df)
         brush_row_colors, brush_color_key = build_asv_group_colors(list(brush_asv_corr.index.astype(str)), brush_isa_annotations, taxonomy_df)
         brush_color_key.to_csv(outdir / "isa_bronchial_brush_asv_group_colors.tsv", sep="\t", index=False)
@@ -976,6 +1032,8 @@ def main() -> None:
             outdir / "isa_bronchial_brush_asv_voc_clustermap",
             row_colors=brush_row_colors,
             row_color_legend=legend_items_from_color_key(brush_color_key),
+            correlation_direction=args.correlation_direction,
+            cbar_label=f"Spearman rho ({args.correlation_direction} only)" if args.correlation_direction != "both" else "Spearman rho",
         )
 
     sample_voc_matrix, sample_voc_meta, sample_row_colors = build_sample_voc_matrix(voc_df, sample_meta, voc_meta)
@@ -986,10 +1044,13 @@ def main() -> None:
         outdir / "sample_voc_brush_clustermap",
         row_colors=sample_row_colors,
         row_color_legends=sample_voc_legend_blocks(),
+        correlation_direction="data",
+        cbar_label="VOC abundance z-score",
     )
 
     patient_matrix, patient_case, patient_case_table = build_patient_voc_matrix(voc_df, sample_meta)
     patient_matrix.to_csv(outdir / "patient_voc_matrix_brush.tsv", sep="\t")
+    zscore_columns(patient_matrix).to_csv(outdir / "patient_voc_matrix_brush_zscore.tsv", sep="\t")
     patient_case_table.to_csv(outdir / "patient_voc_case_status_brush.tsv", sep="\t", index=False)
     patient_tests = patient_case_voc_tests(patient_matrix, patient_case)
     if not patient_tests.empty:

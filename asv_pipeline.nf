@@ -5,6 +5,7 @@ import groovy.yaml.YamlSlurper
 import groovy.json.JsonOutput
 import java.net.URL
 import java.nio.file.Paths
+import java.security.MessageDigest
 import java.util.regex.Pattern
 import java.util.zip.GZIPInputStream
 
@@ -75,6 +76,10 @@ def resolvePath(String pathValue) {
         return candidate.canonicalPath
     }
     return new File(configRoot, pathValue).canonicalPath
+}
+
+def fileMd5(File inputFile) {
+    return MessageDigest.getInstance('MD5').digest(inputFile.bytes).encodeHex().toString()
 }
 
 def r1Tokens = normalizeList(config.filename_patterns?.r1_tokens, ['R1','1'])
@@ -475,6 +480,7 @@ if( !plotMetadataScriptFile.exists() ) {
     exit 1, "plot_metadata.py not found in project directory"
 }
 def plotMetadataScriptPath = plotMetadataScriptFile.canonicalPath
+def plotMetadataScriptHash = fileMd5(plotMetadataScriptFile)
 def batchCorrectionScriptFile = new File("${projectDir}/processes/asv_batch_correction/asv_batch_correction.py")
 if( !batchCorrectionScriptFile.exists() ) {
     exit 1, "asv_batch_correction.py not found in project directory"
@@ -495,6 +501,7 @@ if( !filterCountsScriptFile.exists() ) {
     exit 1, "filter_nontarget.py not found in project directory"
 }
 def filterCountsScriptPath = filterCountsScriptFile.canonicalPath
+def filterCountsScriptHash = fileMd5(filterCountsScriptFile)
 def calcDivScriptFile = new File("${projectDir}/processes/diversity_analysis/calc_div.py")
 if( !calcDivScriptFile.exists() ) {
     exit 1, "calc_div.py not found in project directory"
@@ -625,6 +632,7 @@ if( !plotVocCcaScriptFile.exists() ) {
     exit 1, "plot_voc_cca.py not found in project directory"
 }
 def plotVocCcaScriptPath = plotVocCcaScriptFile.canonicalPath
+def plotVocCcaScriptHash = fileMd5(plotVocCcaScriptFile)
 def emptyModulesScriptFile = new File("${projectDir}/processes/master_summary/empty_modules.tsv")
 if( !emptyModulesScriptFile.exists() ) {
     exit 1, "empty_modules.tsv not found in project directory"
@@ -794,6 +802,29 @@ if( filterCountsMitoColsRaw instanceof List ) {
     filterCountsMitoCols = filterCountsMitoColsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
 } else {
     filterCountsMitoCols = ['MITOMASTER','BLAST_mito']
+}
+def filterCountsExcludeTaxaRaw = filterCountsConfig.exclude_taxa
+List<String> filterCountsExcludeTaxa = []
+if( filterCountsExcludeTaxaRaw instanceof List ) {
+    filterCountsExcludeTaxa = filterCountsExcludeTaxaRaw.collect { item ->
+        if( item instanceof Map ) {
+            def rank = item.rank ?: item.level
+            def value = item.value ?: item.taxon ?: item.name
+            (rank && value) ? "${rank}:${value}".toString() : ''
+        } else {
+            item.toString()
+        }
+    }.findAll { it?.trim() }
+} else if( filterCountsExcludeTaxaRaw instanceof Map ) {
+    filterCountsExcludeTaxaRaw.each { rank, values ->
+        if( values instanceof List ) {
+            values.each { value -> filterCountsExcludeTaxa << "${rank}:${value}".toString() }
+        } else if( values ) {
+            filterCountsExcludeTaxa << "${rank}:${values}".toString()
+        }
+    }
+} else if( filterCountsExcludeTaxaRaw ) {
+    filterCountsExcludeTaxa = filterCountsExcludeTaxaRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
 }
 def filterCountsSaveIntermediates = (filterCountsConfig.save_intermediates ?: false) as boolean
 def defaultFilterMitoDir = new File(dirMap.mito, "ASVs").canonicalPath
@@ -1470,6 +1501,10 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     } else if( vocCorrelationVocColsRaw ) {
         vocCorrelationVocCols = vocCorrelationVocColsRaw.toString().split(/\r?\n|\|/).collect { it.trim() }.findAll { it }
     }
+    def vocCorrelationDirection = vocCorrelationConfig.correlation_direction ? vocCorrelationConfig.correlation_direction.toString().trim().toLowerCase() : 'positive'
+    if( !(vocCorrelationDirection in ['positive','negative','both']) ) {
+        exit 1, "voc_correlation.correlation_direction must be one of: positive, negative, both"
+    }
 
     def clustermapsConfig = config.clustermaps ?: [:]
     boolean clustermapsRequested = clustermapsConfig.containsKey('enabled') ? (clustermapsConfig.enabled as boolean) : false
@@ -1940,6 +1975,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationSampleTypes: vocCorrelationSampleTypes,
         vocCorrelationUseLegacySubset: vocCorrelationUseLegacySubset,
         vocCorrelationVocCols: vocCorrelationVocCols,
+        vocCorrelationDirection: vocCorrelationDirection,
         clustermapsOutputDirAbs: clustermapsOutputDirAbs,
         clustermapsMitoOutputDirAbs: clustermapsMitoOutputDirAbs,
         clustermapsMitoInputPath: clustermapsMitoInputPath,
@@ -2168,7 +2204,7 @@ workflow {
     if( metadataPlotsEnabled ) {
         metadata_analysis_stage = RUN_METADATA_ANALYSES(
             general_stats_stage.fastq_stats,
-            filter_counts_stage.filtered_micro,
+            filter_counts_stage.filtered_counts,
             filter_counts_stage.filtered_mito,
             taxonomy_stage.taxonomy_table
         )
@@ -3031,8 +3067,11 @@ process FILTER_COUNTS {
     def saveInterArg = filterCountsSaveIntermediates ? "  --save-intermediates \\\n" : ''
     def mitoColsArg = (filterCountsMitoCols && !filterCountsMitoCols.isEmpty()) ?
         """  --mito-cols ${filterCountsMitoCols.collect { "\"${it}\"" }.join(' ')} \\\n""" : ''
-    """
+    def excludeTaxaArg = (filterCountsExcludeTaxa && !filterCountsExcludeTaxa.isEmpty()) ?
+        filterCountsExcludeTaxa.collect { item -> """  --exclude-taxon "${item}" \\\n""" }.join('') : ''
+"""
 set -euo pipefail
+echo "filter_nontarget.py md5: ${filterCountsScriptHash}"
 python "${filterCountsScriptPath}" \\
   --count-table "${count_table}" \\
   --nontarget-table "${nontarget_table}" \\
@@ -3044,7 +3083,7 @@ ${metadataArg}${groupArg}  --min-group-size ${filterCountsMinGroup} \\
   --taxon-col "${filterCountsTaxonCol}" \\
   --consensus-col "${filterCountsConsensusCol}" \\
   --biofactorial-col "${filterCountsBiofactorialCol}" \\
-${mitoColsArg}  --mito-output-dir "." \\
+${mitoColsArg}${excludeTaxaArg}  --mito-output-dir "." \\
   --output "${filterCountsOutputName}" \\
 ${saveInterArg}
 """
@@ -3191,13 +3230,14 @@ process PLOT_METADATA {
     def metadataMitoFile = "${outputDir}/mito/metadata/metadata_updated_mito.tsv"
     def asvMetaMicroFile = "${outputDir}/metadata/ASV_meta_micro.tsv"
     def asvMetaMitoFile = "${outputDir}/mito/metadata/ASV_meta_mito.tsv"
-    def asvTargetMicroFile = "${outputDir}/ASVs/ASV_target.micro.tsv"
-    def asvTargetMitoFile = "${outputDir}/mito/ASVs/ASV_target.mito.tsv"
+    def asvTargetMicroFile = "${outputDir}/ASVs/${filterCountsOutputName}"
+    def asvTargetMitoFile = "${outputDir}/mito/ASVs/${filterCountsOutputName.replace('.tsv','.mito.tsv')}"
     def asvFinalMicroFile = "${outputDir}/ASVs/ASV_final.micro.tsv"
     def asvFinalMitoFile = "${outputDir}/mito/ASVs/ASV_final.mito.tsv"
     def asvTaxTable = "${outputDir}/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv"
-    """
+"""
 set -euo pipefail
+echo "plot_metadata.py md5: ${plotMetadataScriptHash}"
 
 cmd=(
   python "${plotMetadataScriptPath}"
@@ -4152,9 +4192,10 @@ process VOC_CORRELATION {
     script:
     def vocColsArgs = vocCorrelationVocCols.collect { col -> """  --voc-col "${col}" \\\n""" }.join('')
     def legacySubsetArg = vocCorrelationUseLegacySubset ? "  --use-legacy-voc-subset \\\n" : ''
-    """
+"""
 set -euo pipefail
 mkdir -p "${vocCorrelationOutputDirAbs}"
+echo "plot_voc_cca.py md5: ${plotVocCcaScriptHash}"
 
 python "${plotVocCcaScriptPath}" \\
   --asv-meta "${asv_meta_table}" \\
@@ -4171,6 +4212,7 @@ python "${plotVocCcaScriptPath}" \\
 ${legacySubsetArg}${vocColsArgs}  --spieceasi-min-rel-abund ${spieceasiMinRelAbund} \\
   --spieceasi-min-prevalence ${spieceasiMinPrevalence} \\
   --spieceasi-remove-zero-var ${spieceasiRemoveZeroVar} \\
+  --correlation-direction "${vocCorrelationDirection}" \\
   --indicspecies-glob "*_indicator_species*.tsv"
 
 touch voc_correlation.done

@@ -1,495 +1,245 @@
 # ASPIRE
 
-ASPIRE is the current Nextflow-based ASV analysis workflow in this repository.
+ASPIRE is a Nextflow DSL2 workflow for ASV generation, taxonomy assignment, decontamination, metadata-linked ASV summaries, ecological analyses, VOC association analyses, network/module analyses, and optional ASV-to-MAG linkage.
 
-The primary entrypoint is `run_asv_pipeline.sh`, which wraps `asv_pipeline.nf` and manages:
-- controller environment bootstrapping
-- resume behavior
-- stage-aware reruns with `--rerun-from`
+The supported entrypoint is `run_asv_pipeline.sh`. It bootstraps the controller environment, launches `asv_pipeline.nf`, manages resume behavior, and supports stage-aware reruns with `--rerun-from`.
 
-Key files:
-- `run_asv_pipeline.sh`: main wrapper used for runs
-- `asv_pipeline.nf`: current workflow definition
-- `asv_pipeline_nextflow.yml`: canonical config template
-- `examples/`: copy-ready starter configs and input templates
+The canonical user documentation is this README. `ASPIRE.ipynb` is kept as a short run notebook; the old duplicate technical notebook has been removed.
 
-# ASPIRE Nextflow Pipeline
+## Key Files
 
-## TL;DR Quick Start
+- `run_asv_pipeline.sh`: main wrapper for routine runs.
+- `asv_pipeline.nf`: current Nextflow workflow.
+- `asv_pipeline_nextflow.yml`: full config template.
+- `examples/set1-2.local.yml`: local example config with absolute paths for the UBC/LMP test dataset.
+- `processes/`: scripts and conda environment YAMLs used by individual stages.
 
-This is the shortest reliable path to run the pipeline on a new dataset.
+## Quick Start
 
-### 1. Install runtime prerequisites
+Install runtime prerequisites:
 
 ```bash
-# one-time: mamba is required by the wrapper
 command -v mamba
 ```
 
-Notes:
-- Main entrypoint is `run_asv_pipeline.sh`, which bootstraps a controller env at `ASPIRE/.controller_env` from `processes/controller/env.yml` (contains `nextflow` + `yq`).
-- `run_asv_pipeline.sh` reads `paths.work_dir` and `paths.conda_cache_dir` from your YAML and exports `NXF_WORK` / `NXF_CONDA_CACHEDIR`.
-
-### 2. Copy and edit a pipeline YAML template
+Create a run config from the full template, then edit all paths for your environment:
 
 ```bash
-cd ASPIRE
-# Choose one:
-cp examples/my_run.full.yml my_run.yml   # metadata + mito workflow
-# or
-cp examples/my_run.min.yml my_run.yml    # core-only starter
+cp asv_pipeline_nextflow.yml my_run.yml
 ```
 
-You must edit at least:
+At minimum, review:
+
 - `paths.input_dir`
 - `paths.output_dir`
-- `paths.manifest` (recommended; required for default metadata stage)
-- Any placeholder paths under `/abs/path/...`
+- `paths.manifest`
+- `paths.work_dir`
+- `paths.conda_cache_dir`
+- any `/abs/path/...` placeholder
+- enabled optional branches that require metadata, reference databases, VOC tables, or genome/MAG inputs
 
-You can still use `asv_pipeline_nextflow.yml` directly if you prefer starting from the full canonical config.
-
-### 3. Prepare required inputs
-
-#### 3a) FASTQ inputs
-- Put FASTQs under `paths.input_dir`, or reference them in `paths.manifest`.
-- Supported extensions: `.fastq.gz`, `.fq.gz`, `.fastq`, `.fq`.
-
-#### 3b) Manifest (recommended; required by default metadata plotting)
-- Tab-separated, **no header**.
-- Columns:
-  1. `sample_id`
-  2. `fastq_r1`
-  3. `fastq_r2` (optional for single-end)
-- `#` comment lines are allowed.
-- Relative file paths are resolved relative to the manifest file directory.
-- Starter template: `examples/manifest.example.tsv`
-
-Example:
-
-```tsv
-#sample_id	fastq_r1	fastq_r2
-S01	/path/reads/S01_R1.fastq.gz	/path/reads/S01_R2.fastq.gz
-S02	/path/reads/S02_R1.fastq.gz	/path/reads/S02_R2.fastq.gz
-SE03	/path/reads/SE03_R1.fastq.gz
-```
-
-#### 3c) Metadata (required for default config sections)
-With the shipped `asv_pipeline_nextflow.yml`, these sections are enabled and require metadata:
-- `filter_counts.enabled: true` (metadata optional, but used when provided)
-- `metadata_plots.enabled: true` (metadata required)
-- `sankey.enabled: true` (metadata required)
-
-Minimal columns for the default example settings:
-- `sampleID` (must match manifest `sample_id`)
-- `Depth`
-- `Color`
-
-Starter template:
-- `examples/metadata.example.tsv`
-
-### 4. Set custom BLAST databases (required if `mito.enabled: true`)
-
-Default config has `mito.enabled: true`, so set:
-- `mito.mito_db`
-- `mito.biof_db`
-
-These should point to BLAST DB base paths (or compatible fasta path). Recommended:
+Run the pipeline:
 
 ```bash
-makeblastdb -in mito_ncbi.fasta -dbtype nucl -out /path/db/mito_ncbi
-makeblastdb -in contaminants.fasta -dbtype nucl -out /path/db/ssu_pipeline_contaminants
-```
-
-Then in YAML:
-
-```yaml
-mito:
-  enabled: true
-  mito_db: /path/db/mito_ncbi
-  biof_db: /path/db/ssu_pipeline_contaminants
-```
-
-### 5. (Optional) Core-only mode for first test run
-
-If you want to run only the core ASV+taxonomy flow without metadata/mito extras:
-
-```yaml
-mito:
-  enabled: false
-filter_counts:
-  enabled: false
-metadata_plots:
-  enabled: false
-sankey:
-  enabled: false
-batch_correction:
-  enabled: false
-outlier_detection:
-  enabled: false
-collectors_curve:
-  enabled: false
-diversity:
-  enabled: false
-indicspecies:
-  enabled: false
-clustermaps:
-  enabled: false
-spieceasi:
-  enabled: false
-```
-
-### 6. Validate, then run (main entrypoint)
-
-```bash
-# syntax/help check
-./run_asv_pipeline.sh --help
-
-# real run
 ./run_asv_pipeline.sh my_run.yml
-
-# resume
-./run_asv_pipeline.sh my_run.yml
-
-# force rerun from a stage onward
-./run_asv_pipeline.sh my_run.yml --rerun-from FILTER_COUNTS
 ```
 
-Direct Nextflow invocation is still supported:
+List valid stage names for targeted reruns:
 
 ```bash
-nextflow run asv_pipeline.nf -params-file my_run.yml
+./run_asv_pipeline.sh --list-stages
 ```
 
-If using `-params-file`, set `config_root` in YAML when you need deterministic relative-path resolution.
+Force a rerun from one stage onward while preserving cacheability for future resumes:
 
----
+```bash
+./run_asv_pipeline.sh my_run.yml --rerun-from PLOT_METADATA
+```
 
-## Provided Templates
+Pass extra Nextflow options after `--`:
 
-Copy-ready files are available in `ASPIRE/examples/`:
+```bash
+./run_asv_pipeline.sh my_run.yml -- -with-report report.html -with-trace trace.tsv
+```
 
-- `examples/my_run.min.yml`: core ASV + taxonomy only.
-- `examples/my_run.full.yml`: metadata + mito workflow.
-- `examples/my_run.patient_aware_test.yml`: minimal test config for the new patient-aware branches.
-- `examples/my_run.asv_mag_test.yml`: minimal test config for the ASV-to-genome barrnap linkage branch.
-- `examples/manifest.example.tsv`: manifest format template.
-- `examples/metadata.example.tsv`: minimal metadata schema template.
+Direct Nextflow invocation is supported, but the wrapper is preferred:
 
-Template usage and field descriptions are documented in:
-- `examples/README.md`
+```bash
+nextflow run asv_pipeline.nf --params-file my_run.yml --pipeline_config my_run.yml
+```
 
----
+## Inputs
 
-## What This Pipeline Runs
+FASTQs can be discovered from `paths.input_dir`, but manifest mode is preferred for reproducible sample names.
 
-`asv_pipeline.nf` executes a core ASV workflow plus optional downstream modules, all controlled by `asv_pipeline_nextflow.yml`.
+Manifest format:
 
-### Core ASV path
+- Tab-separated, no header.
+- Column 1: `sample_id`.
+- Column 2: R1 FASTQ.
+- Column 3: R2 FASTQ, optional for single-end data.
+- Lines starting with `#` are ignored.
+- Relative FASTQ paths are resolved relative to the manifest file.
+
+Metadata is required by enabled metadata-aware branches such as metadata plots, Sankey, diversity, indicator species, VOC correlation, power analysis, taxonomy patient-aware analysis, lung-status analysis, and several network overlays. The configured sample column must match the manifest sample IDs.
+
+Reference inputs depend on enabled branches:
+
+- `sina.reference` and taxonomy references are used for SINA alignment and taxonomy assignment. The config can point at local files or URLs.
+- `mito.mito_db` and `mito.biof_db` are required when mitochondrial/contaminant decontamination is enabled.
+- `voc_correlation.voc_table` is required when VOC correlation is enabled.
+- `asv_mag_link.*` inputs are required only when ASV-to-MAG linkage is enabled.
+
+## Workflow Stages
+
+The wrapper's current stage order is:
+
 1. `FASTP_QC`
 2. `MERGE_READS`
 3. `FILTER_READS`
-4. `RELABEL_FILTERED` (if `concat.relabel`)
-5. `DEREPLICATE`
-6. `DENOISE`
-7. `CHIMERA_CHECK`
-8. `CREATE_COUNT_MATRIX`
-9. `FILTER_TABLE`
-10. `SINA_TRIM`
-11. `TAXONOMY`
+4. `RELABEL_FILTERED`
+5. `CONCAT_FASTAS`
+6. `DEREPLICATE`
+7. `DENOISE`
+8. `CHIMERA_CHECK`
+9. `CREATE_COUNT_MATRIX`
+10. `FILTER_TABLE`
+11. `SINA_TRIM`
+12. `TAXONOMY`
+13. `MITOMASTER`
+14. `MITO_DECONTAM`
+15. `FILTER_COUNTS`
+16. `GENERAL_STATS`
+17. `PLOT_METADATA`
+18. `PLOT_UPSET`
+19. `ASV_BATCH_CORRECTION`
+20. `ASV_META_FROM_CORRECTED`
+21. `BUBBLEPLOTTER`
+22. `UMAP_CLUSTERING`
+23. `OUTLIER_CHECKER`
+24. `COLLECTORS_CURVE`
+25. `DIVERSITY_ANALYSIS`
+26. `INDICSPECIES`
+27. `INDICSPECIES_PLOTS`
+28. `VOC_CORRELATION`
+29. `CLUSTERMAPS`
+30. `POWER_ANALYSIS_PIPELINE`
+31. `SPIECEASI`
+32. `NETWORK_MODULES`
+33. `ASV_MAG_LINK`
+34. `GRAPH_NETWORK`
+35. `MODULE_MAG_ANCHORS`
+36. `SANKEY`
+37. `MASTER_SUMMARY`
 
-### Optional modules (YAML-controlled)
-- Mito decontamination and count filtering: `MITOMASTER`, `MITO_DECONTAM`, `FILTER_COUNTS`
-- Metadata/reporting: `GENERAL_STATS`, `PLOT_METADATA`, `SANKEY`, `PLOT_UPSET`, `BUBBLEPLOTTER`, `UMAP_CLUSTERING`
-- Batch/outlier/diversity/ecology/network: `ASV_BATCH_CORRECTION`, `OUTLIER_CHECKER`, `COLLECTORS_CURVE`, `DIVERSITY_ANALYSIS`, `INDICSPECIES`, `CLUSTERMAPS`, `SPIECEASI`, `NETWORK_MODULES`, `GRAPH_NETWORK`
+Disabled optional branches are skipped based on the YAML config.
 
----
+## Count Filtering
 
-## Input Requirements
+`FILTER_COUNTS` produces the ASV count tables used by downstream analyses. The important outputs are:
 
-### Always required
-- `paths.input_dir`
-- `paths.output_dir`
-- Valid FASTQ files (discovered from manifest or filename patterns)
+- `ASV_target.tsv`: final microbial ASV table after contaminant removal, mitochondrial removal, abundance/prevalence filtering, taxonomy-quality filtering, and explicit taxon exclusions.
+- `ASV_target.micro.tsv`: intermediate microbial table before final abundance/taxonomy filtering; kept for audit and data-loss summaries.
+- `ASV_target.decon.tsv`: intermediate decontaminated table.
+- `ASV_target.mito.tsv`: mitochondrial table.
 
-### Required depending on enabled sections
+Downstream metadata and VOC analyses use `ASV_target.tsv`, not the intermediate `.micro.tsv`, so taxa excluded by final filtering should not re-enter later outputs.
 
-- `paths.manifest`
-  - Strongly recommended.
-  - Effectively required when `metadata_plots.enabled: true` (default in example YAML), because metadata plotting consumes `--sample-manifest`.
-
-- `filter_counts.metadata` (if `filter_counts.enabled` and you want group/sample filtering)
-  - Defaults in example YAML use this file.
-
-- `metadata_plots.metadata` (if `metadata_plots.enabled`)
-  - Must contain configured columns (`sample_col`, `type_col`, `color_col`; defaults often `sampleID`, `Depth`, `Color`).
-
-- `sankey.metadata` (if `sankey.enabled`)
-  - Also needs `filter_counts.enabled: true`, `filter_counts.save_intermediates: true`, and `general_stats.enabled: true`.
-
-- `mito.mito_db` and `mito.biof_db` (if `mito.enabled`)
-  - Must exist and be usable by BLAST.
-
-### Optional references (auto-download fallback exists)
-- `sina.reference` or `sina.reference_url`
-- `taxonomy.ref_taxonomy` or `taxonomy.ref_taxonomy_url`
-- `taxonomy.ref_sequences` or `taxonomy.ref_sequences_url`
-
-If local files are not present, the pipeline attempts downloads to output subdirectories.
-
----
-
-## Config Sections You Should Edit First
-
-### `paths`
-- `input_dir`
-- `output_dir`
-- `manifest` (recommended)
-- `work_dir` (optional override; otherwise Nextflow uses `nextflow.config` default)
-- `conda_cache_dir` (optional override)
-
-### `resources`
-- `threads`
-- `single_end`
-
-### `environments`
-Map logical stage environments to YAML files under `ASPIRE/processes/`.
-
-Common keys:
-- `main`, `sina`, `taxonomy`, `mitomaster`, `mito_checker`, `filter_counts`, `general_stats`, `plot_metadata`, `sankey`
-- Optional advanced keys: `diversity`, `indicspecies`, `power_analysis`, `clustermaps`, `spieceasi`, `asv_mag_link`, `network`, `network_modules`, `plot_upset`, `bubbleplotter`, `umap_clustering`
-
-### Feature toggles to review
-- `mito.enabled`
-- `filter_counts.enabled`
-- `metadata_plots.enabled`
-- `sankey.enabled`
-- `batch_correction.enabled`
-- `outlier_detection.enabled`
-- `collectors_curve.enabled`
-- `diversity.enabled`
-- `indicspecies.enabled`
-- `power_analysis.enabled`
-- `clustermaps.enabled`
-- `spieceasi.enabled`
-- `asv_mag_link.enabled`
-
-### `power_analysis`
-Optional patient-aware power-analysis branch. This stage is off by default and requires `metadata_plots.enabled: true`, because it builds a long-format master table from `ASV_meta_micro*.tsv` plus the final micro count table. If `indicspecies.enabled: true`, the power-analysis plotting wrapper will also reuse the run's indicspecies outputs for aligned ISA power figures.
-
-### `diversity.patient_aware`
-Optional patient-aware Bray-Curtis sub-analysis nested under `diversity`. When enabled, `DIVERSITY_ANALYSIS` still produces the standard Shannon/Bray/Jaccard outputs, then also runs the patient-aware Bray PERMANOVA workflow into `diversity/<patient_aware.output_dir>/`. This covers the old standalone Bray patient-aware branch without requiring a separate workflow module.
-
-Common keys:
-- `enabled`
-- `output_dir`
-- `sample_col`
-- `patient_col`
-- `case_col`
-- `type_col`
-- `sample_types`
-- `exclude_contralateral_in_cancer`
-- `contralateral_col`
-- `cancer_site_col`
-- `lung_side_col`
-- `contralateral_value`
-- `contralateral_sample_types`
-- `transform` (`none` or `rclr`)
-- `permutations`
-- `seed`
-- `require_complete_types`
-
-### Flexible ISA Groups
-`indicspecies.group_cols` can contain more than two grouping columns. The ISA analysis itself already runs all listed groups, and the downstream network layers support `groupN_*` ISA modes based on that configured order.
-
-Useful keys:
-- `indicspecies.group_cols`
-- `indicspecies.group_palettes`
-- `indicspecies.group_orders`
-- `indicspecies.focus_labels`
-- `spieceasi.isa_overlay_groups`
-- `spieceasi.group_palettes`
-- `spieceasi.group_orders`
-- `spieceasi.focus_labels`
-
-Example:
+Explicit taxon exclusions are configured with `filter_counts.exclude_taxa`. Entries are exact, case-insensitive matches against parsed taxonomy ranks, and underscores in configured values are normalized to spaces. Supported forms include strings, maps, and mixed lists:
 
 ```yaml
-indicspecies:
-  group_cols:
-    - anomaly_type
-    - o2_subcompartment_final
-    - o2_compartment
-  group_orders:
-    anomaly_type: [oxic, dysoxic, anoxic]
-
-spieceasi:
-  isa_overlay_groups:
-    - anomaly_type
-    - o2_subcompartment_final
-    - o2_compartment
-  network_modes:
-    - group1_isa_all
-    - group2_isa_all
-    - group3_isa_all
+filter_counts:
+  enabled: true
+  exclude_taxa:
+    - "Species:Homo sapiens"
+    - "Class:Mammalia"
+    - Order: Primates
 ```
 
-Common keys:
-- `enabled`
-- `output_dir`
-- `sample_col`
-- `patient_col`
-- `case_col`
-- `type_col`
-- `sample_sizes_cancer`
-- `sample_sizes_stype`
-- `n_control`
-- `n_simulations`
-- `n_perm`
-- `alpha`
-- `seed`
-- `skip_estimate`
-- `skip_plot`
-- `transform` (`none` or `rclr`)
-- `keep_contralateral_in_cancer`
-- `contralateral_sample_types`
+Use this for host or other known non-target ranks that should be removed even if they pass sequence and abundance filters.
 
-### `taxonomy_patient_aware`
-Optional patient-aware taxonomy branch. This stage is off by default and requires `metadata_plots.enabled: true`. It builds a fresh `ASV_master_long.tsv` from the current run outputs, runs `run_taxonomic_abundance_analysis.py` for case/control comparisons and `run_taxonomic_sample_type_analysis.py` for paired sample-type comparisons, then renders the combined figures with `plot_taxonomic_observed_analysis.py`. When batch correction is enabled, the branch uses the corrected count matrix and corrected ASV metadata so the taxonomy summaries reflect the same processed data used by the rest of the run.
+## Metadata And ASV Outputs
 
-Common keys:
-- `enabled`
-- `output_dir`
-- `sample_col`
-- `patient_col`
-- `case_col`
-- `type_col`
-- `count_col`
-- `tax_levels`
-- `sample_types`
-- `min_prevalence`
-- `exclude_contralateral_in_cancer`
-- `contralateral_col`
-- `cancer_site_col`
-- `lung_side_col`
-- `contralateral_value`
-- `contralateral_sample_types`
-- `skip_omnibus`
-- `transform` (`none` or `rclr`)
-- `alpha`
-- `top_n`
+`PLOT_METADATA` builds the run's metadata-linked ASV products. Typical outputs include:
 
-### `lung_status_analysis`
-Optional lung-status contrast branch. This stage is off by default and requires `metadata_plots.enabled: true`. It builds a fresh `ASV_master_long.tsv`, then for each configured sample type runs `prepare_lung_status_data.py`, `run_lung_status_analysis.R`, and `plot_lung_status_analysis.py`. The prep step prefers explicit metadata columns such as `TumorSide`, `Contralateral`, `Healthy`, and `lung_status` when present, and otherwise falls back to deriving the three-way status from `Case`, `Cancer_Site`, and `lung_code`. When batch correction is enabled, the branch uses the corrected count matrix and corrected ASV metadata.
+- `metadata/ASV_meta.tsv`
+- `metadata/ASV_meta_micro.tsv`
+- `metadata/ASV_final.tsv`
+- `metadata/ASV_final.micro.tsv`
+- run metadata summaries and plots
 
-Common keys:
-- `enabled`
-- `output_dir`
-- `sample_col`
-- `type_col`
-- `sample_types`
-- `case_col`
-- `patient_col`
-- `cancer_site_col`
-- `lung_code_col`
-- `tumor_side_col`
-- `contralateral_col`
-- `healthy_col`
-- `lung_status_col`
+When batch correction is enabled, corrected count and metadata tables are produced and downstream branches that support corrected inputs use them.
 
-### `asv_mag_link`
-Optional ASV-to-genome linkage branch. This stage is off by default and runs after the ASV feature table is finalized but before `MASTER_SUMMARY`, so its outputs can be pulled into the summary tables. It aligns the filtered ASV FASTA against barrnap-derived 16S/SSU references recovered from one or more genome/MAG sources, then writes per-hit tables, best-hit pairings, pairing-status summaries, genome-level count tables, MAG-enriched summary tables, and downstream plots. The preferred input is `genome_qc_dir` or `genome_qc_dirs`, because the linker can autodetect `barrnap/`, prefer final QC genomes from `dedupe/fasta` (falling back to `genomes_subset`), and restrict the eligible MAGs to those that pass the genome-QC barrnap check. If you are not using a genome_qc result directory, you can still provide `barrnap_dir` directly, and optionally `genome_fasta_dir` for GFF-based interval extraction.
+## VOC Correlation
 
-Common keys:
-- `enabled`
-- `genome_qc_dir`
-- `genome_qc_dirs`
-- `barrnap_dir`
-- `genome_fasta_dir`
-- `output_dir`
-- `threads`
-- `min_pident`
-- `min_qcov`
-- `top_n`
-- `plot_top_n`
+`VOC_CORRELATION` links VOC abundances to filtered ASV abundances. It requires `voc_correlation.enabled: true`, a metadata table, the final filtered ASV counts, and `voc_correlation.voc_table`.
 
-### `indicspecies.aligned_*`
-Optional aligned ISA summary/plot stage built on top of the existing `INDICSPECIES` outputs. This stage is off by default and does not replace the standard `INDICSPECIES_PLOTS` step; it adds a second summary/visualization pass using `plot_indicspecies_aligned.py`.
+Direction filtering is controlled by:
 
-Common keys:
-- `aligned_plot_enabled`
-- `aligned_plot_output_dir`
-- `aligned_alpha`
-- `aligned_min_stat`
-- `aligned_top_n`
-
----
-
-## Manifest vs Auto-Discovery
-
-If `paths.manifest` is set, the pipeline uses it.
-
-If not set, the pipeline scans `paths.input_dir` and detects pairs using:
-- `filename_patterns.r1_tokens`
-- `filename_patterns.r2_tokens`
-- `filename_patterns.ext_patterns`
-- `filename_patterns.sample_strip_regex`
-
-This works for common Illumina names, but manifest mode is safer and reproducible.
-
----
-
-## Output Structure (Top-Level)
-
-Under `paths.output_dir`, typical directories include:
-- `fastp/`, `merged/`, `filtered/`, `concat/`, `derep/`, `denoise/`, `nochimeras/`, `ASVs/`
-- `sina/`, `taxonomy/`, `mito/`, `stats/`, `logs/`
-- optional: `metadata/`, `batch_correction/`, `outliers_corrected/`, `diversity/`, `indicspecies/`, `clustermaps/`, `spieceasi/`, `network/`
-- optional: `power_analysis/`
-- optional: `taxonomy_patient_aware/`
-- optional: `lung_status_analysis/`
-- optional: `asv_mag_link/`
-
-Nextflow runtime artifacts:
-- Work dir: `${HOME}/.nextflow/work` unless overridden
-- Local run log: `.nextflow.log`
-
----
-
-## Practical Troubleshooting
-
-- `No usable entries detected in manifest ...`
-  - Check tab format, sample IDs, and file paths in manifest.
-
-- `metadata_plots metadata file not found ...`
-  - Provide `metadata_plots.metadata` or disable `metadata_plots.enabled`.
-
-- `power_analysis.enabled requires metadata_plots.enabled to be true`
-  - Enable `metadata_plots`, or disable `power_analysis`.
-
-- `... BLAST database not found ...`
-  - Set `mito.mito_db` / `mito.biof_db` to valid DB prefixes and ensure files exist.
-
-- `Sankey requires filter_counts.save_intermediates to be true`
-  - Set `filter_counts.save_intermediates: true` when `sankey.enabled: true`.
-
-- Conda solve issues
-  - Confirm `mamba` is installed in your runner environment.
-  - Pin/override env YAMLs via `environments.*` keys.
-
----
-
-## Example Run Commands
-
-```bash
-# Standard run using custom YAML
-nextflow run asv_pipeline.nf --config my_run.yml
-
-# Resume
-nextflow run asv_pipeline.nf --config my_run.yml -resume
-
-# Run with explicit Nextflow reports
-nextflow run asv_pipeline.nf --config my_run.yml \
-  -with-report reports/nf_report.html \
-  -with-trace reports/nf_trace.tsv \
-  -with-timeline reports/nf_timeline.html
+```yaml
+voc_correlation:
+  enabled: true
+  correlation_direction: positive  # positive, negative, or both
 ```
+
+This setting applies to ASV-VOC correlation tables and ASV-VOC correlation heatmaps. For example, `positive` keeps only positive ASV-VOC correlations in the reported long table and correlation clustermap, allowing statements such as "VOC abundance was positively correlated with ASV X." Multiple-testing q-values are computed across the tested ASV-VOC pairs before direction filtering.
+
+VOC abundance plots are different from correlation plots:
+
+- `asv_voc_clustermap*` shows ASV-VOC correlation values and respects `correlation_direction`.
+- `sample_voc_brush_clustermap*` shows per-sample VOC abundance z-scores, not correlations. Blue indicates lower-than-average VOC abundance for that VOC, white is near the VOC mean, and orange indicates higher-than-average abundance.
+- `patient_case_voc_barplots_brush*` displays per-VOC patient z-scores so VOCs are visually comparable on one axis; statistical tests are still run on original patient-level VOC values.
+
+## Optional Analysis Branches
+
+Major optional modules are controlled by YAML `enabled` flags:
+
+- `mito`: BLAST-based mitochondrial and contaminant screening.
+- `filter_counts`: count filtering, intermediate count audit tables, and explicit taxon exclusions.
+- `general_stats`: run-level ASV and sample summaries.
+- `metadata_plots`: metadata-linked ASV summary tables and plots.
+- `plot_upset`, `bubbleplotter`, `umap_clustering`: metadata visualization branches.
+- `batch_correction` and `outlier_detection`: corrected ASV tables and outlier checks.
+- `collectors_curve`: rarefaction/collector curve summaries.
+- `diversity`: Shannon, Bray-Curtis, Jaccard, and optional patient-aware diversity workflows.
+- `indicspecies`: indicator species analysis and aligned indicator plots.
+- `voc_correlation`: VOC-ASV association analysis and VOC abundance visualizations.
+- `clustermaps`: ASV and metadata heatmaps.
+- `spieceasi`, `network_modules`, `graph_network`: SPIEC-EASI network inference, module detection, and network visualization.
+- `power_analysis`: patient-aware power analysis using metadata-linked ASV tables.
+- `taxonomy_patient_aware` and `lung_status_analysis`: patient-aware taxonomic and lung-status comparisons.
+- `asv_mag_link` and `module_mag_anchors`: ASV-to-MAG/barrnap linkage and module anchoring.
+- `sankey`: data-loss and filtering Sankey summaries.
+- `master_summary`: final combined ASV summary export.
+
+## Output Structure
+
+Typical top-level output directories include:
+
+- `fastp/`, `merged/`, `filtered/`, `concat/`, `derep/`, `denoise/`, `nochimeras/`
+- `ASVs/`, `sina/`, `taxonomy/`, `mito/`, `stats/`, `logs/`
+- `metadata/`, `batch_correction/`, `outliers_corrected/`
+- `diversity/`, `indicspecies/`, `voc_correlation/`, `clustermaps/`
+- `spieceasi/`, `network/`, `asv_mag_link/`
+- `power_analysis/`, `taxonomy_patient_aware/`, `lung_status_analysis/`
+- `sankey/`, `master_summary/`
+
+The actual directory set depends on which branches are enabled.
+
+## Runtime And Cache Behavior
+
+The wrapper reads `paths.work_dir` and `paths.conda_cache_dir` from the YAML and exports `NXF_WORK` and `NXF_CONDA_CACHEDIR` when configured. It also creates the controller environment at `.controller_env`.
+
+Normal repeated wrapper runs resume from Nextflow cache. If a branch does not rerun because cached outputs are valid, use `--rerun-from STAGE_NAME`.
+
+Several stages include checksums of external process scripts in their task commands, so edits to important Python/R helper scripts invalidate the relevant Nextflow task cache. This avoids stale outputs when a script changes but the input filenames stay the same.
+
+## Troubleshooting
+
+- `No usable entries detected in manifest`: check tab separation, sample IDs, and FASTQ paths.
+- `metadata file not found`: set the branch-specific metadata path or disable that branch.
+- Host taxa still appear downstream: confirm `filter_counts.exclude_taxa` is set and rerun from `FILTER_COUNTS` or at least from `PLOT_METADATA` if the final `ASV_target.tsv` is already corrected.
+- VOC direction did not change outputs: rerun from `VOC_CORRELATION`.
+- Sankey complains about intermediates: set `filter_counts.save_intermediates: true`.
+- BLAST database errors: set `mito.mito_db` and `mito.biof_db` to valid database prefixes or compatible FASTA paths.
+- Conda solve errors: confirm `mamba` is available and review the relevant `environments.*` config entry.

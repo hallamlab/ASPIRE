@@ -30,7 +30,7 @@ python filter_nontarget_asvs.py \
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Dict, List, Sequence, Set, Tuple
 
 import pandas as pd
 
@@ -105,6 +105,17 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Minimum taxonomy consensus score (0.0 = disabled)"
+    )
+    filtering.add_argument(
+        "--exclude-taxon",
+        action="append",
+        default=[],
+        metavar="RANK:VALUE",
+        help=(
+            "Exclude ASVs whose taxonomy has an exact rank/value match. "
+            "May be repeated; accepts ':' or '=' separators, e.g. "
+            "'Species:Homo sapiens' or 'Class=Mammalia'."
+        )
     )
     filtering.add_argument(
         "--biofactorial-col",
@@ -335,12 +346,66 @@ def filter_by_abundance(
     return filtered_df
 
 
+TAXONOMY_LEVELS = ["Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species"]
+
+
+def normalize_taxon_value(value) -> str:
+    """Normalize taxonomy values for exact, case-insensitive matching."""
+    if value is None or pd.isna(value):
+        return ""
+    return " ".join(str(value).replace("_", " ").strip().lower().split())
+
+
+def split_taxa_string(taxa_str: str, delimiter: str = ";") -> Dict[str, str]:
+    """Split a SILVA-style taxonomy string into named ranks."""
+    if pd.isna(taxa_str) or str(taxa_str).strip() == "":
+        parts = ["Unassigned"]
+    elif str(taxa_str).strip() == "Unassigned":
+        parts = ["Unassigned"]
+    else:
+        parts = [
+            part.strip().split("__", 1)[1] if "__" in part else part.strip()
+            for part in str(taxa_str).split(delimiter)
+        ]
+    return {
+        level: (parts[i] if i < len(parts) else "")
+        for i, level in enumerate(TAXONOMY_LEVELS)
+    }
+
+
+def parse_exclude_taxa(items: Sequence[str]) -> Dict[str, Set[str]]:
+    """Parse RANK:VALUE/RANK=VALUE entries for taxonomy exclusion."""
+    rank_lookup = {level.lower(): level for level in TAXONOMY_LEVELS}
+    filters: Dict[str, Set[str]] = {}
+
+    for raw in items or []:
+        if raw is None or not str(raw).strip():
+            continue
+        text = str(raw).strip()
+        separator = ":" if ":" in text else "=" if "=" in text else None
+        if separator is None:
+            raise ValueError(f"--exclude-taxon expects RANK:VALUE or RANK=VALUE, got '{raw}'")
+        rank, value = text.split(separator, 1)
+        rank_key = rank_lookup.get(rank.strip().lower())
+        if rank_key is None:
+            raise ValueError(
+                f"Unknown taxonomy rank '{rank}'. Expected one of: {', '.join(TAXONOMY_LEVELS)}"
+            )
+        clean_value = normalize_taxon_value(value)
+        if not clean_value:
+            raise ValueError(f"Missing taxon value in --exclude-taxon entry '{raw}'")
+        filters.setdefault(rank_key, set()).add(clean_value)
+
+    return filters
+
+
 def filter_by_taxonomy(
     count_df: pd.DataFrame,
     tax_df: pd.DataFrame,
     taxon_col: str,
     consensus_col: str,
-    min_consensus: float
+    min_consensus: float,
+    exclude_taxa: Dict[str, Set[str]]
 ) -> pd.DataFrame:
     """
     Filter ASVs by taxonomy quality.
@@ -365,6 +430,26 @@ def filter_by_taxonomy(
         print(f"[INFO] Taxonomy filter: Taxon != 'Unassigned'")
     
     qual_tax_df = tax_df.loc[tax_filter]
+
+    excluded_asvs: Set[str] = set()
+    if exclude_taxa:
+        for asv_id, taxon in qual_tax_df[taxon_col].items():
+            ranks = split_taxa_string(taxon)
+            for rank, excluded_values in exclude_taxa.items():
+                if normalize_taxon_value(ranks.get(rank, "")) in excluded_values:
+                    excluded_asvs.add(asv_id)
+                    break
+
+        if excluded_asvs:
+            qual_tax_df = qual_tax_df.loc[~qual_tax_df.index.isin(excluded_asvs)]
+
+        rendered = ", ".join(
+            f"{rank}={value}"
+            for rank, values in exclude_taxa.items()
+            for value in sorted(values)
+        )
+        print(f"[INFO] Explicit taxonomy exclusions: {rendered}")
+        print(f"[INFO] Explicit taxonomy exclusion removed {len(excluded_asvs)} annotated ASVs")
     
     annotated_n = int(count_df.index.isin(tax_df.index).sum())
     coverage = (annotated_n / len(count_df) * 100) if len(count_df) else 0.0
@@ -399,6 +484,11 @@ def save_output(
 def main():
     """Main execution function."""
     args = parse_args()
+    try:
+        exclude_taxa = parse_exclude_taxa(args.exclude_taxon)
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        sys.exit(1)
     
     print("="*70)
     print("ASV NON-TARGET FILTERING PIPELINE")
@@ -472,7 +562,8 @@ def main():
         tax_df=tax_df,
         taxon_col=args.taxon_col,
         consensus_col=args.consensus_col,
-        min_consensus=args.min_consensus
+        min_consensus=args.min_consensus,
+        exclude_taxa=exclude_taxa
     )
     
     # Save final output

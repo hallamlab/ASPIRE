@@ -119,6 +119,9 @@ filter_counts:
   abundance_threshold: 0.5
   sample_id_col: Sample
   min_consensus: 0.0
+  exclude_taxa:
+    - "Species:Homo sapiens"
+    - "Class:Mammalia"
   taxon_col: Taxon
   consensus_col: Consensus
   biofactorial_col: BioFactorial
@@ -394,6 +397,7 @@ voc_correlation:
   voc_sample_col: sample
   sample_id_mode: legacy_patient_pair
   use_legacy_voc_subset: true
+  correlation_direction: positive
   voc_columns: []
 
 power_analysis:
