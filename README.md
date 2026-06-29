@@ -11,7 +11,7 @@ The canonical user documentation is this README. `ASPIRE.ipynb` is kept as a sho
 - `run_asv_pipeline.sh`: main wrapper for routine runs.
 - `asv_pipeline.nf`: current Nextflow workflow.
 - `asv_pipeline_nextflow.yml`: full config template.
-- `examples/set1-2.local.yml`: local example config with absolute paths for the UBC/LMP test dataset.
+- `examples/set1-2.local.yml`: local example config with absolute paths for the LMP test dataset.
 - `processes/`: scripts and conda environment YAMLs used by individual stages.
 
 ## Quick Start
