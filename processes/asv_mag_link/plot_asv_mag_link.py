@@ -19,6 +19,12 @@ def read_tsv(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, sep="\t", low_memory=False)
 
 
+def save_png_and_svg(path: Path) -> None:
+    """Save the current matplotlib figure as PNG plus matching SVG."""
+    plt.savefig(path, dpi=300)
+    plt.savefig(path.with_suffix(".svg"))
+
+
 def add_display_label(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -88,7 +94,7 @@ def plot_top_genome_status(pairing: pd.DataFrame, plots_dir: Path, top_n: int) -
     ax.set_ylabel("Genome/MAG")
     ax.set_title("Top genome/MAG pairings by assignment status")
     plt.tight_layout()
-    plt.savefig(plots_dir / "asv2mag_top_genomes_stacked_status.png", dpi=300)
+    save_png_and_svg(plots_dir / "asv2mag_top_genomes_stacked_status.png")
     plt.close()
 
 
@@ -124,7 +130,7 @@ def plot_quality_by_status(pairing: pd.DataFrame, plots_dir: Path) -> None:
     for ax in axes:
         ax.tick_params(axis="x", rotation=20)
     plt.tight_layout()
-    plt.savefig(plots_dir / "asv2mag_hit_quality_by_status.png", dpi=300)
+    save_png_and_svg(plots_dir / "asv2mag_hit_quality_by_status.png")
     plt.close()
 
 
@@ -143,7 +149,7 @@ def plot_top_genome_metrics(genome_summary: pd.DataFrame, plots_dir: Path, top_n
     ax.set_xlabel("")
     ax.set_ylabel("Genome/MAG")
     plt.tight_layout()
-    plt.savefig(plots_dir / "asv2mag_top_genome_metrics_heatmap.png", dpi=300)
+    save_png_and_svg(plots_dir / "asv2mag_top_genome_metrics_heatmap.png")
     plt.close()
 
 

@@ -28,6 +28,8 @@ opt_list <- list(
               help="Keep ASVs reaching at least this relative abundance in >=1 sample. Accepts fraction (0-1) or percent (0-100) [default %default]."),
   make_option("--min-prevalence", type="double", default=0.0, dest="min_prevalence",
               help="Keep ASVs present in at least this prevalence threshold. Accepts fraction (0-1) or percent (0-100) [default %default]."),
+  make_option("--force-keep-asvs", type="character", default=NULL, dest="force_keep_asvs",
+              help="Optional TSV/list of ASV IDs to retain regardless of min abundance/prevalence filters. ISA summary TSVs are supported; zero-variance filtering still applies."),
   make_option("--remove-zero-var", type="logical", default=TRUE, dest="remove_zero_var",
               help="Drop ASVs with zero variance after filtering [default %default]."),
 
@@ -99,6 +101,44 @@ dir.create(opt$outdir, showWarnings = FALSE, recursive = TRUE)
 msg <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 load_if_exists <- function(path) if (file.exists(path)) readRDS(path) else FALSE
 save_csv <- function(x, path) { write.csv(x, path, row.names = FALSE); msg("Wrote %s", path) }
+normalize_asv_ids <- function(x) {
+  x <- trimws(as.character(x))
+  x <- x[!is.na(x) & nzchar(x)]
+  unique(sub(";size=[0-9]+.*$", "", x, perl = TRUE))
+}
+read_force_keep_asvs <- function(path) {
+  if (is.null(path) || !nzchar(path)) {
+    return(character(0))
+  }
+  if (!file.exists(path)) {
+    stop(sprintf("--force-keep-asvs file does not exist: %s", path), call. = FALSE)
+  }
+  if (file.info(path)$size == 0) {
+    return(character(0))
+  }
+
+  keep_tbl <- suppressMessages(readr::read_tsv(path, col_types = readr::cols(.default = "c"), progress = FALSE))
+  if (nrow(keep_tbl) == 0 || ncol(keep_tbl) == 0) {
+    return(character(0))
+  }
+
+  if ("ASV" %in% names(keep_tbl)) {
+    keep_rows <- rep(TRUE, nrow(keep_tbl))
+    if ("significant" %in% names(keep_tbl)) {
+      keep_rows <- keep_rows & tolower(keep_tbl$significant) %in% c("true", "t", "1", "yes")
+    }
+    if ("q.value" %in% names(keep_tbl)) {
+      q_values <- suppressWarnings(as.numeric(keep_tbl$q.value))
+      keep_rows <- keep_rows & !is.na(q_values) & q_values < 0.05
+    } else if ("q_value" %in% names(keep_tbl)) {
+      q_values <- suppressWarnings(as.numeric(keep_tbl$q_value))
+      keep_rows <- keep_rows & !is.na(q_values) & q_values < 0.05
+    }
+    return(normalize_asv_ids(keep_tbl$ASV[keep_rows]))
+  }
+
+  normalize_asv_ids(keep_tbl[[1]])
+}
 safe_write_graph <- function(graph, path, format, required = TRUE) {
   tryCatch(
     {
@@ -275,8 +315,27 @@ if (nrow(mat) < 2 || ncol(mat) < 2) {
   stop(sprintf("Input matrix is too small after loading/transposition: samples=%d, ASVs=%d", nrow(mat), ncol(mat)), call. = FALSE)
 }
 
+force_keep_asvs <- read_force_keep_asvs(opt$force_keep_asvs)
+force_keep_present <- intersect(force_keep_asvs, colnames(mat))
+if (length(force_keep_asvs) > 0) {
+  msg(
+    "Loaded %d force-keep ASVs from %s; %d are present in the count table.",
+    length(force_keep_asvs),
+    opt$force_keep_asvs,
+    length(force_keep_present)
+  )
+  missing_force_keep <- setdiff(force_keep_asvs, colnames(mat))
+  if (length(missing_force_keep) > 0) {
+    msg("WARNING: %d force-keep ASVs are absent from the count table and cannot be retained.", length(missing_force_keep))
+  }
+}
+
+force_filter_effective <- isTRUE(opt$force_filter) || length(force_keep_present) > 0
+force_spieceasi_effective <- isTRUE(opt$force_spieceasi) || length(force_keep_present) > 0
+force_graphs_effective <- isTRUE(opt$force_graphs) || length(force_keep_present) > 0
+
 # Filter (cached)
-count_data_filtered <- if (isFALSE(opt$force_filter)) load_if_exists(cache_counts) else FALSE
+count_data_filtered <- if (isFALSE(force_filter_effective)) load_if_exists(cache_counts) else FALSE
 
 if (identical(count_data_filtered, FALSE)) {
   msg("Filtering ASVs ...")
@@ -295,10 +354,19 @@ if (identical(count_data_filtered, FALSE)) {
     keep <- keep & (prev >= opt$min_prevalence)
   }
 
+  if (length(force_keep_present) > 0) {
+    keep <- keep | (colnames(mat) %in% force_keep_present)
+    msg("Force-retaining %d ASVs through abundance/prevalence filtering.", length(force_keep_present))
+  }
+
   mat_f <- mat[, keep, drop = FALSE]
 
   if (isTRUE(opt$remove_zero_var) && ncol(mat_f) > 0) {
     v <- apply(mat_f, 2, var, na.rm = TRUE)
+    dropped_force_keep <- intersect(force_keep_present, colnames(mat_f)[v <= 0])
+    if (length(dropped_force_keep) > 0) {
+      msg("WARNING: Dropping %d force-kept ASVs with zero variance after filtering.", length(dropped_force_keep))
+    }
     mat_f <- mat_f[, v > 0, drop = FALSE]
   }
   if (nrow(mat_f) < 2 || ncol(mat_f) < 2) {
@@ -321,7 +389,7 @@ if (identical(count_data_filtered, FALSE)) {
 stopifnot(nrow(count_data_filtered) > 1, ncol(count_data_filtered) > 1)
 
 # ----------------------------- SpiecEasi -------------------------------------
-se_obj <- if (isFALSE(opt$force_spieceasi)) load_if_exists(cache_spiece) else FALSE
+se_obj <- if (isFALSE(force_spieceasi_effective)) load_if_exists(cache_spiece) else FALSE
 
 if (identical(se_obj, FALSE)) {
   set.seed(opt$seed)
@@ -378,8 +446,8 @@ if (!is.null(se_obj$refit$stars)) {
 }
 
 # ----------------------------- Graphs + Layouts ------------------------------
-ig_main  <- if (isFALSE(opt$force_graphs)) load_if_exists(cache_graph)  else FALSE
-am_coord <- if (isFALSE(opt$force_graphs)) load_if_exists(cache_layout) else FALSE
+ig_main  <- if (isFALSE(force_graphs_effective)) load_if_exists(cache_graph)  else FALSE
+am_coord <- if (isFALSE(force_graphs_effective)) load_if_exists(cache_layout) else FALSE
 
 if (identical(ig_main, FALSE) || identical(am_coord, FALSE)) {
   msg("Building graphs ...")

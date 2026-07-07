@@ -24,6 +24,8 @@ option_list <- list(
               help="Comma-separated grouping analyses to run. Use '+' inside one entry to combine metadata columns into one grouping factor, e.g. 'status,type_group,Depth_bin+O2_bin' [default: %default]"),
   make_option("--blocked-cols", type="character", default="type_group",
               help="Comma-separated grouping analyses requiring blocked permutations. Entries must match --group-cols specs, including composite specs like 'Depth_bin+O2_bin' [default: %default]"),
+  make_option("--stratified-isa", type="character", default="",
+              help="Semicolon-separated stratified ISA specs as within_col::group_col or within_col::group_col::level1|level2. Example: Type_Group::Case::BAL|Bronchial Brush [default: none]"),
   make_option("--status-extra-no-contralateral", type="logical", default=TRUE,
               help="For Lung Brush status analysis, add extra run excluding contralateral cancer samples [default: %default]"),
   make_option("--status-exclude-contralateral", type="logical", default=TRUE,
@@ -44,8 +46,12 @@ option_list <- list(
               help="Value in type_group identifying Lung Brush samples [default: %default]"),
   make_option("--transform",  type="character", default="none",
               help="Abundance transform before multipatt: none|rclr [default: %default]"),
-  make_option("--perms",      type="integer",   default=999,
+  make_option("--perms",      type="integer",   default=9999,
               help="Permutations for multipatt [default: %default]"),
+  make_option("--seed",       type="integer",   default=42,
+              help="Random seed for ISA permutation tests [default: %default]"),
+  make_option("--q-threshold", type="double", default=0.05,
+              help="FDR q-value threshold used to set the significant column [default: %default]"),
   make_option("--min-n",      type="integer",   default=2,
               help="Minimum samples per group to keep [default: %default]"),
   make_option("--type-group-require-complete", type="logical", default=FALSE,
@@ -78,6 +84,10 @@ if (length(missing)) {
   print_help(parser)
   quit(status=2)
 }
+if (!is.finite(opt$`q-threshold`) || opt$`q-threshold` < 0 || opt$`q-threshold` > 1) {
+  stop("--q-threshold must be a finite value between 0 and 1")
+}
+set.seed(opt$seed)
 
 outdir <- file.path(opt$outdir, "indicspecies")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
@@ -98,6 +108,34 @@ expand_group_spec_cols <- function(specs) {
     trimws() |>
     discard(~ .x == "") |>
     unique()
+}
+
+parse_stratified_isa <- function(x) {
+  if (is.null(x) || !nzchar(trimws(x))) {
+    return(list())
+  }
+
+  specs <- strsplit(x, ";", fixed = TRUE)[[1]] |>
+    trimws() |>
+    discard(~ .x == "")
+
+  lapply(specs, function(spec) {
+    parts <- strsplit(spec, "::", fixed = TRUE)[[1]] |>
+      trimws()
+    if (!(length(parts) %in% c(2, 3)) || any(parts[1:2] == "")) {
+      stop(
+        "Invalid --stratified-isa spec '", spec,
+        "'. Expected within_col::group_col or within_col::group_col::level1|level2."
+      )
+    }
+    levels <- character(0)
+    if (length(parts) == 3 && nzchar(parts[3])) {
+      levels <- strsplit(parts[3], "|", fixed = TRUE)[[1]] |>
+        trimws() |>
+        discard(~ .x == "")
+    }
+    list(within_col = parts[1], group_col = parts[2], levels = levels)
+  })
 }
 
 make_grouping_factor <- function(meta_df, spec) {
@@ -151,15 +189,23 @@ long_df <- read_tsv(opt$`data-long`, show_col_types = FALSE)
 group_specs <- parse_cli_csv(opt$`group-cols`)
 blocked_specs <- parse_cli_csv(opt$`blocked-cols`)
 group_cols <- expand_group_spec_cols(group_specs)
+stratified_specs <- parse_stratified_isa(opt$`stratified-isa`)
+stratified_cols <- unique(unlist(lapply(stratified_specs, function(spec) {
+  c(spec$within_col, spec$group_col)
+}), use.names = FALSE))
 
 if ("status" %in% group_specs && !("type_group" %in% group_cols)) {
   # Needed for status stratification by sample type.
   group_cols <- c(group_cols, "type_group")
 }
 
-required_cols <- c(opt$`sample-col`, group_cols)
+required_cols <- c(opt$`sample-col`, group_cols, stratified_cols)
 if ("status" %in% group_specs) {
   # Status ISA aggregates within patient before testing between-status differences.
+  required_cols <- c(required_cols, opt$`patient-col`)
+}
+if (length(stratified_specs) > 0) {
+  # Stratified ISA aggregates replicate samples to the patient level when possible.
   required_cols <- c(required_cols, opt$`patient-col`)
 }
 if (!is.null(opt$`block-col`) && nzchar(opt$`block-col`)) {
@@ -265,7 +311,7 @@ apply_matrix_transform <- function(mat, method = "none") {
   out
 }
 
-run_indics <- function(X_samples_by_features, grouping, perms = 999, duleg = FALSE, patient_blocks = NULL) {
+run_indics <- function(X_samples_by_features, grouping, perms = 9999, duleg = FALSE, patient_blocks = NULL) {
   # indicspecies::multipatt expects samples in rows, species/features in columns
   # If patient_blocks provided, use blocked permutations (for within-patient comparisons)
   if (!is.null(patient_blocks)) {
@@ -296,7 +342,7 @@ summarize_multipatt <- function(fit) {
   if ("p.value" %in% names(out)) {
     out <- out %>%
       mutate(q.value = p.adjust(.data[["p.value"]], method = "fdr"),
-             significant = q.value < 0.05)
+             significant = q.value < opt$`q-threshold`)
   }
   out
 }
@@ -698,6 +744,156 @@ for (gcol in group_specs) {
   if (gcol == "type_group") {
     write_tables(res1_sign, res1_full, "Type_Group_indicator_species")
     write_tables(res2_sign, res2_full, "Type_Group_indicator_species_DULEG")
+  }
+}
+
+for (spec in stratified_specs) {
+  within_col <- spec$within_col
+  group_col <- spec$group_col
+  within_slug <- make_group_slug(within_col)
+  group_slug <- make_group_slug(group_col)
+
+  if (!(within_col %in% colnames(meta))) {
+    warning("Skipping stratified ISA: within_col '", within_col, "' not found.")
+    next
+  }
+  if (!(group_col %in% colnames(meta))) {
+    warning("Skipping stratified ISA: group_col '", group_col, "' not found.")
+    next
+  }
+
+  within_levels <- spec$levels
+  if (length(within_levels) == 0) {
+    within_levels <- unique(as.character(meta[[within_col]]))
+    within_levels <- within_levels[!is.na(within_levels) & within_levels != ""]
+  }
+
+  pooled_sign <- list()
+  pooled_full <- list()
+  pooled_sign_duleg <- list()
+  pooled_full_duleg <- list()
+
+  for (within_value in within_levels) {
+    site_mask <- !is.na(meta[[within_col]]) & as.character(meta[[within_col]]) == as.character(within_value)
+    if (!any(site_mask)) {
+      warning("Skipping stratified ISA for ", group_col, " within ", within_col,
+              "='", within_value, "': no matching samples.")
+      next
+    }
+
+    X_site <- t(asv_mat[, site_mask, drop = FALSE])
+    meta_site <- meta[site_mask, , drop = FALSE]
+    grouping_site <- droplevels(as.factor(meta_site[[group_col]]))
+
+    keep_site <- !is.na(grouping_site)
+    grouping_site <- droplevels(grouping_site[keep_site])
+    X_site <- X_site[keep_site, , drop = FALSE]
+    meta_site <- meta_site[keep_site, , drop = FALSE]
+
+    tab_site <- table(grouping_site)
+    small_site <- names(tab_site[tab_site < opt$`min-n`])
+    if (length(small_site) > 0) {
+      message("Dropping groups in stratified ISA for ", group_col, " within ",
+              within_col, "='", within_value, "' with < ", opt$`min-n`,
+              " samples: ", paste(small_site, collapse = ", "))
+      keep_min <- !(grouping_site %in% small_site)
+      grouping_site <- droplevels(grouping_site[keep_min])
+      X_site <- X_site[keep_min, , drop = FALSE]
+      meta_site <- meta_site[keep_min, , drop = FALSE]
+    }
+
+    if (length(unique(grouping_site)) < 2) {
+      warning("Skipping stratified ISA for ", group_col, " within ", within_col,
+              "='", within_value, "' (<2 groups after filtering).")
+      next
+    }
+
+    X_for_isa <- X_site
+    grouping_for_isa <- grouping_site
+
+    if (opt$`patient-col` %in% colnames(meta_site)) {
+      X_for_isa <- aggregate_mean_relative(X_site, meta_site[[opt$`patient-col`]])
+      group_map <- meta_site %>%
+        transmute(
+          patient_id___ = as.character(.data[[opt$`patient-col`]]),
+          group_id___ = as.character(.data[[group_col]])
+        ) %>%
+        filter(!is.na(patient_id___), !is.na(group_id___)) %>%
+        distinct() %>%
+        group_by(patient_id___) %>%
+        summarise(
+          n_groups___ = n_distinct(group_id___),
+          group_id___ = first(group_id___),
+          .groups = "drop"
+        )
+
+      mixed_patients <- group_map$patient_id___[group_map$n_groups___ > 1]
+      if (length(mixed_patients) > 0) {
+        warning("Stratified ISA for ", group_col, " within ", within_col, "='",
+                within_value, "' has patients with multiple group labels; using first label for: ",
+                paste(mixed_patients, collapse = ", "))
+      }
+
+      group_vec <- group_map$group_id___[match(rownames(X_for_isa), group_map$patient_id___)]
+      keep_pat <- !is.na(group_vec)
+      X_for_isa <- X_for_isa[keep_pat, , drop = FALSE]
+      grouping_for_isa <- droplevels(factor(group_vec[keep_pat]))
+
+      tab_pat <- table(grouping_for_isa)
+      small_pat <- names(tab_pat[tab_pat < opt$`min-n`])
+      if (length(small_pat) > 0) {
+        keep_pat_min <- !(grouping_for_isa %in% small_pat)
+        grouping_for_isa <- droplevels(grouping_for_isa[keep_pat_min])
+        X_for_isa <- X_for_isa[keep_pat_min, , drop = FALSE]
+      }
+    }
+
+    if (length(unique(grouping_for_isa)) < 2) {
+      warning("Skipping stratified ISA for ", group_col, " within ", within_col,
+              "='", within_value, "' after patient aggregation.")
+      next
+    }
+
+    X_for_isa <- apply_matrix_transform(X_for_isa, opt$transform)
+    within_value_slug <- make_group_slug(within_value)
+    base <- paste0(
+      "stratified_", group_slug, "_within_", within_slug, "_",
+      within_value_slug, "_indicator_species"
+    )
+
+    message("Running stratified multipatt for '", group_col, "' within '",
+            within_col, "'='", within_value, "' (general multipatt, duleg=FALSE) …")
+    fit1 <- run_indics(X_for_isa, grouping_for_isa, perms = opt$perms, duleg = FALSE, patient_blocks = NULL)
+    res1_sign <- as.data.frame(fit1$sign) %>%
+      rownames_to_column("ASV") %>%
+      mutate(stratified_within_col = within_col, stratified_within_value = within_value,
+             stratified_group_col = group_col)
+    res1_full <- summarize_multipatt(fit1) %>%
+      mutate(stratified_within_col = within_col, stratified_within_value = within_value,
+             stratified_group_col = group_col)
+    write_tables(res1_sign, res1_full, base)
+    pooled_sign[[length(pooled_sign) + 1]] <- res1_sign
+    pooled_full[[length(pooled_full) + 1]] <- res1_full
+
+    message("Running stratified multipatt for '", group_col, "' within '",
+            within_col, "'='", within_value, "' (DULEG-restricted mode, duleg=TRUE) …")
+    fit2 <- run_indics(X_for_isa, grouping_for_isa, perms = opt$perms, duleg = TRUE, patient_blocks = NULL)
+    res2_sign <- as.data.frame(fit2$sign) %>%
+      rownames_to_column("ASV") %>%
+      mutate(stratified_within_col = within_col, stratified_within_value = within_value,
+             stratified_group_col = group_col)
+    res2_full <- summarize_multipatt(fit2) %>%
+      mutate(stratified_within_col = within_col, stratified_within_value = within_value,
+             stratified_group_col = group_col)
+    write_tables(res2_sign, res2_full, paste0(base, "_DULEG"))
+    pooled_sign_duleg[[length(pooled_sign_duleg) + 1]] <- res2_sign
+    pooled_full_duleg[[length(pooled_full_duleg) + 1]] <- res2_full
+  }
+
+  if (length(pooled_sign) > 0) {
+    pooled_base <- paste0("stratified_", group_slug, "_within_", within_slug, "_indicator_species")
+    write_tables(bind_rows(pooled_sign), bind_rows(pooled_full), pooled_base)
+    write_tables(bind_rows(pooled_sign_duleg), bind_rows(pooled_full_duleg), paste0(pooled_base, "_DULEG"))
   }
 }
 

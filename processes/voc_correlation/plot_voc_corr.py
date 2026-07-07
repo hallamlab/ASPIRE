@@ -25,6 +25,8 @@ plt.rcParams["font.family"] = "Source Sans Pro"
 sns.set_theme()
 sns.set_style("white")
 
+FIGURE_FORMATS = (".pdf", ".png", ".svg")
+
 GROUP_TYPE_PALETTE = {
     "Oral Rinse": "#6A3D9A",
     "BAL+Oral Rinse": "#E78AC3",
@@ -732,7 +734,7 @@ def save_clustermap(
     for idx, (legend_title, legend_items) in enumerate(legend_blocks):
         add_side_legend(grid.fig, cbar_left, 0.54 - idx * 0.16, legend_title, legend_items)
 
-    for suffix in (".pdf", ".png"):
+    for suffix in FIGURE_FORMATS:
         grid.fig.savefig(output_stem.with_suffix(suffix), dpi=600, bbox_inches="tight", pad_inches=0.35)
     plt.close(grid.fig)
 
@@ -905,7 +907,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
     )
     g.fig.suptitle("Brush Patient-Level VOC Abundance Z-Score by Case Status", y=1.01)
     g.fig.tight_layout(rect=(0, 0, 0.88, 1))
-    for suffix in (".pdf", ".png"):
+    for suffix in FIGURE_FORMATS:
         g.fig.savefig(output_stem.with_suffix(suffix), dpi=600, bbox_inches="tight", pad_inches=0.55)
     plt.close(g.fig)
 
@@ -948,10 +950,10 @@ def main() -> None:
     taxonomy_df = build_taxonomy_table(asv_meta)
 
     asv_counts = load_asv_counts(args.asv_counts, args.sample_id_mode)
-    asv_counts_t = asv_counts.T
+    asv_counts_t_unfiltered = asv_counts.T
     spieceasi_remove_zero_var = str(args.spieceasi_remove_zero_var).strip().lower() in {"true", "1", "yes", "y"}
     asv_counts_t, spieceasi_summary = apply_spieceasi_asv_filter(
-        asv_counts_t,
+        asv_counts_t_unfiltered,
         min_rel_abund=normalize_fraction_threshold(float(args.spieceasi_min_rel_abund)),
         min_prevalence=normalize_fraction_threshold(float(args.spieceasi_min_prevalence)),
         remove_zero_var=spieceasi_remove_zero_var,
@@ -969,7 +971,7 @@ def main() -> None:
 
     common_samples = (
         pd.Index(sample_meta["normalized_sample_id"])
-        .intersection(asv_counts_t.index)
+        .intersection(asv_counts_t_unfiltered.index)
         .intersection(voc_df.index)
     )
     if len(common_samples) < 3:
@@ -977,6 +979,7 @@ def main() -> None:
 
     sample_meta = sample_meta.set_index("normalized_sample_id").loc[common_samples].reset_index()
     asv_counts_t = asv_counts_t.loc[common_samples]
+    asv_counts_t_unfiltered = asv_counts_t_unfiltered.loc[common_samples]
     voc_df = voc_df.loc[common_samples]
 
     isa_annotations = load_isa_annotations(args.indicspecies_glob)
@@ -1014,10 +1017,10 @@ def main() -> None:
     brush_asv_ids = [
         asv
         for asv in sorted(set(brush_isa_annotations["ASV"].astype(str)))
-        if asv in asv_counts_t.columns
+        if asv in asv_counts_t_unfiltered.columns
     ]
     if brush_asv_ids:
-        brush_asv_counts_t = asv_counts_t[brush_asv_ids]
+        brush_asv_counts_t = asv_counts_t_unfiltered[brush_asv_ids]
         brush_asv_corr, brush_asv_long = correlation_results(
             brush_asv_counts_t, voc_df, "asv", "voc", direction=args.correlation_direction
         )

@@ -6,5 +6,6 @@ dependencies:
   - pandas
   - numpy
   - plotly
+  - python-kaleido
   - seaborn
   - matplotlib

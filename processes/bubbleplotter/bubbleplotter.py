@@ -968,7 +968,7 @@ def parse_args() -> argparse.Namespace:
                     help="Input TSV file with ASV counts and taxonomy")
     io.add_argument("--output-prefix", "-o", default="bubble_plot_asv",
                     help="Output file prefix")
-    io.add_argument("--formats", default="pdf,png",
+    io.add_argument("--formats", default="pdf,png,svg",
                     help="Comma-separated output formats (pdf,png,svg)")
     io.add_argument("--dpi", type=int, default=300,
                     help="DPI for raster outputs (PNG)")

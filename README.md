@@ -134,6 +134,78 @@ The wrapper's current stage order is:
 
 Disabled optional branches are skipped based on the YAML config.
 
+## Scripts Used By Stage
+
+Stages that do not list a custom ASPIRE script are executed directly by Nextflow using command-line tools. In the core ASV path, fastp is used for read trimming, vsearch is used for read merging, quality filtering, dereplication, denoising, chimera removal, and read-to-ASV mapping, SINA is used for sequence alignment before region trimming, seqkit is used for sequence splitting/statistics, and blastn is used for mitochondrial and contaminant database searches.
+
+| Workflow stage | Script used | Purpose |
+|---|---|---|
+| Pipeline launch | `run_asv_pipeline.sh` | Initializes the controller environment, resolves work/cache directories, and launches `asv_pipeline.nf` with the selected YAML config. |
+| Workflow orchestration | `asv_pipeline.nf` | Defines process order, config parsing, inputs/outputs, conda environments, and enabled/disabled analysis branches. |
+| `FILTER_TABLE` | `processes/filter_table/filter_ASV_table.py` | Filters the intermediate ASV count table by minimum sample read depth and minimum ASV abundance. |
+| `SINA_TRIM` | `processes/sina_trim/parse_sina_log.py` | Parses SINA variable-region annotations from SINA logs. |
+| `SINA_TRIM` | `processes/sina_trim/trim_v_sina.py` | Trims dereplicated ASV sequences to configured variable regions. |
+| `TAXONOMY` | `processes/taxonomy/qiime_vs_classifier.py` | Calls the QIIME2 Python API and q2-feature-classifier to classify ASVs against configured SILVA artifacts. |
+| `MITOMASTER` | `processes/mitomaster/mitomaster.py` | Queries MITOMASTER for candidate mitochondrial ASVs. |
+| `MITO_DECONTAM` | `processes/mito_decontam/mito_checker.py` | Integrates MITOMASTER, mitochondrial blastn, contaminant blastn, and taxonomy evidence into non-target calls and plots. |
+| `FILTER_COUNTS` | `processes/filter_counts/filter_nontarget.py` | Removes non-target, mitochondrial, low-abundance, low-quality taxonomy, and explicitly excluded taxa; writes final `ASV_target.tsv`. |
+| `PLOT_METADATA` | `processes/plot_metadata/plot_metadata.py` | Merges ASV counts with metadata, applies configured control subtraction, and writes ASV metadata tables and plots. |
+| `SANKEY` | `processes/sankey/sankey_builder.py` | Builds data-loss Sankey and sample-retention summaries from raw, filtered, decontaminated, and final tables. |
+| `PLOT_UPSET` | `processes/plot_upset/plot_upset.py` | Produces ASV/sample overlap plots for raw/final microbial and mitochondrial tables. |
+| `BUBBLEPLOTTER` | `processes/bubbleplotter/bubbleplotter.py` | Generates metadata-linked ASV bubble plots. |
+| `UMAP_CLUSTERING` | `processes/umap_clustering/umap_clustering.py` | Generates UMAP/HDBSCAN summaries from ASV-linked metadata tables. |
+| `ASV_BATCH_CORRECTION` | `processes/asv_batch_correction/asv_batch_correction.py` | Performs optional ASV abundance batch correction and diagnostics. |
+| `OUTLIER_CHECKER` | `processes/outlier_checker/outlier_checker.py` | Performs optional outlier detection from configured ASV abundance inputs. |
+| `COLLECTORS_CURVE` | `processes/collectors_curve/collectors_curve.py` | Produces species/ASV accumulation curves by metadata group. |
+| `DIVERSITY_ANALYSIS` | `processes/diversity_analysis/calc_div.py` | Calculates Shannon diversity, Bray-Curtis distance, and Jaccard distance. |
+| `DIVERSITY_ANALYSIS` | `processes/diversity_analysis/plot_diversity.py` | Generates diversity plots, UMAPs, heatmaps, and PERMANOVA outputs. |
+| `DIVERSITY_ANALYSIS` patient-aware sub-branch | `processes/bray_patient_aware/run_bray_permanova_patient_aware.R` | Runs optional patient-aware Bray-Curtis PERMANOVA analyses. |
+| `DIVERSITY_ANALYSIS` patient-aware sub-branch | `processes/bray_patient_aware/plot_bray_permanova_patient_aware.py` | Plots patient-aware Bray-Curtis PERMANOVA outputs. |
+| `INDICSPECIES` | `processes/indicspecies/run_indicspecies.R` | Runs indicator species analysis with the R `indicspecies` package. |
+| `INDICSPECIES_PLOTS` | `processes/indicspecies_plots/plot_indicspecies.py` | Generates standard indicator species plots and summaries. |
+| `INDICSPECIES_PLOTS` aligned sub-branch | `processes/indicspecies_aligned_plots/plot_indicspecies_aligned.py` | Generates optional aligned indicator species summaries and figures. |
+| `VOC_CORRELATION` | `processes/voc_correlation/plot_voc_corr.py` | Matches VOC and ASV samples, filters ASVs, computes ASV-VOC Spearman correlations, applies FDR and direction filtering, and generates VOC/correlation plots. |
+| `CLUSTERMAPS` | `processes/clustermaps/plot_clustermaps.py` | Generates ASV and metadata clustermaps from configured count and metadata inputs. |
+| `POWER_ANALYSIS_PIPELINE` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by the power-analysis branch. |
+| `POWER_ANALYSIS_PIPELINE` | `processes/power_analysis_pipeline/run_power_analysis_pipeline.sh` | Launches the power-analysis subworkflow. |
+| `POWER_ANALYSIS_PIPELINE` subworkflow | scripts under `processes/power_analysis_pipeline/` | Runs simulation-based power analyses for diversity, taxonomic abundance, indicator species, and related plotting. |
+| `TAXONOMY_PATIENT_AWARE` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by taxonomy patient-aware analyses. |
+| `TAXONOMY_PATIENT_AWARE` | `processes/taxonomy_patient_aware/run_taxonomic_abundance_analysis.py` | Runs patient-level taxonomic abundance comparisons between disease/control groups. |
+| `TAXONOMY_PATIENT_AWARE` | `processes/taxonomy_patient_aware/run_taxonomic_sample_type_analysis.py` | Runs paired or sample-type taxonomic abundance comparisons. |
+| `TAXONOMY_PATIENT_AWARE` | `processes/taxonomy_patient_aware/plot_taxonomic_observed_analysis.py` | Plots observed taxonomic abundance analysis outputs. |
+| `LUNG_STATUS_ANALYSIS` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by lung-status analyses. |
+| `LUNG_STATUS_ANALYSIS` | `processes/lung_status_analysis/prepare_lung_status_data.py` | Derives lung-status labels and prepares per-sample/per-patient tables. |
+| `LUNG_STATUS_ANALYSIS` | `processes/lung_status_analysis/run_lung_status_analysis.R` | Runs lung-status statistical analyses. |
+| `LUNG_STATUS_ANALYSIS` | `processes/lung_status_analysis/plot_lung_status_analysis.py` | Plots lung-status analysis outputs. |
+| `SPIECEASI` | `processes/spieceasi/run_spieceasi.R` | Runs SPIEC-EASI graphical lasso network inference and exports graph/network tables. |
+| `NETWORK_MODULES` | `processes/network_modules/network_modules.R` | Detects network modules using configured Leiden/Louvain methods. |
+| `GRAPH_NETWORK` | `processes/graph_network/graph_network.py` | Generates network visualizations and ASV/node annotations. |
+| `MODULE_MAG_ANCHORS` | `processes/module_mag_anchors/summarize_module_mag_anchors.py` | Summarizes MAG-linked ASVs within network modules. |
+| `MASTER_SUMMARY` | `processes/master_summary/build_master_asv_summary.py` | Builds final combined ASV summary tables integrating taxonomy, metadata, indicator species, network, VOC, and optional MAG information. |
+| `ASV_MAG_LINK` | `processes/asv_mag_link/asv_mag_barrnap_linker.py` | Links ASVs to barrnap-derived SSU/16S sequences from genome/MAG inputs. |
+| `ASV_MAG_LINK` | `processes/asv_mag_link/plot_asv_mag_link.py` | Plots ASV-MAG linkage summaries. |
+
+## Indicator Species Analysis
+
+`INDICSPECIES` always runs the primary analyses listed in `indicspecies.group_cols`, preserving the standard outputs such as `Type_Group_indicator_species_summary.tsv` and `Case_indicator_species_summary.tsv`.
+
+Additional nested ISA runs can be requested with `indicspecies.stratified`. Each analysis tests `group_col` separately within each selected `within_col` value. For example, the VOC-enabled example config tests cancer/control indicators within each respiratory sample type:
+
+```yaml
+indicspecies:
+  stratified:
+    enabled: true
+    analyses:
+      - within_col: Type_Group
+        group_col: Case
+        levels:
+          - Oral Rinse
+          - BAL
+          - Bronchial Brush
+```
+
+These stratified runs write per-level and pooled tables named like `stratified_Case_within_Type_Group_Bronchial_Brush_indicator_species_summary.tsv` and `stratified_Case_within_Type_Group_indicator_species_summary.tsv`.
+
 ## Count Filtering
 
 `FILTER_COUNTS` produces the ASV count tables used by downstream analyses. The important outputs are:

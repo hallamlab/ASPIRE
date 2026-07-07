@@ -1010,6 +1010,15 @@ def compute_umap_hdbscan(
 # Plotting Functions
 # ============================================================================
 
+def save_png_and_svg(output_path: Path | str, *, bbox_inches: str = 'tight', dpi: int = 300) -> None:
+    """Save the current matplotlib figure as PNG plus matching SVG."""
+    png_path = Path(output_path)
+    if png_path.suffix.lower() != '.png':
+        png_path = png_path.with_suffix('.png')
+    plt.savefig(png_path, bbox_inches=bbox_inches, dpi=dpi)
+    plt.savefig(png_path.with_suffix('.svg'), bbox_inches=bbox_inches)
+
+
 def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> None:
     """
     Visualize joint UMAP+HDBSCAN parameter optimization results.
@@ -1125,7 +1134,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.legend(loc='upper right')
     ax.grid(axis='y', alpha=0.3)
     
-    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    save_png_and_svg(output_path)
     plt.close()
     
     print(f"  [✓] Saved parameter optimization plots")
@@ -2157,7 +2166,7 @@ def diagnose_batch_correction(
     ax.grid(axis='y', alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{output_prefix}_correction_diagnostics.png", bbox_inches='tight', dpi=300)
+    save_png_and_svg(f"{output_prefix}_correction_diagnostics.png")
     plt.close()
     
     print(f"[✓] Saved diagnostic plots to: {output_prefix}_correction_diagnostics.png\n")

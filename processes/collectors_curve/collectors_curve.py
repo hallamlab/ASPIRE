@@ -347,7 +347,7 @@ def main():
                     help="Comma-separated explicit group order for facets/legend.")
     ap.add_argument("--title", default="",
                     help="Optional plot title (overlay and faceted).")
-    ap.add_argument("--formats", default="pdf",
+    ap.add_argument("--formats", default="pdf,svg",
                     help="Comma-separated image formats to write (e.g., pdf,png,svg).")
     ap.add_argument("--dpi", type=int, default=150, help="Figure DPI for raster outputs (PNG).")
     ap.add_argument("--xpad", type=float, default=0.5,

@@ -627,12 +627,12 @@ if( !plotLungStatusScriptFile.exists() ) {
     exit 1, "plot_lung_status_analysis.py not found in project directory"
 }
 def plotLungStatusScriptPath = plotLungStatusScriptFile.canonicalPath
-def plotVocCcaScriptFile = new File("${projectDir}/processes/voc_correlation/plot_voc_cca.py")
-if( !plotVocCcaScriptFile.exists() ) {
-    exit 1, "plot_voc_cca.py not found in project directory"
+def plotVocCorrScriptFile = new File("${projectDir}/processes/voc_correlation/plot_voc_corr.py")
+if( !plotVocCorrScriptFile.exists() ) {
+    exit 1, "plot_voc_corr.py not found in project directory"
 }
-def plotVocCcaScriptPath = plotVocCcaScriptFile.canonicalPath
-def plotVocCcaScriptHash = fileMd5(plotVocCcaScriptFile)
+def plotVocCorrScriptPath = plotVocCorrScriptFile.canonicalPath
+def plotVocCorrScriptHash = fileMd5(plotVocCorrScriptFile)
 def emptyModulesScriptFile = new File("${projectDir}/processes/master_summary/empty_modules.tsv")
 if( !emptyModulesScriptFile.exists() ) {
     exit 1, "empty_modules.tsv not found in project directory"
@@ -852,6 +852,13 @@ if( sankeyKeepTypesRaw instanceof List ) {
 } else if( sankeyKeepTypesRaw ) {
     sankeyKeepTypes = sankeyKeepTypesRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
 }
+def sankeyVerticalOrderRaw = sankeyConfig.vertical_order ?: sankeyConfig.group_order
+List<String> sankeyVerticalOrder = []
+if( sankeyVerticalOrderRaw instanceof List ) {
+    sankeyVerticalOrder = sankeyVerticalOrderRaw.collect { it.toString().trim() }.findAll { it }
+} else if( sankeyVerticalOrderRaw ) {
+    sankeyVerticalOrder = sankeyVerticalOrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+}
 def sankeyOutputPrefix = sankeyConfig.output_prefix ?: "metadata/data_loss_sankey"
 def sankeyTitle = sankeyConfig.title ?: "Data Loss Flow"
 def sankeyMakeLabeled = (sankeyConfig.make_labeled == null) ? true : (sankeyConfig.make_labeled as boolean)
@@ -1046,7 +1053,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def collectorsOutPrefix = collectorsConfig.out_prefix ?: 'metadata/collectors_curve'
     def collectorsOutPrefixAbs = new File(outputDir, collectorsOutPrefix).canonicalPath
     def collectorsTitle = collectorsConfig.title ?: ''
-    def collectorsFormats = collectorsConfig.formats ?: 'pdf'
+    def collectorsFormats = collectorsConfig.formats ?: 'pdf,svg'
     def collectorsXpad = collectorsConfig.xpad != null ? (collectorsConfig.xpad as double) : 0.5d
     def collectorsMaxCols = collectorsConfig.max_cols ? (collectorsConfig.max_cols as int) : 3
     def collectorsShowPerms = collectorsConfig.show_perms ? (collectorsConfig.show_perms as int) : 10
@@ -1096,7 +1103,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def bubbleplotterOutputPrefix = bubbleplotterConfig.output_prefix ?: 'metadata/bubble_plot_asv'
     def bubbleplotterOutputPrefixAbs = new File(outputDir, bubbleplotterOutputPrefix).canonicalPath
     def bubbleplotterOutputDirAbs = (new File(bubbleplotterOutputPrefixAbs).parentFile ?: new File(outputDir)).canonicalPath
-    def bubbleplotterFormats = bubbleplotterConfig.formats ?: 'pdf,png'
+    def bubbleplotterFormats = bubbleplotterConfig.formats ?: 'pdf,png,svg'
     def bubbleplotterCountCol = bubbleplotterConfig.count_col ?: 'count'
     def bubbleplotterSampleCol = bubbleplotterConfig.sample_col ?: metadataPlotsSampleCol
     def bubbleplotterDepthCol = bubbleplotterConfig.group1_col ?: (bubbleplotterConfig.depth_col ?: metadataPlotsTypeCol)
@@ -1148,7 +1155,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     } else if( umapClusteringGroup2OrderRaw ) {
         umapClusteringGroup2Order = umapClusteringGroup2OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
     }
-    def umapClusteringFormats = umapClusteringConfig.formats ?: 'pdf,png'
+    def umapClusteringFormats = umapClusteringConfig.formats ?: 'pdf,png,svg'
     def umapClusteringNormalize = umapClusteringConfig.normalize ?: 'clr'
     def umapClusteringTransform = umapClusteringConfig.transform ?: 'sqrt'
     def umapClusteringNeighbors = umapClusteringConfig.n_neighbors ? (umapClusteringConfig.n_neighbors as int) : 15
@@ -1433,9 +1440,55 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     }
     boolean indicspeciesEnabled = indicspeciesRequested
     def indicspeciesSampleCol = indicspeciesConfig.sample_col ?: metadataPlotsSampleCol
-    def indicspeciesPerms = indicspeciesConfig.perms ? (indicspeciesConfig.perms as int) : 999
+    def indicspeciesPerms = indicspeciesConfig.perms ? (indicspeciesConfig.perms as int) : 9999
+    def indicspeciesSeed = indicspeciesConfig.seed ? (indicspeciesConfig.seed as int) : 42
+    def indicspeciesQThreshold = indicspeciesConfig.q_threshold != null ? (indicspeciesConfig.q_threshold as double) : 0.05d
+    if( indicspeciesQThreshold < 0 || indicspeciesQThreshold > 1 ) {
+        exit 1, "indicspecies.q_threshold must be between 0 and 1"
+    }
     def indicspeciesMinN = indicspeciesConfig.min_n ? (indicspeciesConfig.min_n as int) : 2
     def indicspeciesBlockCol = indicspeciesConfig.block_col ? indicspeciesConfig.block_col.toString().trim() : ''
+    def indicspeciesStratifiedConfig = indicspeciesConfig.stratified ?: [:]
+    boolean indicspeciesStratifiedEnabled = indicspeciesStratifiedConfig instanceof Map ?
+        (indicspeciesStratifiedConfig.containsKey('enabled') ? (indicspeciesStratifiedConfig.enabled as boolean) : false) :
+        false
+    List<String> indicspeciesStratifiedSpecs = []
+    if( indicspeciesStratifiedEnabled ) {
+        def stratifiedAnalysesRaw = indicspeciesStratifiedConfig.analyses ?: []
+        if( !(stratifiedAnalysesRaw instanceof List) ) {
+            exit 1, "indicspecies.stratified.analyses must be a list when indicspecies.stratified.enabled is true"
+        }
+        indicspeciesStratifiedSpecs = stratifiedAnalysesRaw.collect { analysis ->
+            if( !(analysis instanceof Map) ) {
+                exit 1, "Each indicspecies.stratified.analyses entry must be a map with within_col and group_col"
+            }
+            def withinCol = (analysis.within_col ?: analysis.within ?: '').toString().trim()
+            def groupCol = (analysis.group_col ?: analysis.group ?: '').toString().trim()
+            if( !withinCol || !groupCol ) {
+                exit 1, "Each indicspecies.stratified.analyses entry requires within_col and group_col"
+            }
+            def unsafeValues = [withinCol, groupCol].findAll { it.contains('::') || it.contains(';') || it.contains('|') }
+            if( unsafeValues ) {
+                exit 1, "indicspecies.stratified column names cannot contain '::', ';', or '|': ${unsafeValues.join(', ')}"
+            }
+            def levelsRaw = analysis.levels ?: analysis.within_values ?: analysis.sample_types ?: []
+            List<String> levels = []
+            if( levelsRaw instanceof List ) {
+                levels = levelsRaw.collect { it.toString().trim() }.findAll { it }
+            } else if( levelsRaw ) {
+                levels = levelsRaw.toString().split(/\|/).collect { it.trim() }.findAll { it }
+            }
+            def unsafeLevels = levels.findAll { it.contains('::') || it.contains(';') || it.contains('|') }
+            if( unsafeLevels ) {
+                exit 1, "indicspecies.stratified levels cannot contain '::', ';', or '|': ${unsafeLevels.join(', ')}"
+            }
+            levels ? "${withinCol}::${groupCol}::${levels.join('|')}" : "${withinCol}::${groupCol}"
+        }.findAll { it }
+        if( indicspeciesStratifiedSpecs.isEmpty() ) {
+            exit 1, "indicspecies.stratified.enabled is true but no valid analyses were configured"
+        }
+    }
+    def indicspeciesStratifiedSpecsArg = indicspeciesStratifiedSpecs.join(';')
     def indicspeciesGroup1 = indicspeciesGroupCols ? indicspeciesGroupCols[0] : 'group1'
     def indicspeciesGroup2 = indicspeciesGroupCols.size() > 1 ? indicspeciesGroupCols[1] : ''
     def indicspeciesOutputDirAbs = new File(outputDir, "indicspecies").canonicalPath
@@ -1542,7 +1595,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def clustermapsIsaMinStat = clustermapsConfig.isa_min_stat != null ? (clustermapsConfig.isa_min_stat as double) : 0.6d
     def clustermapsIsaSignificanceCols = clustermapsConfig.isa_significance_cols ?: ''
     def clustermapsIsaStatCols = clustermapsConfig.isa_stat_cols ?: ''
-    def clustermapsFormats = clustermapsConfig.formats ?: 'pdf,png'
+    def clustermapsFormats = clustermapsConfig.formats ?: 'pdf,png,svg'
     def clustermapsFigWidth = clustermapsConfig.figwidth != null ? clustermapsConfig.figwidth : null
     def clustermapsRowHeight = clustermapsConfig.row_height != null ? clustermapsConfig.row_height : null
     def clustermapsMinHeight = clustermapsConfig.min_height != null ? clustermapsConfig.min_height : null
@@ -1946,8 +1999,11 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         metadataPlotsGroupOrder: metadataPlotsGroupOrder,
         indicspeciesSampleCol: indicspeciesSampleCol,
         indicspeciesPerms: indicspeciesPerms,
+        indicspeciesSeed: indicspeciesSeed,
+        indicspeciesQThreshold: indicspeciesQThreshold,
         indicspeciesMinN: indicspeciesMinN,
         indicspeciesBlockCol: indicspeciesBlockCol,
+        indicspeciesStratifiedSpecsArg: indicspeciesStratifiedSpecsArg,
         indicspeciesGroup1: indicspeciesGroup1,
         indicspeciesGroup2: indicspeciesGroup2,
         indicspeciesOutputDirAbs: indicspeciesOutputDirAbs,
@@ -2201,6 +2257,7 @@ workflow {
     def asvMetaForMasterSummary = null
     def asvFinalForMasterSummary = null
     def indicspeciesTablesForOverlay = Channel.value(file(emptyModulesPath))
+    def indicspeciesGroup1SummaryForSpieceasi = Channel.value(file(emptyModulesPath))
     if( metadataPlotsEnabled ) {
         metadata_analysis_stage = RUN_METADATA_ANALYSES(
             general_stats_stage.fastq_stats,
@@ -2214,6 +2271,7 @@ workflow {
         asvMetaForMasterSummary = metadata_analysis_stage.asv_meta_master_summary
         asvFinalForMasterSummary = metadata_analysis_stage.asv_final_master_summary
         indicspeciesTablesForOverlay = metadata_analysis_stage.indicspecies_tables
+        indicspeciesGroup1SummaryForSpieceasi = metadata_analysis_stage.indicspecies_group1_summary
     }
     def asv_mag_link_stage = null
     if( asvMagLinkEnabled ) {
@@ -2231,7 +2289,8 @@ workflow {
     def modulesAllForNetwork = null
     if( spieceasiEnabled ) {
         spieceasi_stage = SPIECEASI(
-            asvFinalForSpieceasi
+            asvFinalForSpieceasi,
+            indicspeciesGroup1SummaryForSpieceasi
         )
         graphAllForModules = spieceasi_stage.graph_all.map { it }
         graphAllForNetwork = spieceasi_stage.graph_all.map { it }
@@ -2497,6 +2556,7 @@ workflow RUN_METADATA_ANALYSES {
     asv_meta_master_summary = asvMetaForMasterSummary
     asv_final_master_summary = asvFinalForMasterSummary
     indicspecies_tables = indicspeciesTablesForOverlay
+    indicspecies_group1_summary = indicspeciesEnabled ? indicspecies_stage.group1_summary : Channel.value(file(emptyModulesPath))
 }
 
 workflow RUN_GRAPH_NETWORK {
@@ -3108,6 +3168,7 @@ process SANKEY {
 
     script:
     def keepTypesArg = sankeyKeepTypes && !sankeyKeepTypes.isEmpty() ? "  --keep-types \"${sankeyKeepTypes.join(',')}\" \\\n" : ''
+    def verticalOrderArg = sankeyVerticalOrder && !sankeyVerticalOrder.isEmpty() ? "  --vertical-order \"${sankeyVerticalOrder.join(',')}\" \\\n" : ''
     def rawOutputPrefix = "${sankeyOutputPrefix}_raw"
     def labeledFlag = sankeyMakeLabeled ? "  --make-labeled \\\n" : ''
     def unlabeledFlag = sankeyMakeUnlabeled ? "  --make-unlabeled \\\n" : ''
@@ -3122,7 +3183,7 @@ python3 "${sankeyScriptPath}" \\
   --samp-col "${sankeySampCol}" \\
   --group1-col "${sankeyGroupCol}" \\
   --color-col "${sankeyColorCol}" \\
-${keepTypesArg}  --fastq-stats stats/"${fastq_stats}" \\
+${keepTypesArg}${verticalOrderArg}  --fastq-stats stats/"${fastq_stats}" \\
   --filtered-stats stats/"${filtered_stats}" \\
   --asv-raw ASVs/"${asv_counts}" \\
   --asv-decon ASVs/"${asv_decon_counts}" \\
@@ -3140,7 +3201,7 @@ python3 "${sankeyScriptPath}" \\
   --samp-col "${sankeySampCol}" \\
   --group1-col "${sankeyGroupCol}" \\
   --color-col "${sankeyColorCol}" \\
-  --fastq-stats stats/"${fastq_stats}" \\
+${verticalOrderArg}  --fastq-stats stats/"${fastq_stats}" \\
   --filtered-stats stats/"${filtered_stats}" \\
   --asv-raw ASVs/"${asv_counts}" \\
   --asv-decon ASVs/"${asv_decon_counts}" \\
@@ -3890,6 +3951,7 @@ process INDICSPECIES {
     script:
     def indicspeciesGroupColsArg = indicspeciesGroupCols.join(',')
     def indicspeciesBlockArg = indicspeciesBlockCol ? """  --block-col "${indicspeciesBlockCol}" \\\n""" : ''
+    def indicspeciesStratifiedArg = indicspeciesStratifiedSpecsArg ? """  --stratified-isa "${indicspeciesStratifiedSpecsArg}" \\\n""" : ''
     def isaSummarySuffix = indicspeciesUseDuleg ? '_indicator_species_DULEG_summary.tsv' : '_indicator_species_summary.tsv'
     def isaResultsSuffix = indicspeciesUseDuleg ? '_indicator_species_DULEG_results.tsv' : '_indicator_species_results.tsv'
     def group1SummaryPath = "${indicspeciesOutputDirAbs}/${indicspeciesGroup1}${isaSummarySuffix}"
@@ -3905,7 +3967,9 @@ Rscript "${indicspeciesScriptPath}" \\
   --meta "${metadata_table}" \\
   --sample-col "${indicspeciesSampleCol}" \\
   --group-cols "${indicspeciesGroupColsArg}" \\
-${indicspeciesBlockArg}  --perms ${indicspeciesPerms} \\
+${indicspeciesBlockArg}${indicspeciesStratifiedArg}  --perms ${indicspeciesPerms} \\
+  --seed ${indicspeciesSeed} \\
+  --q-threshold ${indicspeciesQThreshold} \\
   --min-n ${indicspeciesMinN} \\
   --outdir "${outputDir}"
 
@@ -4195,9 +4259,9 @@ process VOC_CORRELATION {
 """
 set -euo pipefail
 mkdir -p "${vocCorrelationOutputDirAbs}"
-echo "plot_voc_cca.py md5: ${plotVocCcaScriptHash}"
+echo "plot_voc_corr.py md5: ${plotVocCorrScriptHash}"
 
-python "${plotVocCcaScriptPath}" \\
+python "${plotVocCorrScriptPath}" \\
   --asv-meta "${asv_meta_table}" \\
   --asv-counts "${asv_counts}" \\
   --voc "${vocCorrelationVocTablePath}" \\
@@ -4637,6 +4701,7 @@ process SPIECEASI {
 
     input:
     path(asv_counts)
+    path(force_keep_asvs)
 
     output:
     path("spieceasi_network_pos_all.graphml"), emit: graph_all
@@ -4651,6 +4716,7 @@ process SPIECEASI {
     def forceFilterFlag = spieceasiForceFilter ? 'TRUE' : 'FALSE'
     def forceSpieceasiFlag = spieceasiForceSpieceasi ? 'TRUE' : 'FALSE'
     def forceGraphsFlag = spieceasiForceGraphs ? 'TRUE' : 'FALSE'
+    def forceKeepAsvsArg = indicspeciesEnabled ? """  --force-keep-asvs "${force_keep_asvs}" \\\n""" : ''
     """
 set -euo pipefail
 mkdir -p "${spieceasiOutputDirAbs}"
@@ -4662,7 +4728,7 @@ Rscript "${spieceasiScriptPath}" \\
   --transpose ${transposeFlag} \\
   --min-rel-abund ${spieceasiMinRelAbund} \\
   --min-prevalence ${spieceasiMinPrevalence} \\
-  --remove-zero-var ${removeZeroVarFlag} \\
+${forceKeepAsvsArg}  --remove-zero-var ${removeZeroVarFlag} \\
   --method "${spieceasiMethod}" \\
   --lambda-min-ratio ${spieceasiLambdaMinRatio} \\
   --nlambda ${spieceasiNlambda} \\

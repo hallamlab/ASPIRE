@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Sequence, Optional
 
@@ -365,6 +366,16 @@ def build_sankey(steps: List[str], counts: List[int],
     output_html.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(str(output_html))
     print(f"✔ Sankey saved: {output_html}")
+    try:
+        output_svg = output_html.with_suffix(".svg")
+        fig.write_image(str(output_svg))
+        print(f"✔ Sankey saved: {output_svg}")
+    except Exception as exc:
+        print(
+            f"[WARN] Could not export Sankey SVG for {output_html}: {exc}. "
+            "Install/refresh the sankey environment with python-kaleido for static Plotly export.",
+            file=sys.stderr,
+        )
 
 
 # =========================
@@ -414,6 +425,11 @@ def get_parser() -> argparse.ArgumentParser:
         default="snap",
         choices=["snap", "perpendicular", "freeform", "fixed"],
         help="Plotly sankey node arrangement mode (use 'freeform' for draggable nodes).",
+    )
+    out.add_argument(
+        "--vertical-order",
+        default="",
+        help="Comma-separated group order from top to bottom for input/output Sankey nodes. Unlisted groups are appended.",
     )
 
     # --- Misc
@@ -553,15 +569,21 @@ def main():
         asv_micro_reads
     ]
 
+    vertical_order = [t.strip() for t in args.vertical_order.split(',') if t.strip()]
     if keep_types:
         types = keep_types
     else:
-        unique_types = meta[args.group1_col].unique()
+        unique_types = [str(t) for t in meta[args.group1_col].dropna().unique()]
         # Sort numerically if possible, otherwise alphabetically
         try:
             types = sorted(unique_types, key=lambda x: float(x))
         except (ValueError, TypeError):
             types = sorted(unique_types)
+    if vertical_order:
+        present = {str(t) for t in types}
+        ordered = [t for t in vertical_order if t in present]
+        ordered.extend([str(t) for t in types if str(t) not in set(ordered)])
+        types = ordered
 
     # Input and output dicts for sankey ends (string keys to match palette)
     lmp_in = {
@@ -573,13 +595,14 @@ def main():
         for t in types
     }
 
-    # Sort by key (numeric if possible)
-    try:
-        lmp_in = dict(sorted(lmp_in.items(), key=lambda x: float(x[0])))
-        lmp_out = dict(sorted(lmp_out.items(), key=lambda x: float(x[0])))
-    except (ValueError, TypeError):
-        lmp_in = dict(sorted(lmp_in.items()))
-        lmp_out = dict(sorted(lmp_out.items()))
+    # Preserve explicit top-to-bottom order when requested; otherwise sort deterministically.
+    if not vertical_order:
+        try:
+            lmp_in = dict(sorted(lmp_in.items(), key=lambda x: float(x[0])))
+            lmp_out = dict(sorted(lmp_out.items(), key=lambda x: float(x[0])))
+        except (ValueError, TypeError):
+            lmp_in = dict(sorted(lmp_in.items()))
+            lmp_out = dict(sorted(lmp_out.items()))
 
     if args.verbose:
         print("[i] Steps:")

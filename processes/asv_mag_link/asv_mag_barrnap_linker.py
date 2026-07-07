@@ -14,9 +14,9 @@ The script writes:
 - tables/asv2mag_pairing.tsv
 - tables/asv2mag_summary.tsv
 - tables/asv2mag_genome_summary.tsv
-- plots/asv2mag_pairing_status.png
-- plots/asv2mag_top_genomes.png
-- plots/asv2mag_identity_vs_coverage.png
+- plots/asv2mag_pairing_status.{png,svg}
+- plots/asv2mag_top_genomes.{png,svg}
+- plots/asv2mag_identity_vs_coverage.{png,svg}
 """
 
 from __future__ import annotations
@@ -101,6 +101,12 @@ def info(msg: str) -> None:
 
 def warn(msg: str) -> None:
     print(f"[WARN] {msg}", file=sys.stderr)
+
+
+def save_png_and_svg(path: Path) -> None:
+    """Save the current matplotlib figure as PNG plus matching SVG."""
+    plt.savefig(path, dpi=300)
+    plt.savefig(path.with_suffix(".svg"))
 
 
 def die(msg: str) -> None:
@@ -1081,7 +1087,7 @@ def plot_pairing_status(summary: pd.DataFrame, plots_dir: Path) -> None:
     ax.set_title("ASV-to-genome pairing status")
     plt.xticks(rotation=20, ha="right")
     plt.tight_layout()
-    plt.savefig(plots_dir / "asv2mag_pairing_status.png", dpi=300)
+    save_png_and_svg(plots_dir / "asv2mag_pairing_status.png")
     plt.close()
 
 
@@ -1097,7 +1103,7 @@ def plot_top_genomes(genome_summary: pd.DataFrame, plots_dir: Path, top_n: int =
     ax.set_ylabel("Genome/MAG")
     ax.set_title("Top genome/MAG pairings")
     plt.tight_layout()
-    plt.savefig(plots_dir / "asv2mag_top_genomes.png", dpi=300)
+    save_png_and_svg(plots_dir / "asv2mag_top_genomes.png")
     plt.close()
 
 
@@ -1119,7 +1125,7 @@ def plot_identity_vs_coverage(pairing: pd.DataFrame, plots_dir: Path) -> None:
     ax.set_ylabel("Percent identity")
     ax.set_title("Best ASV-to-genome alignments")
     plt.tight_layout()
-    plt.savefig(plots_dir / "asv2mag_identity_vs_coverage.png", dpi=300)
+    save_png_and_svg(plots_dir / "asv2mag_identity_vs_coverage.png")
     plt.close()
 
 

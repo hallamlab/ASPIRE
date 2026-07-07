@@ -142,6 +142,13 @@ sankey:
   group1_col: Type_Group
   color_col: Color
   keep_types:
+  vertical_order:
+    - Skin Brush
+    - Scope Flush
+    - Oral Rinse
+    - BAL
+    - Bronchial Brush
+    - Control
   arrangement: freeform
   output_prefix: metadata/data_loss_sankey
   title: Data Loss Flow
@@ -232,7 +239,7 @@ collectors_curve:
     - BAL
     - Bronchial Brush
   permutations: 999
-  seed: 42
+  seed: 1
   out_prefix: metadata/collectors_curve
   title: "Collector's Curves"
   formats: pdf,svg
@@ -272,7 +279,7 @@ bubbleplotter:
     - Oral Rinse
     - BAL
     - Bronchial Brush
-  formats: pdf,png
+  formats: pdf,png,svg
   figsize: "32,60"
   bubble_scale: 10
   no_auto_size: false
@@ -289,7 +296,7 @@ umap_clustering:
     - Oral Rinse
     - BAL
     - Bronchial Brush
-  formats: pdf,png
+  formats: pdf,png,svg
   normalize: clr
   transform: none
   no_scale: true
@@ -336,8 +343,8 @@ diversity:
     contralateral_value: Contralateral
     contralateral_sample_types: Bronchial Brush,BAL
     transform: none
-    permutations: 9999
-    seed: 42
+    permutations: 999
+    seed: 1
     require_complete_types: false
 
 indicspecies:
@@ -347,6 +354,15 @@ indicspecies:
   group_cols:
     - Type_Group
     - Case
+  stratified:
+    enabled: true
+    analyses:
+      - within_col: Type_Group
+        group_col: Case
+        levels:
+          - Oral Rinse
+          - BAL
+          - Bronchial Brush
   group_palettes:
     Type_Group: Oral Rinse=#6A3D9A,BAL+Oral Rinse=#E78AC3,BAL=#0072B2,BAL+Bronchial Brush=#5CC8C8,Bronchial Brush=#009E73,Bronchial Brush+Oral Rinse=#B8E186,BAL+Bronchial Brush+Oral Rinse=#CBB6E9,not_indicator=#D3D3D3
     Case: Control=#FFFFFF,Cancer=#A50026,Cancer+Control=#000000,not_indicator=#D3D3D3
@@ -371,6 +387,8 @@ indicspecies:
   group2_palette: Control=#FFFFFF,Cancer=#A50026,Cancer+Control=#000000,not_indicator=#D3D3D3
   block_col: Participant_ID
   perms: 999
+  seed: 1
+  q_threshold: 0.05
   min_n: 2
   focus_group1_label: Bronchial Brush
   label_focused_asvs: true
@@ -412,7 +430,7 @@ power_analysis:
   n_simulations: 1000
   n_perm: 199
   alpha: 0.05
-  seed: 42
+  seed: 1
   skip_estimate: false
   skip_plot: false
   transform: none
@@ -490,7 +508,7 @@ clustermaps:
   isa_min_stat: 0.6
   isa_significance_cols:
   isa_stat_cols:
-  formats: pdf,png
+  formats: pdf,png,svg
   figwidth: 32
   row_height: 0.08
   min_height: 8
@@ -508,7 +526,7 @@ spieceasi:
   module_resolutions: 0.8,1.0,1.2
   module_reps: 50
   module_consensus_threshold: 0.95
-  module_seed: 42
+  module_seed: 1
   module_best_only: true
   module_best_min_size: 5
   module_best_min_stability: 0.7
@@ -560,14 +578,14 @@ spieceasi:
   rep_num: 50
   thresh: 0.1
   ncores: 8
-  seed: 10010
+  seed: 1
   edge_threshold: 0.05
   keep_negative: true
   layout_iters: 1000
   force_filter: true
   force_spieceasi: true
   force_graphs: true
-  layout_seed: 42
+  layout_seed: 1
   layout_scale: 3.0
   degree_scale: 80.0
   degree_size_mode: legacy

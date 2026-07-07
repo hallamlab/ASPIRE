@@ -505,7 +505,7 @@ def main():
     ap.add_argument("--row-height", type=float, default=0.4, help="Row height scale (in/row).")
     ap.add_argument("--min-height", type=float, default=8.0, help="Minimum figure height (in).")
     ap.add_argument("--max-height", type=float, default=6000.0, help="Maximum figure height (in).")
-    ap.add_argument("--formats", type=str, default="pdf,png",
+    ap.add_argument("--formats", type=str, default="pdf,png,svg",
                     help="Comma-separated output formats, e.g. 'pdf,png' or 'pdf,svg'.")
 
     # Mitochondrial (optional)
