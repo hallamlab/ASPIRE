@@ -6,7 +6,6 @@ dependencies:
   # Early workflow tools (FASTP_QC through FILTER_TABLE)
   - fastp
   - vsearch
-  - swarm
   - python=3.11
   - pandas
   - biopython
