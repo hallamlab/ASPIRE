@@ -2,8 +2,6 @@ paths:
   input_dir: /cephfs/rjm_work/si_asv/V4_ncbi_input
   output_dir: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output
   manifest: /cephfs/rjm_work/si_asv/ref_db/sample_manifest.tsv
-  work_dir: /cephfs/rjm_work/si_asv/nf_work_aspire
-  conda_cache_dir: /cephfs/rjm_work/si_asv/conda_cache
 
 resources:
   threads: 12
