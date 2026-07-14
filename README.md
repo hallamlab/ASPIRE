@@ -118,6 +118,20 @@ checksum table, generated YAML and manifest, launch command, and the completed
 input manifest, reference checksums, module inventory, output SHA-256 values,
 and integrated master tables.
 
+**Review the mock outputs:** Open
+`<output_dir>/summary/report/ASPIRE_run_report.html` in a web browser as the
+starting point for reviewing the completed run. Its opening **Data Accounting
+Summary** reports analyzed samples, participants, study-group counts, sequence
+totals, and retained ASVs, followed by the filtering Sankey, read-depth
+swarmplot, ASV-overlap UpSet plot, and collector's curves. The **Output
+Inventory** summarizes the number of tables and plots produced by each module
+and links directly to their locations under `<output_dir>/modules/`. The final
+**Nextflow run details** section links the execution report, timeline, trace,
+workflow DAG, launch command, version record, controller log, task inventory,
+and per-task logs under `<output_dir>/logs/`. Exact output paths and SHA-256
+checksums remain available in `<output_dir>/summary/tables/`. The report is an
+accounting and navigation aid; it does not provide biological interpretation.
+
 ## General Quick Start
 
 Create a run config from the full template, then edit all paths for your environment:
@@ -168,6 +182,18 @@ finalization is performed by the wrapper:
 ```bash
 nextflow run asv_pipeline.nf --params-file my_run.yml --pipeline_config my_run.yml
 ```
+
+**Review the outputs:** After a successful wrapper run, open
+`<output_dir>/summary/report/ASPIRE_run_report.html` in a web browser. This is
+the recommended starting point before biological interpretation. Review the
+opening **Data Accounting Summary** for sample and group composition, sequence
+and ASV retention, and the Sankey, swarmplot, UpSet, and collector's-curve
+figures. Use the **Output Inventory** to open each enabled module's tables and
+plots under `<output_dir>/modules/`. Use **Nextflow run details** to inspect task
+status and resource use, execution timing, the workflow DAG, trace data,
+software/runtime records, and controller or per-task logs under
+`<output_dir>/logs/`. Machine-readable inventories, exact paths, and checksums
+are stored under `<output_dir>/summary/tables/`.
 
 ## Inputs
 
