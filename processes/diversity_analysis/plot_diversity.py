@@ -121,6 +121,17 @@ def parse_list_arg(arg: str) -> List[str]:
     return [x.strip() for x in arg.split(',') if x.strip()] if arg else []
 
 
+def parse_palette_arg(arg: str) -> Dict[str, str]:
+    palette: Dict[str, str] = {}
+    for item in parse_list_arg(arg):
+        if "=" not in item:
+            raise ValueError(f"Invalid palette entry '{item}'; expected label=#RRGGBB")
+        label, color = (part.strip() for part in item.split("=", 1))
+        if label and color:
+            palette[label] = color
+    return palette
+
+
 def create_palette_from_metadata(meta: pd.DataFrame, group_col: str, 
                                  color_col: Optional[str] = None) -> Dict[str, str]:
     """
@@ -367,7 +378,9 @@ def plot_alpha_faceted(df: pd.DataFrame, group_col: str, facet_col: str,
         if data.empty:
             return
         # Keep only x levels present in this facet to avoid seaborn edge-case failures
-        x_levels = [lvl for lvl in sorted(data[x].dropna().unique().tolist()) if lvl in facet_palette]
+        present = set(data[x].dropna().astype(str))
+        x_levels = [str(level) for level in facet_palette if str(level) in present]
+        x_levels.extend(sorted(level for level in present if level not in x_levels))
         if not x_levels:
             return
         sns.boxplot(
@@ -1036,6 +1049,8 @@ def parse_args() -> argparse.Namespace:
         "--style-cols", default="",
         help="Comma-separated columns to use as styles in UMAP plots"
     )
+    style.add_argument("--group-palette", default="", help="Primary label=#hex palette.")
+    style.add_argument("--secondary-palette", default="", help="Secondary label=#hex palette.")
     
     # Parameters
     params = parser.add_argument_group("Analysis Parameters")
@@ -1111,9 +1126,18 @@ def main():
     style_cols = parse_list_arg(args.style_cols)
     
     # Create palette
-    palette = create_palette_from_metadata(
-        metadata, args.group_col, args.color_col
-    )
+    auto_primary = create_palette_from_metadata(metadata, args.group_col, args.color_col)
+    palette = {**auto_primary, **parse_palette_arg(args.group_palette)}
+    observed_groups = set(metadata[args.group_col].dropna().astype(str))
+    palette = {key: value for key, value in palette.items() if key in observed_groups}
+    secondary_palette = parse_palette_arg(args.secondary_palette)
+    if args.secondary_col and args.secondary_col in metadata.columns:
+        observed_secondary = set(metadata[args.secondary_col].dropna().astype(str))
+        auto_secondary = create_palette_from_metadata(metadata, args.secondary_col)
+        secondary_palette = {**auto_secondary, **secondary_palette}
+        secondary_palette = {
+            key: value for key, value in secondary_palette.items() if key in observed_secondary
+        }
     
     # Load alpha diversity
     alpha_table = None
@@ -1167,6 +1191,7 @@ def main():
         exclude_groups=exclude_groups,
         group_palette=palette,
         secondary_col=args.secondary_col,
+        secondary_palette=secondary_palette or None,
         filter_col=args.filter_col,
         filter_exclude=filter_exclude,
         size_col=args.size_col,
@@ -1224,6 +1249,7 @@ def main():
             exclude_groups=exclude_groups,
             group_palette=palette,
             secondary_col=args.secondary_col,
+            secondary_palette=secondary_palette or None,
             filter_col=args.filter_col,
             filter_exclude=filter_exclude,
             size_col=args.size_col,

@@ -4,23 +4,121 @@ ASPIRE is a Nextflow DSL2 workflow for ASV generation, taxonomy assignment, deco
 
 The supported entrypoint is `run_asv_pipeline.sh`. It bootstraps the controller environment, launches `asv_pipeline.nf`, manages resume behavior, and supports stage-aware reruns with `--rerun-from`.
 
-The canonical user documentation is this README. `ASPIRE.ipynb` is kept as a short run notebook; the old duplicate technical notebook has been removed.
-
 ## Key Files
 
 - `run_asv_pipeline.sh`: main wrapper for routine runs.
 - `asv_pipeline.nf`: current Nextflow workflow.
 - `asv_pipeline_nextflow.yml`: full config template.
 - `examples/set1-2.local.yml`: local example config with absolute paths for the LMP test dataset.
+- `examples/mock.local.yml`: full-module template used by the portable mock config generator.
+- `examples/configure_mock_run.sh`: validates a supplied mock fixture and writes a machine-local YAML.
+- `examples/validate_mock_run.sh`: validates the completed mock run against its truth contract.
+- `examples/MOCK_DATASET_TESTING.md`: expanded mock test instructions.
 - `processes/`: scripts and conda environment YAMLs used by individual stages.
 
-## Quick Start
+## Requirements
 
-Install runtime prerequisites:
+ASPIRE is developed for a 64-bit Linux environment. Before starting, install:
+
+- Bash and standard GNU command-line utilities.
+- Conda or Mamba, with `mamba` available on `PATH`.
+- Git for obtaining and identifying the workflow revision.
+- Internet access on the first run to solve Conda environments and download
+  configured SINA and QIIME2/SILVA references. Fully offline runs require
+  pre-populated package caches and local reference paths.
+
+The wrapper creates a repository-local controller environment containing
+Nextflow and its Java runtime, then creates process-specific environments from
+the committed YAML definitions. Users should not manually combine all process
+dependencies into one environment. ASPIRE isolates the run's package cache and
+serializes Conda environment creation to prevent concurrent repodata-lock
+failures. Environment solves use strict channel priority to avoid pathological
+cross-channel backtracking, and module-specific environments avoid the legacy
+all-in-one dependency search space. Builds are terminated after 30 minutes by
+default rather than hanging indefinitely; set `ASPIRE_MAMBA_BUILD_TIMEOUT` only
+when a slower package source is expected. Analysis tasks remain parallel.
+
+Resource needs depend on sample count and sequencing depth. For the complete
+mock benchmark, provision at least 8 CPU cores, 32 GB RAM, and 50 GB of free
+storage for input data, Conda environments, Nextflow work files, downloaded
+references, and final outputs. `resources.threads` controls per-task CPU use; it
+does not limit the total storage used by cached tasks.
+
+Verify the entrypoint prerequisites:
 
 ```bash
+command -v bash
+command -v git
 command -v mamba
 ```
+
+If `mamba` is unavailable, install a current Miniforge distribution from
+<https://github.com/conda-forge/miniforge> and open a new shell before running
+ASPIRE.
+
+## Mock Dataset Quick Start
+
+Download and extract the ASPIRE mock dataset from
+[Zenodo (DOI: 10.5281/zenodo.21358300)](https://doi.org/10.5281/zenodo.21358300).
+The [direct Zenodo record](https://zenodo.org/records/21358300) provides the
+dataset archive used by this test.
+
+Clone ASPIRE and record the exact revision:
+
+```bash
+git clone https://github.com/hallamlab/ASPIRE.git
+cd ASPIRE
+git rev-parse HEAD
+```
+
+Using the extracted `mock_dataset/`, generate a portable configuration. Do not
+edit the developer paths in `examples/mock.local.yml`:
+
+No controller-environment setup or activation is required. The configuration
+script creates or updates `.controller_env`, and the run and validation wrappers
+reuse it automatically.
+
+```bash
+./examples/configure_mock_run.sh \
+  --dataset /absolute/path/to/mock_dataset \
+  --output /absolute/path/to/aspire_mock_output \
+  --config-out mock_run.generated.yml
+```
+
+Run every benchmarked module except optional ASV-to-MAG linkage:
+
+```bash
+./run_asv_pipeline.sh mock_run.generated.yml --no-resume
+```
+
+Validate both technical completion and recovery of the dataset's known signals:
+
+```bash
+./examples/validate_mock_run.sh \
+  --dataset /absolute/path/to/mock_dataset \
+  --results /absolute/path/to/aspire_mock_output
+```
+
+Success is reported as `All mock-run checks passed.` with exit status zero. The
+validator derives sample counts from the supplied manifest and metadata, checks
+known mitochondrial/contaminant removal, confirms taxonomy and statistical
+outputs, rejects a degenerate network, verifies SVG production, and checks every
+published module file against its SHA-256 manifest. See
+`examples/MOCK_DATASET_TESTING.md` for the dataset schema, restart instructions,
+and interpretation of failed checks.
+
+The visible output directories are created when the run starts and updated only
+after the workflow completes successfully. Nextflow work files, Conda environments,
+and internal staging persist under `<output_dir>/.aspire/`, allowing the same command
+to resume interrupted, failed, or completed runs without a separate temporary tree.
+
+For a reproducibility record, retain the ASPIRE Git commit, supplied dataset
+checksum table, generated YAML and manifest, launch command, and the completed
+`summary/tables/` directory. The latter records the resolved run configuration,
+input manifest, reference checksums, module inventory, output SHA-256 values,
+and integrated master tables.
+
+## General Quick Start
 
 Create a run config from the full template, then edit all paths for your environment:
 
@@ -33,6 +131,8 @@ At minimum, review:
 - `paths.input_dir`
 - `paths.output_dir`
 - `paths.manifest`
+- `paths.runtime_dir`
+- `paths.keep_runtime_dir`
 - `paths.work_dir`
 - `paths.conda_cache_dir`
 - any `/abs/path/...` placeholder
@@ -50,7 +150,7 @@ List valid stage names for targeted reruns:
 ./run_asv_pipeline.sh --list-stages
 ```
 
-Force a rerun from one stage onward while preserving cacheability for future resumes:
+Force a rerun from one stage onward using the retained default runtime cache:
 
 ```bash
 ./run_asv_pipeline.sh my_run.yml --rerun-from PLOT_METADATA
@@ -62,7 +162,8 @@ Pass extra Nextflow options after `--`:
 ./run_asv_pipeline.sh my_run.yml -- -with-report report.html -with-trace trace.tsv
 ```
 
-Direct Nextflow invocation is supported, but the wrapper is preferred:
+Direct Nextflow invocation is intended only for debugging because public-output
+finalization is performed by the wrapper:
 
 ```bash
 nextflow run asv_pipeline.nf --params-file my_run.yml --pipeline_config my_run.yml
@@ -70,23 +171,40 @@ nextflow run asv_pipeline.nf --params-file my_run.yml --pipeline_config my_run.y
 
 ## Inputs
 
-FASTQs can be discovered from `paths.input_dir`, but manifest mode is preferred for reproducible sample names.
+FASTQs can be discovered from `paths.input_dir`. Every run writes a normalized,
+reusable manifest to `<output_dir>/summary/tables/run_manifest.tsv`, regardless of
+whether discovery or `paths.manifest` supplied the inputs.
 
 Manifest format:
 
-- Tab-separated, no header.
+- Tab-separated; the `sample_id`, `fastq_r1`, `fastq_r2` header is optional.
 - Column 1: `sample_id`.
 - Column 2: R1 FASTQ.
 - Column 3: R2 FASTQ, optional for single-end data.
 - Lines starting with `#` are ignored.
 - Relative FASTQ paths are resolved relative to the manifest file.
 
+See `examples/manifest.template.tsv` for a reusable template.
+
 Metadata is required by enabled metadata-aware branches such as metadata plots, Sankey, diversity, indicator species, VOC correlation, power analysis, taxonomy patient-aware analysis, lung-status analysis, and several network overlays. The configured sample column must match the manifest sample IDs.
+
+Metadata column names are configured per run (`sample_col`, `type_col`,
+`case_col`, `patient_col`, and related settings); ASPIRE does not require fixed
+study-specific names. If the configured color column is absent, ASPIRE assigns
+deterministic colors and writes both an augmented metadata table and a reusable
+two-column palette under `<output_dir>/modules/metadata_plots/tables`. Set `palette_file` in
+`metadata_plots` or `sankey` to override it. See
+`examples/metadata_palette.template.tsv`.
 
 Reference inputs depend on enabled branches:
 
 - `sina.reference` and taxonomy references are used for SINA alignment and taxonomy assignment. The config can point at local files or URLs.
-- `mito.mito_db` and `mito.biof_db` are required when mitochondrial/contaminant decontamination is enabled.
+- Mitochondrial/contaminant decontamination accepts existing database prefixes
+  through `mito.mito_db` and `mito.biof_db`, or FASTA inputs through
+  `mito.mito_fasta` and `mito.contaminant_fasta`. ASPIRE exports/copies and
+  rebuilds both as run references under `<output_dir>/references/reference/blast_databases`.
+- `mito.run_mitomaster: false` skips the external MITOMASTER service while
+  retaining taxonomy and local BLAST screens, which is useful for offline tests.
 - `voc_correlation.voc_table` is required when VOC correlation is enabled.
 - `asv_mag_link.*` inputs are required only when ASV-to-MAG linkage is enabled.
 
@@ -106,31 +224,35 @@ The wrapper's current stage order is:
 10. `FILTER_TABLE`
 11. `SINA_TRIM`
 12. `TAXONOMY`
-13. `MITOMASTER`
-14. `MITO_DECONTAM`
-15. `FILTER_COUNTS`
-16. `GENERAL_STATS`
-17. `PLOT_METADATA`
-18. `PLOT_UPSET`
-19. `ASV_BATCH_CORRECTION`
-20. `ASV_META_FROM_CORRECTED`
-21. `BUBBLEPLOTTER`
-22. `UMAP_CLUSTERING`
-23. `OUTLIER_CHECKER`
-24. `COLLECTORS_CURVE`
-25. `DIVERSITY_ANALYSIS`
-26. `INDICSPECIES`
-27. `INDICSPECIES_PLOTS`
-28. `VOC_CORRELATION`
-29. `CLUSTERMAPS`
-30. `POWER_ANALYSIS_PIPELINE`
-31. `SPIECEASI`
-32. `NETWORK_MODULES`
-33. `ASV_MAG_LINK`
-34. `GRAPH_NETWORK`
-35. `MODULE_MAG_ANCHORS`
-36. `SANKEY`
-37. `MASTER_SUMMARY`
+13. `PREPARE_BLAST_DATABASES`
+14. `MITOMASTER`
+15. `MITO_DECONTAM`
+16. `FILTER_COUNTS`
+17. `GENERAL_STATS`
+18. `PLOT_METADATA`
+19. `PLOT_UPSET`
+20. `ASV_BATCH_CORRECTION`
+21. `ASV_META_FROM_CORRECTED`
+22. `BUBBLEPLOTTER`
+23. `UMAP_CLUSTERING`
+24. `OUTLIER_CHECKER`
+25. `COLLECTORS_CURVE`
+26. `DIVERSITY_ANALYSIS`
+27. `INDICSPECIES`
+28. `INDICSPECIES_PLOTS`
+29. `INDICSPECIES_ALIGNED_PLOTS`
+30. `VOC_CORRELATION`
+31. `CLUSTERMAPS`
+32. `POWER_ANALYSIS_PIPELINE`
+33. `TAXONOMY_PATIENT_AWARE`
+34. `LUNG_STATUS_ANALYSIS`
+35. `SPIECEASI`
+36. `NETWORK_MODULES`
+37. `ASV_MAG_LINK`
+38. `GRAPH_NETWORK`
+39. `MODULE_MAG_ANCHORS`
+40. `SANKEY`
+41. `MASTER_SUMMARY`
 
 Disabled optional branches are skipped based on the YAML config.
 
@@ -141,11 +263,13 @@ Stages that do not list a custom ASPIRE script are executed directly by Nextflow
 | Workflow stage | Script used | Purpose |
 |---|---|---|
 | Pipeline launch | `run_asv_pipeline.sh` | Initializes the controller environment, resolves work/cache directories, and launches `asv_pipeline.nf` with the selected YAML config. |
+| Output finalization | `processes/output_layout/organize_outputs.py` | Atomically publishes runtime staging into module tables/plots, intermediates, references, logs, and integrated summary manifests. |
 | Workflow orchestration | `asv_pipeline.nf` | Defines process order, config parsing, inputs/outputs, conda environments, and enabled/disabled analysis branches. |
 | `FILTER_TABLE` | `processes/filter_table/filter_ASV_table.py` | Filters the intermediate ASV count table by minimum sample read depth and minimum ASV abundance. |
 | `SINA_TRIM` | `processes/sina_trim/parse_sina_log.py` | Parses SINA variable-region annotations from SINA logs. |
 | `SINA_TRIM` | `processes/sina_trim/trim_v_sina.py` | Trims dereplicated ASV sequences to configured variable regions. |
 | `TAXONOMY` | `processes/taxonomy/qiime_vs_classifier.py` | Calls the QIIME2 Python API and q2-feature-classifier to classify ASVs against configured SILVA artifacts. |
+| `PREPARE_BLAST_DATABASES` | Command-line `blastdbcmd` and `makeblastdb` | Normalizes configured FASTA files or existing nucleotide database prefixes into archived run-specific BLAST databases. |
 | `MITOMASTER` | `processes/mitomaster/mitomaster.py` | Queries MITOMASTER for candidate mitochondrial ASVs. |
 | `MITO_DECONTAM` | `processes/mito_decontam/mito_checker.py` | Integrates MITOMASTER, mitochondrial blastn, contaminant blastn, and taxonomy evidence into non-target calls and plots. |
 | `FILTER_COUNTS` | `processes/filter_counts/filter_nontarget.py` | Removes non-target, mitochondrial, low-abundance, low-quality taxonomy, and explicitly excluded taxa; writes final `ASV_target.tsv`. |
@@ -234,10 +358,10 @@ Use this for host or other known non-target ranks that should be removed even if
 
 `PLOT_METADATA` builds the run's metadata-linked ASV products. Typical outputs include:
 
-- `metadata/ASV_meta.tsv`
-- `metadata/ASV_meta_micro.tsv`
-- `metadata/ASV_final.tsv`
-- `metadata/ASV_final.micro.tsv`
+- `modules/metadata_plots/tables/ASV_meta_micro.tsv`
+- `modules/metadata_plots/tables/ASV_final.micro.tsv`
+- `modules/metadata_plots/tables/metadata_updated_micro.tsv`
+- `modules/metadata_plots/tables/master_table_micro.tsv`
 - run metadata summaries and plots
 
 When batch correction is enabled, corrected count and metadata tables are produced and downstream branches that support corrected inputs use them.
@@ -267,46 +391,114 @@ VOC abundance plots are different from correlation plots:
 Major optional modules are controlled by YAML `enabled` flags:
 
 - `mito`: BLAST-based mitochondrial and contaminant screening.
-- `filter_counts`: count filtering, intermediate count audit tables, and explicit taxon exclusions.
+- `non_target_filtering`: mitochondrial/contaminant screening, count filtering, audit tables, and explicit taxon exclusions.
 - `general_stats`: run-level ASV and sample summaries.
 - `metadata_plots`: metadata-linked ASV summary tables and plots.
 - `plot_upset`, `bubbleplotter`, `umap_clustering`: metadata visualization branches.
 - `batch_correction` and `outlier_detection`: corrected ASV tables and outlier checks.
 - `collectors_curve`: rarefaction/collector curve summaries.
 - `diversity`: Shannon, Bray-Curtis, Jaccard, and optional patient-aware diversity workflows.
-- `indicspecies`: indicator species analysis and aligned indicator plots.
+- `indicator_analysis`: indicator species tables, standard plots, and aligned indicator plots.
 - `voc_correlation`: VOC-ASV association analysis and VOC abundance visualizations.
 - `clustermaps`: ASV and metadata heatmaps.
-- `spieceasi`, `network_modules`, `graph_network`: SPIEC-EASI network inference, module detection, and network visualization.
+- `network_analysis`: SPIEC-EASI inference, module detection, network visualization, and optional module/MAG anchor tables.
 - `power_analysis`: patient-aware power analysis using metadata-linked ASV tables.
-- `taxonomy_patient_aware` and `lung_status_analysis`: patient-aware taxonomic and lung-status comparisons.
+- `taxonomy`: taxonomic assignment and patient-aware taxonomic comparisons.
+- `lung_status_analysis`: patient-aware lung-status comparisons.
 - `asv_mag_link` and `module_mag_anchors`: ASV-to-MAG/barrnap linkage and module anchoring.
 - `sankey`: data-loss and filtering Sankey summaries.
 - `master_summary`: final combined ASV summary export.
 
 ## Output Structure
 
-Typical top-level output directories include:
+Successful wrapper runs atomically publish a clean output tree:
 
-- `fastp/`, `merged/`, `filtered/`, `concat/`, `derep/`, `denoise/`, `nochimeras/`
-- `ASVs/`, `sina/`, `taxonomy/`, `mito/`, `stats/`, `logs/`
-- `metadata/`, `batch_correction/`, `outliers_corrected/`
-- `diversity/`, `indicspecies/`, `voc_correlation/`, `clustermaps/`
-- `spieceasi/`, `network/`, `asv_mag_link/`
-- `power_analysis/`, `taxonomy_patient_aware/`, `lung_status_analysis/`
-- `sankey/`, `master_summary/`
+```text
+<output_dir>/
+├── .aspire/             # persistent Nextflow work, Conda cache, and internal staging
+├── modules/
+│   └── <module>/
+│       ├── tables/
+│       └── plots/
+├── intermediates/
+├── references/
+├── summary/
+│   ├── tables/
+│   ├── plots/
+│   └── report/
+└── logs/
+```
 
-The actual directory set depends on which branches are enabled.
+Each enabled analytical module receives both `tables/` and `plots/`, even when
+one is empty. `intermediates/` contains core FASTQ, FASTA, and ASV-processing
+artifacts. `summary/tables/module_output_manifest.tsv` inventories and
+checksums every module deliverable. The summary also contains the supplied run
+configuration, normalized input manifest, per-module file/size totals,
+reference checksums, an intermediate-file inventory, and the integrated master
+ASV tables when `master_summary` is enabled. `summary/plots/module_output_summary.svg`
+visualizes the published module inventory, and
+`summary/report/ASPIRE_run_report.html` provides
+an integrated, navigable run report. Its opening data-accounting section summarizes
+analyzed samples, participants, group membership, retained ASVs, and sequence totals,
+and displays the Sankey, read-depth swarmplot, and ASV-overlap UpSet without adding
+biological interpretation. A combined collector's curve adds descriptive sampling-
+coverage context. The report then inventories module outputs and links to
+Nextflow's execution report, timeline, trace table, and workflow DAG. These artifacts are generated by
+default under `logs/`, alongside the recorded launch command and Nextflow
+version. `logs/controller.log` captures the complete Nextflow/controller stream;
+`logs/task_execution.tsv` and `logs/tasks/` preserve the command, stdout, stderr,
+trace, and exit code available for every task in the completed run. External
+Nextflow integrations that require services or credentials, such as Tower,
+webhooks, notifications, and telemetry exporters, remain opt-in. The publication
+also writes `summary/tables/nextflow_artifact_manifest.tsv` with paths, sizes,
+and SHA-256 checksums for all archived run records. The publication is assembled from runtime
+staging only after Nextflow succeeds, so the visible output is never left in a
+half-organized state.
 
 ## Runtime And Cache Behavior
 
-The wrapper reads `paths.work_dir` and `paths.conda_cache_dir` from the YAML and exports `NXF_WORK` and `NXF_CONDA_CACHEDIR` when configured. It also creates the controller environment at `.controller_env`.
+By default, an output such as `/project/run/ASPIRE_output` keeps its runtime
+state in a hidden directory inside that output:
 
-Normal repeated wrapper runs resume from Nextflow cache. If a branch does not rerun because cached outputs are valid, use `--rerun-from STAGE_NAME`.
+```text
+ASPIRE_output/.aspire/
+├── nf_work/
+├── conda_cache/
+└── publication_staging/
+```
+
+The wrapper creates the visible modular directories at run start. After a
+successful workflow, it atomically replaces only `modules/`, `intermediates/`,
+`references/`, `summary/`, and `logs/`; `.aspire/` is never replaced during
+publication. Set `paths.runtime_dir` to relocate the runtime tree. Runtime state
+is retained by default so normal `-resume` and `--rerun-from` execution remains
+available after successful, failed, and interrupted runs. Set
+`paths.keep_runtime_dir: false` only when the cache should be discarded after a
+successful run. Explicit
+`paths.work_dir` and `paths.conda_cache_dir` values override their respective
+derived paths.
+
+Rerunning the same wrapper command resumes from the retained Nextflow cache. If a
+branch does not rerun because cached outputs are valid, use `--rerun-from STAGE_NAME`.
 
 Several stages include checksums of external process scripts in their task commands, so edits to important Python/R helper scripts invalidate the relevant Nextflow task cache. This avoids stale outputs when a script changes but the input filenames stay the same.
 
 ## Troubleshooting
+
+If environment creation fails while collecting repodata with
+`BlockingIOError: [Errno 11] Resource temporarily unavailable`, the failure is
+a Conda cache-lock collision rather than evidence of an unavailable package.
+Current wrapper runs use a run-local package cache and serialize environment
+creation through `flock`. Restart the failed run normally; its retained
+Nextflow work directory remains resumable. DNS, connection-timeout, or HTTP
+errors instead indicate network or repository availability and are retried by
+the controller before the run fails.
+
+Interrupted Nextflow sessions can also leave `.env-*.lock` marker files even
+when no `mamba` process remains. The wrapper takes an exclusive lock on the
+configured Conda cache, rejects concurrent runs that share that cache, and then
+removes these orphaned markers automatically. Messages about waiting for the
+serialized mamba slot indicate active environment creation, not a deadlock.
 
 - `No usable entries detected in manifest`: check tab separation, sample IDs, and FASTQ paths.
 - `metadata file not found`: set the branch-specific metadata path or disable that branch.

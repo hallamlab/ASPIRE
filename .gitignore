@@ -34,6 +34,7 @@ conda-local/
 .nextflow/
 .nextflow*
 work/
+.aspire/
 
 # Common Nextflow report/trace artifacts (when emitted in repo root)
 timeline.html
@@ -46,6 +47,8 @@ dag.dot
 # Generated analysis outputs
 # -----------------------------
 reports/
+mock_run*.yml
+mock_run*.manifest.tsv
 
 # -----------------------------
 # OS/editor noise

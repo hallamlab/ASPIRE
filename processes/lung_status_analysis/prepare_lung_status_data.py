@@ -66,6 +66,9 @@ def assign_lung_status(
     contralateral_col: str | None,
     healthy_col: str | None,
     explicit_status_col: str | None,
+    status_a_value: str,
+    status_b_value: str,
+    reference_status_value: str,
 ) -> str:
     """
     Assign lung status using explicit metadata when available, otherwise derive it.
@@ -77,8 +80,13 @@ def assign_lung_status(
     """
     if explicit_status_col and explicit_status_col in row.index:
         explicit = str(row.get(explicit_status_col, "")).strip()
-        if explicit in {"TumorSide", "Contralateral", "Healthy"}:
-            return explicit
+        explicit_map = {
+            status_a_value: "TumorSide",
+            status_b_value: "Contralateral",
+            reference_status_value: "Healthy",
+        }
+        if explicit in explicit_map:
+            return explicit_map[explicit]
 
     if healthy_col and healthy_col in row.index:
         is_healthy = as_bool(row.get(healthy_col))
@@ -138,6 +146,9 @@ def main() -> None:
     p.add_argument("--contralateral-col", type=str, default="Contralateral", help="Optional boolean contralateral column")
     p.add_argument("--healthy-col", type=str, default="Healthy", help="Optional boolean healthy/control column")
     p.add_argument("--lung-status-col", type=str, default="lung_status", help="Optional precomputed lung-status column")
+    p.add_argument("--status-a-value", default="TumorSide", help="Value representing the first paired status")
+    p.add_argument("--status-b-value", default="Contralateral", help="Value representing the second paired status")
+    p.add_argument("--reference-status-value", default="Healthy", help="Value representing the unpaired reference status")
     p.add_argument(
         "--outdir",
         type=Path,
@@ -184,11 +195,14 @@ def main() -> None:
         contralateral_col=args.contralateral_col if args.contralateral_col in df_filt.columns else None,
         healthy_col=args.healthy_col if args.healthy_col in df_filt.columns else None,
         explicit_status_col=args.lung_status_col if args.lung_status_col in df_filt.columns else None,
+        status_a_value=args.status_a_value,
+        status_b_value=args.status_b_value,
+        reference_status_value=args.reference_status_value,
     )
 
     # Remove "Other" and "Unknown" categories
     df_filt = df_filt[df_filt["lung_status"].isin(["TumorSide", "Contralateral", "Healthy"])].copy()
-    print(f"  After assignment: {df_filt['sample'].nunique()} samples")
+    print(f"  After assignment: {df_filt[args.sample_col].nunique()} samples")
 
     if df_filt.empty:
         print("ERROR: No samples remaining after lung_status assignment")

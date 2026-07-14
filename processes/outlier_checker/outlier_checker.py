@@ -46,6 +46,9 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sklearn.ensemble import IsolationForest
 from sklearn.svm import OneClassSVM
@@ -65,6 +68,41 @@ except ImportError:
 
 DEFAULT_SAMPLE_ID_COL = 'sampleID'
 FALLBACK_SAMPLE_ID_COLS = ("sampleID", "sample", "longID")
+
+mpl.rcParams["pdf.fonttype"] = 42
+mpl.rcParams["svg.fonttype"] = "none"
+
+
+def write_outlier_summary_plot(preds: pd.DataFrame, tag: str, out_dir: Path) -> None:
+    detector_cols = [col for col in ("IsolationForest", "OneClassSVM", "HDBSCAN") if col in preds]
+    summary = pd.DataFrame({
+        "detector": detector_cols + ["Consensus"],
+        "outlier_count": [int((preds[col] == -1).sum()) for col in detector_cols]
+        + [int(preds["is_outlier"].astype(bool).sum())],
+    })
+    summary["sample_count"] = len(preds)
+    summary["outlier_fraction"] = summary["outlier_count"] / max(len(preds), 1)
+    summary.to_csv(out_dir / f"outliers_{tag}_summary.tsv", sep="\t", index=False)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+    sns.barplot(data=summary, x="detector", y="outlier_count", color="#D55E00", ax=axes[0])
+    axes[0].set_title("Outliers by detector")
+    axes[0].set_xlabel("")
+    axes[0].set_ylabel("Samples flagged")
+    axes[0].tick_params(axis="x", rotation=25)
+
+    max_votes = int(preds["outlier_votes"].max()) if len(preds) else 0
+    vote_counts = preds["outlier_votes"].value_counts().reindex(range(max_votes + 1), fill_value=0)
+    axes[1].bar(vote_counts.index.astype(str), vote_counts.values, color="#0072B2")
+    axes[1].set_title("Ensemble vote distribution")
+    axes[1].set_xlabel("Outlier votes")
+    axes[1].set_ylabel("Samples")
+    sns.despine(fig=fig)
+    fig.suptitle(f"Outlier detection summary: {tag}", fontweight="bold")
+    fig.tight_layout()
+    for ext in ("svg", "pdf", "png"):
+        fig.savefig(out_dir / f"outliers_{tag}_summary.{ext}", bbox_inches="tight", dpi=300)
+    plt.close(fig)
 
 
 # -----------------------------
@@ -439,6 +477,7 @@ def main():
         tag = "all" if gcol.lower() == "none" else gcol
         out_path = out_dir / f"outliers_{tag}.tsv"
         preds.reset_index().rename(columns={"index": "sample"}).to_csv(out_path, sep="\t", index=False)
+        write_outlier_summary_plot(preds, tag, out_dir)
         if args.verbose:
             n_out = int(preds["is_outlier"].sum())
             print(f"[✓] Wrote {out_path}  (outliers={n_out}, n={len(preds)})")

@@ -127,11 +127,22 @@ def parse_csv_list(text: str) -> list[str]:
     return [item.strip() for item in str(text).split(",") if item.strip()]
 
 
+def parse_mapping(text: str) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for token in parse_csv_list(text):
+        if "=" not in token:
+            raise ValueError(f"Invalid palette entry '{token}'; expected label=#RRGGBB")
+        label, color = (part.strip() for part in token.split("=", 1))
+        if label and color:
+            mapping[label] = color
+    return mapping
+
+
 def normalize_sample_id(value: object, mode: str) -> str:
     text = str(value).strip()
     if not text:
         return text
-    if mode == "none":
+    if mode in {"none", "exact"}:
         return text
     parts = text.split("_")
     if mode == "legacy_patient_pair":
@@ -255,9 +266,11 @@ def choose_voc_columns(voc_df: pd.DataFrame, requested: list[str], sample_col: s
     return numeric_cols
 
 
-def load_isa_annotations(pattern: str) -> pd.DataFrame:
+def load_isa_annotations(pattern: str, q_threshold: float = 0.05) -> pd.DataFrame:
+    columns = ["ASV", "isa_source", "isa_groups", "source_category"]
     rows: list[pd.DataFrame] = []
-    for match in sorted(glob.glob(pattern)):
+    normalized_pattern = str(pattern).replace(r"\_", "_")
+    for match in sorted(glob.glob(normalized_pattern)):
         path = Path(match)
         name = path.name
         if not name.endswith("_summary.tsv") or "DULEG" in name:
@@ -277,12 +290,12 @@ def load_isa_annotations(pattern: str) -> pd.DataFrame:
         sig_col = next((col for col in ["significant", "is_significant", "sig"] if col in df.columns), None)
         stat_col = next((col for col in ["stat", "Stat", "STAT"] if col in df.columns), None)
         keep = pd.Series(True, index=df.index)
-        if q_col:
-            keep &= pd.to_numeric(df[q_col], errors="coerce").le(0.05)
-        if stat_col:
-            keep &= pd.to_numeric(df[stat_col], errors="coerce").gt(0.0)
         if sig_col:
             keep &= df[sig_col].astype(str).str.strip().str.lower().isin({"true", "t", "1", "yes", "y"})
+        elif q_col:
+            keep &= pd.to_numeric(df[q_col], errors="coerce").le(q_threshold)
+        if stat_col:
+            keep &= pd.to_numeric(df[stat_col], errors="coerce").gt(0.0)
         ann = ann.loc[keep].copy()
         if ann.empty:
             continue
@@ -300,10 +313,10 @@ def load_isa_annotations(pattern: str) -> pd.DataFrame:
         ann = ann.loc[ann["isa_groups"].astype(bool), ["ASV", "isa_source", "isa_groups"]]
         rows.append(ann)
     if not rows:
-        return pd.DataFrame(columns=["ASV", "isa_source", "isa_groups"])
+        return pd.DataFrame(columns=columns)
     out = pd.concat(rows, ignore_index=True).drop_duplicates()
     out["source_category"] = out["isa_source"].map(isa_source_category)
-    return out
+    return out.reindex(columns=columns)
 
 
 def isa_source_category(source: object) -> str:
@@ -424,10 +437,10 @@ def load_voc_metadata(voc_path: str, sample_col: str, sample_id_mode: str) -> pd
     if sample_col not in voc_df.columns:
         raise ValueError(f"VOC sample column '{sample_col}' not found.")
     needed = [sample_col] + [col for col in ["subclass2", "Type"] if col in voc_df.columns]
-    missing = [col for col in ["subclass2", "Type"] if col not in voc_df.columns]
-    if missing:
-        raise ValueError(f"VOC metadata columns not found: {', '.join(missing)}")
     voc_meta = voc_df[needed].copy()
+    for column in ["subclass2", "Type"]:
+        if column not in voc_meta.columns:
+            voc_meta[column] = "missing"
     voc_meta[sample_col] = voc_meta[sample_col].map(lambda x: normalize_sample_id(x, sample_id_mode))
     voc_meta = voc_meta.loc[~voc_meta[sample_col].duplicated(keep="first")].set_index(sample_col)
     voc_meta["subclass2"] = voc_meta["subclass2"].fillna("missing").astype(str)
@@ -589,26 +602,22 @@ def build_sample_voc_matrix(
     return matrix, plot_meta.reset_index(drop=True), color_df
 
 
-def sample_voc_legend_blocks() -> list[tuple[str, list[tuple[str, str]]]]:
+def observed_legend_items(values: pd.Series, palette: dict[str, str]) -> list[tuple[str, str]]:
+    observed = set(values.dropna().astype(str))
+    return [(label, color) for label, color in palette.items() if label in observed]
+
+
+def sample_voc_legend_blocks(plot_meta: pd.DataFrame) -> list[tuple[str, list[tuple[str, str]]]]:
     return [
-        ("Case", [("Control", CASE_STATUS_PALETTE["Control"]), ("Cancer", CASE_STATUS_PALETTE["Cancer"])]),
-        ("subclass2", [
-            ("ctrl-brush", VOC_SUBCLASS2_PALETTE["ctrl-brush"]),
-            ("ca-contra", VOC_SUBCLASS2_PALETTE["ca-contra"]),
-            ("ca-lung", VOC_SUBCLASS2_PALETTE["ca-lung"]),
-            ("missing", VOC_SUBCLASS2_PALETTE["missing"]),
-        ]),
-        ("Type", [
-            ("Left Brush", BRUSH_SIDE_PALETTE["Left Brush"]),
-            ("Right Brush", BRUSH_SIDE_PALETTE["Right Brush"]),
-            ("missing", BRUSH_SIDE_PALETTE["missing"]),
-        ]),
+        ("Case", observed_legend_items(plot_meta["case_status"], CASE_STATUS_PALETTE)),
+        ("subclass2", observed_legend_items(plot_meta["subclass2"], VOC_SUBCLASS2_PALETTE)),
+        ("Type", observed_legend_items(plot_meta["brush_side"], BRUSH_SIDE_PALETTE)),
     ]
 
 
 def legend_items_from_color_key(color_key: pd.DataFrame) -> list[tuple[str, str]]:
     labels = [] if color_key.empty else color_key["isa_group_primary"].astype(str).dropna().drop_duplicates().tolist()
-    ordered = ordered_group_type_labels(labels, include_all_known=True)
+    ordered = ordered_group_type_labels(labels, include_all_known=False)
     return [(label, GROUP_TYPE_PALETTE.get(label, GROUP_TYPE_PALETTE["not_indicator"])) for label in ordered]
 
 
@@ -696,6 +705,9 @@ def save_clustermap(
     row_cluster = df.shape[0] > 1
     col_cluster = df.shape[1] > 1
     cmap, norm, center, vmin, vmax = clustermap_scale(df, correlation_direction)
+    n_row_annotations = 0 if plot_row_colors is None else plot_row_colors.shape[1]
+    n_col_annotations = 0 if plot_col_colors is None else plot_col_colors.shape[1]
+    annotation_ratio = min(0.12, max(0.045, 0.035 * max(n_row_annotations, n_col_annotations, 1)))
     grid = sns.clustermap(
         df.astype(float),
         cmap=cmap,
@@ -706,7 +718,7 @@ def save_clustermap(
         method="average",
         figsize=(fig_width, fig_height),
         dendrogram_ratio=(0.12, 0.12),
-        colors_ratio=(0.03, 0.03),
+        colors_ratio=(annotation_ratio, annotation_ratio),
         cbar_pos=None,
         row_cluster=row_cluster,
         col_cluster=col_cluster,
@@ -924,7 +936,11 @@ def main() -> None:
     parser.add_argument("--case-col", default="Case")
     parser.add_argument("--sample-types", default="Bronchial Brush,Lung Brush")
     parser.add_argument("--voc-sample-col", default="sample")
-    parser.add_argument("--sample-id-mode", default="legacy_patient_pair")
+    parser.add_argument(
+        "--sample-id-mode",
+        choices=["exact", "none", "legacy_patient_pair", "prefix1"],
+        default="legacy_patient_pair",
+    )
     parser.add_argument("--voc-col", action="append", default=[])
     parser.add_argument("--use-legacy-voc-subset", action="store_true")
     parser.add_argument("--spieceasi-min-rel-abund", type=float, default=0.0)
@@ -932,7 +948,13 @@ def main() -> None:
     parser.add_argument("--spieceasi-remove-zero-var", type=str, default="true")
     parser.add_argument("--correlation-direction", choices=["positive", "negative", "both"], default="positive")
     parser.add_argument("--indicspecies-glob", default="*_indicator_species*.tsv")
+    parser.add_argument("--isa-q-threshold", type=float, default=0.05)
+    parser.add_argument("--case-palette", default="", help="Comma-separated label=#hex mapping.")
+    parser.add_argument("--isa-palette", default="", help="Comma-separated ISA-group=#hex mapping.")
     args = parser.parse_args()
+
+    CASE_STATUS_PALETTE.update(parse_mapping(args.case_palette))
+    GROUP_TYPE_PALETTE.update(parse_mapping(args.isa_palette))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -982,7 +1004,7 @@ def main() -> None:
     asv_counts_t_unfiltered = asv_counts_t_unfiltered.loc[common_samples]
     voc_df = voc_df.loc[common_samples]
 
-    isa_annotations = load_isa_annotations(args.indicspecies_glob)
+    isa_annotations = load_isa_annotations(args.indicspecies_glob, q_threshold=args.isa_q_threshold)
     isa_group_annotations = isa_annotations.loc[isa_annotations["source_category"] == "group"].copy()
     if not isa_group_annotations.empty:
         isa_group_annotations.to_csv(outdir / "isa_annotations_group.tsv", sep="\t", index=False)
@@ -1046,7 +1068,7 @@ def main() -> None:
         zscore_columns(sample_voc_matrix),
         outdir / "sample_voc_brush_clustermap",
         row_colors=sample_row_colors,
-        row_color_legends=sample_voc_legend_blocks(),
+        row_color_legends=sample_voc_legend_blocks(sample_voc_meta),
         correlation_direction="data",
         cbar_label="VOC abundance z-score",
     )

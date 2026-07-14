@@ -2,8 +2,9 @@ paths:
   input_dir: /home/ryan/Projects/UBC/LMP/spark_set1_fastqs
   output_dir: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output
   manifest: /home/ryan/Projects/UBC/LMP/spark_set1-2_manifest.tsv
-  work_dir: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output/nf_work
-  conda_cache_dir: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output/conda_cache
+  runtime_dir: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output/.aspire
+  keep_runtime_dir: true
+  # work_dir and conda_cache_dir may override runtime_dir independently.
     # Optional: set to an NFS/CephFS path to override Nextflow's -w (e.g. /mnt/ceph/work)
 
 resources:
@@ -56,7 +57,7 @@ swarm:
   distance: 1
 
 sina:
-  reference: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output/sina_reference/SILVA_138.2_SSURef_NR99_03_07_24_opt.arb
+  reference:
   reference_url: https://www.arb-silva.de/fileadmin/silva_databases/release_138_2/ARB_files/SILVA_138.2_SSURef_NR99_03_07_24_opt.arb.gz
   download_subdir: sina_reference
   regions:
@@ -401,7 +402,7 @@ indicspecies:
   aligned_min_stat: 0.0
   aligned_top_n: 25
   venn:
-  taxonomy: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
+  taxonomy:
 
 voc_correlation:
   enabled: true
@@ -479,7 +480,7 @@ clustermaps:
   output_dir: clustermaps
   mito_output_dir: mito/clustermaps
   mito_input:
-  isa_file: /home/ryan/Projects/UBC/LMP/ASPIRE_set1-2_test2_output/indicspecies/
+  isa_file:
   run_mito: true
   sample_col: Sample
   sample_code_col: Sample
@@ -651,10 +652,14 @@ environments:
   batch_correction: processes/asv_batch_correction/env.yml
   outlier_checker: processes/outlier_checker/env.yml
   collectors_curve: processes/collectors_curve/env.yml
+  plot_upset: processes/plot_upset/env.yml
+  bubbleplotter: processes/bubbleplotter/env.yml
+  umap_clustering: processes/umap_clustering/env.yml
   diversity: processes/diversity_analysis/env.yml
   indicspecies: processes/indicspecies/env.yml
   voc_correlation: processes/voc_correlation/env.yml
   clustermaps: processes/clustermaps/env.yml
+  power_analysis: processes/power_analysis_pipeline/env.yml
   taxonomy_patient_aware: processes/taxonomy_patient_aware/env.yml
   lung_status_analysis: processes/lung_status_analysis/env.yml
   spieceasi: processes/spieceasi/env.yml

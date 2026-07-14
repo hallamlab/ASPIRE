@@ -128,10 +128,16 @@ def plot_cancer_vs_control(results_dir: Path, outdir: Path):
     if permanova_df is None or shannon_df is None:
         raise ValueError("Cancer-vs-control power result tables are missing or empty.")
 
-    sample_types = ['BAL', 'Bronchial Brush', 'Oral Rinse']
+    sample_types = list(dict.fromkeys(
+        permanova_df['Sample_type'].dropna().astype(str).tolist()
+        + shannon_df['Sample_type'].dropna().astype(str).tolist()
+    ))
+    if not sample_types:
+        raise ValueError("Cancer-vs-control power tables contain no sample types.")
+    n_types = len(sample_types)
 
     # ========== FULL VERSION (all scenarios) ==========
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7), sharex=True)
+    fig, axes = plt.subplots(2, n_types, figsize=(max(8, 4 * n_types), 7), sharex=True, squeeze=False)
 
     for col_idx, stype in enumerate(sample_types):
         # PERMANOVA (top row)
@@ -179,8 +185,8 @@ def plot_cancer_vs_control(results_dir: Path, outdir: Path):
             ax_shan.set_ylabel('Power (Shannon)', fontsize=11)
 
     # Add legend to top-right subplot
-    handles, labels = axes[0, 2].get_legend_handles_labels()
-    axes[0, 2].legend(handles, labels, loc='lower right', frameon=True,
+    handles, labels = axes[0, -1].get_legend_handles_labels()
+    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
                      fontsize=9, title='Scenario')
 
     plt.suptitle('Power Analysis: Cancer vs Control',
@@ -195,7 +201,7 @@ def plot_cancer_vs_control(results_dir: Path, outdir: Path):
     plt.close()
 
     # ========== SIMPLIFIED VERSION (observed + null only) ==========
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7), sharex=True)
+    fig, axes = plt.subplots(2, n_types, figsize=(max(8, 4 * n_types), 7), sharex=True, squeeze=False)
 
     for col_idx, stype in enumerate(sample_types):
         # PERMANOVA (top row)
@@ -243,8 +249,8 @@ def plot_cancer_vs_control(results_dir: Path, outdir: Path):
             ax_shan.set_ylabel('Power (Shannon)', fontsize=11)
 
     # Add legend to top-right subplot
-    handles, labels = axes[0, 2].get_legend_handles_labels()
-    axes[0, 2].legend(handles, labels, loc='lower right', frameon=True,
+    handles, labels = axes[0, -1].get_legend_handles_labels()
+    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
                      fontsize=9, title='Scenario')
 
     plt.suptitle('Power Analysis: Cancer vs Control (Observed Effect)',
@@ -269,12 +275,17 @@ def plot_sample_type_comparison(results_dir: Path, outdir: Path):
 
     if load_tsv_if_nonempty(perm_pairwise_file) is not None:
         # New format: pairwise comparisons, need to aggregate
-        permanova_df = load_tsv_if_nonempty(perm_pairwise_file)
+        permanova_raw = load_tsv_if_nonempty(perm_pairwise_file)
+        comparison_types = list(dict.fromkeys(
+            permanova_raw['group1'].dropna().astype(str).tolist()
+            + permanova_raw['group2'].dropna().astype(str).tolist()
+        ))
         # Compute max power across pairwise comparisons per sample size (any pairwise difference)
-        permanova_df = permanova_df.groupby('n_patients', as_index=False)['power'].max()
+        permanova_df = permanova_raw.groupby('n_patients', as_index=False)['power'].max()
     elif load_tsv_if_nonempty(perm_file) is not None:
         # Old format: single power column
         permanova_df = load_tsv_if_nonempty(perm_file)
+        comparison_types = []
     else:
         raise ValueError("Sample-type PERMANOVA result tables are missing or empty.")
 
@@ -294,7 +305,8 @@ def plot_sample_type_comparison(results_dir: Path, outdir: Path):
     add_power_threshold(ax_perm, 0.8)
     ax_perm.set_xlabel('Patients (n)', fontsize=12)
     ax_perm.set_ylabel('Power', fontsize=12)
-    ax_perm.set_title('PERMANOVA\n(BAL vs Oral Rinse vs Bronchial Brush)',
+    comparison_label = " vs ".join(comparison_types) if comparison_types else "Configured sample types"
+    ax_perm.set_title(f'PERMANOVA\n({comparison_label})',
                      fontsize=13)
     ax_perm.set_ylim(-0.05, 1.05)
     ax_perm.grid(alpha=0.3, linewidth=0.5)
@@ -340,11 +352,14 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
     if tax_cancer_df is None or tax_stype_df is None:
         raise ValueError("Taxonomic power result tables are missing or empty.")
 
-    sample_types = ['BAL', 'Bronchial Brush', 'Oral Rinse']
+    sample_types = list(dict.fromkeys(tax_cancer_df['sample_type'].dropna().astype(str).tolist()))
+    if not sample_types:
+        raise ValueError("Taxonomic power table contains no sample types.")
+    n_types = len(sample_types)
     tax_levels = ['Phylum', 'Family']
 
     # ========== FULL VERSION (all scenarios) ==========
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7), sharex=True)
+    fig, axes = plt.subplots(2, n_types, figsize=(max(8, 4 * n_types), 7), sharex=True, squeeze=False)
 
     for row_idx, tax_level in enumerate(tax_levels):
         for col_idx, stype in enumerate(sample_types):
@@ -378,8 +393,8 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
             ax.grid(alpha=0.3, linewidth=0.5)
 
     # Add legend
-    handles, labels = axes[0, 2].get_legend_handles_labels()
-    axes[0, 2].legend(handles, labels, loc='lower right', frameon=True,
+    handles, labels = axes[0, -1].get_legend_handles_labels()
+    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
                      fontsize=8, title='Scenario')
 
     plt.suptitle('Power Analysis: Taxonomic Differential Abundance (Cancer vs Control)',
@@ -394,7 +409,7 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
     plt.close()
 
     # ========== SIMPLIFIED VERSION (observed + null only) ==========
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7), sharex=True)
+    fig, axes = plt.subplots(2, n_types, figsize=(max(8, 4 * n_types), 7), sharex=True, squeeze=False)
 
     for row_idx, tax_level in enumerate(tax_levels):
         for col_idx, stype in enumerate(sample_types):
@@ -428,8 +443,8 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
             ax.grid(alpha=0.3, linewidth=0.5)
 
     # Add legend
-    handles, labels = axes[0, 2].get_legend_handles_labels()
-    axes[0, 2].legend(handles, labels, loc='lower right', frameon=True,
+    handles, labels = axes[0, -1].get_legend_handles_labels()
+    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
                      fontsize=8, title='Scenario')
 
     plt.suptitle('Power Analysis: Taxonomic Differential Abundance (Cancer vs Control, Observed Effect)',
@@ -457,7 +472,9 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
         add_power_threshold(ax, 0.8)
         ax.set_xlabel('Patients (n)', fontsize=12)
         ax.set_ylabel('Power', fontsize=12)
-        ax.set_title(f'{tax_level} Level\n(BAL vs Oral vs Brush)',
+        tax_comparisons = list(dict.fromkeys(tax_stype_df.get('comparison', pd.Series(dtype=str)).dropna().astype(str)))
+        tax_comparison_label = " / ".join(tax_comparisons) if tax_comparisons else "Configured sample types"
+        ax.set_title(f'{tax_level} Level\n({tax_comparison_label})',
                     fontsize=13)
         ax.set_ylim(-0.05, 1.05)
         ax.grid(alpha=0.3, linewidth=0.5)
@@ -495,7 +512,10 @@ def generate_summary_table(results_dir: Path, outdir: Path):
 
     summary_rows = []
 
-    sample_types = ['BAL', 'Bronchial Brush', 'Oral Rinse']
+    sample_types = list(dict.fromkeys(
+        permanova_df['Sample_type'].dropna().astype(str).tolist()
+        + shannon_df['Sample_type'].dropna().astype(str).tolist()
+    ))
 
     for stype in sample_types:
         # PERMANOVA - Observed scenario
@@ -506,7 +526,8 @@ def generate_summary_table(results_dir: Path, outdir: Path):
 
         n_80_perm = find_sample_size_for_power(df_perm_obs, 0.8)
         max_n_perm = int(df_perm_obs['n_cancer'].max())
-        current_power_perm = df_perm_obs[df_perm_obs['n_cancer'] == 8]['Power'].values
+        current_n_perm = int(df_perm_obs['n_cancer'].max())
+        current_power_perm = df_perm_obs[df_perm_obs['n_cancer'] == current_n_perm]['Power'].values
         current_power_perm = current_power_perm[0] if len(current_power_perm) > 0 else np.nan
 
         # Shannon - Observed scenario
@@ -517,13 +538,14 @@ def generate_summary_table(results_dir: Path, outdir: Path):
 
         n_80_shan = find_sample_size_for_power(df_shan_obs, 0.8)
         max_n_shan = int(df_shan_obs['n_cancer'].max())
-        current_power_shan = df_shan_obs[df_shan_obs['n_cancer'] == 8]['Power'].values
+        current_n_shan = int(df_shan_obs['n_cancer'].max())
+        current_power_shan = df_shan_obs[df_shan_obs['n_cancer'] == current_n_shan]['Power'].values
         current_power_shan = current_power_shan[0] if len(current_power_shan) > 0 else np.nan
 
         summary_rows.append({
             'Sample_Type': stype,
             'Analysis': 'PERMANOVA',
-            'Current_n': 8,
+            'Current_n': current_n_perm,
             'Current_Power': f'{current_power_perm:.3f}' if not np.isnan(current_power_perm) else 'N/A',
             'n_for_80%_Power': str(n_80_perm) if n_80_perm else f'>{max_n_perm}',
             'Status': 'Adequate' if current_power_perm >= 0.8 else 'Underpowered'
@@ -532,7 +554,7 @@ def generate_summary_table(results_dir: Path, outdir: Path):
         summary_rows.append({
             'Sample_Type': stype,
             'Analysis': 'Shannon',
-            'Current_n': 8,
+            'Current_n': current_n_shan,
             'Current_Power': f'{current_power_shan:.3f}' if not np.isnan(current_power_shan) else 'N/A',
             'n_for_80%_Power': str(n_80_shan) if n_80_shan else f'>{max_n_shan}',
             'Status': 'Adequate' if current_power_shan >= 0.8 else 'Underpowered'
@@ -550,13 +572,14 @@ def generate_summary_table(results_dir: Path, outdir: Path):
                 if not df_tax_obs.empty:
                     n_80_tax = find_sample_size_for_power(df_tax_obs.rename(columns={'power': 'Power'}), 0.8)
                     max_n_tax = int(df_tax_obs['n_cancer'].max())
-                    current_power_tax = df_tax_obs[df_tax_obs['n_cancer'] == 8]['power'].values
+                    current_n_tax = int(df_tax_obs['n_cancer'].max())
+                    current_power_tax = df_tax_obs[df_tax_obs['n_cancer'] == current_n_tax]['power'].values
                     current_power_tax = current_power_tax[0] if len(current_power_tax) > 0 else np.nan
 
                     summary_rows.append({
                         'Sample_Type': stype,
                         'Analysis': f'Taxonomic ({tax_level})',
-                        'Current_n': 8,
+                        'Current_n': current_n_tax,
                         'Current_Power': f'{current_power_tax:.3f}' if not np.isnan(current_power_tax) else 'N/A',
                         'n_for_80%_Power': str(n_80_tax) if n_80_tax else f'>{max_n_tax}',
                         'Status': 'Adequate' if current_power_tax >= 0.8 else 'Underpowered'

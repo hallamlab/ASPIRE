@@ -321,6 +321,20 @@ def parse_list_csv(arg: str) -> List[str]:
     return [x.strip() for x in str(arg).split(",") if x and x.strip()]
 
 
+def parse_palette(arg: str) -> dict[str, str]:
+    palette: dict[str, str] = {}
+    for item in parse_list_csv(arg):
+        if "=" not in item:
+            raise ValueError(f"Invalid palette entry '{item}'; expected label=#RRGGBB")
+        label, color = (part.strip() for part in item.split("=", 1))
+        palette[label] = color
+    return palette
+
+
+def safe_slug(value: object) -> str:
+    return "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in str(value).strip().lower()).strip("_") or "group"
+
+
 def resolve_category_order(values: pd.Series, requested: Optional[List[str]] = None, noise_last: bool = False) -> List[str]:
     present = [str(v) for v in pd.Series(values).dropna().astype(str).unique().tolist()]
     if requested:
@@ -585,6 +599,8 @@ def parse_args() -> argparse.Namespace:
                       help="Comma-separated explicit order for primary grouping legend.")
     cols.add_argument("--group2-order", default="",
                       help="Comma-separated explicit order for secondary grouping legend.")
+    cols.add_argument("--group1-palette", default="", help="Primary label=#hex palette.")
+    cols.add_argument("--group2-palette", default="", help="Secondary label=#hex palette.")
     
     # Preprocessing
     prep = ap.add_argument_group("Preprocessing")
@@ -652,6 +668,8 @@ def main():
     print("="*60)
     group1_order = parse_list_csv(args.group1_order)
     group2_order = parse_list_csv(args.group2_order)
+    group1_palette = parse_palette(args.group1_palette)
+    group2_palette = parse_palette(args.group2_palette)
     
     # Metadata columns to preserve
     metadata_cols = [
@@ -731,10 +749,12 @@ def main():
         
         # Build color map from metadata
         depth_color_df = metadata_df[[args.depth_col, args.color_col]].dropna().drop_duplicates()
-        color_map = dict(zip(depth_color_df[args.depth_col], depth_color_df[args.color_col]))
+        color_map = dict(zip(depth_color_df[args.depth_col].astype(str), depth_color_df[args.color_col]))
+        color_map.update(group1_palette)
+        group1_suffix = safe_slug(args.depth_col)
         
         for fmt in formats:
-            output_file = output_prefix.parent / f"{output_prefix.stem}_depth.{fmt}"
+            output_file = output_prefix.parent / f"{output_prefix.stem}_{group1_suffix}.{fmt}"
             plot_umap_scatter(
                 embedding=embedding,
                 colors=metadata_df[args.depth_col],
@@ -756,17 +776,14 @@ def main():
     # Plot 2: Colored by secondary grouping column
     if args.secondary_col in metadata_df.columns:
         print(f"\n[INFO] Creating UMAP plot colored by {args.secondary_col}...")
-        secondary_suffix = ''.join(
-            c if c.isalnum() or c in ('_', '-') else '_'
-            for c in str(args.secondary_col).strip().lower()
-        ) or "secondary"
+        secondary_suffix = safe_slug(args.secondary_col)
         
         for fmt in formats:
             output_file = output_prefix.parent / f"{output_prefix.stem}_{secondary_suffix}.{fmt}"
             plot_umap_scatter(
                 embedding=embedding,
                 colors=metadata_df[args.secondary_col],
-                color_map=None,  # Auto-assign colors
+                color_map=group2_palette or None,
                 title=f"UMAP Projection Colored by {args.secondary_col}",
                 xlabel="UMAP1",
                 ylabel="UMAP2",

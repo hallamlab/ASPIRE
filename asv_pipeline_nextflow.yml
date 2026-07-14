@@ -1,10 +1,15 @@
 paths:
   input_dir: /abs/path/input_fastqs
   output_dir: /abs/path/output_dir
+  # Optional. Discovery writes output_dir/metadata/run_manifest.tsv.
   manifest: /abs/path/sample_manifest.tsv
-  work_dir: /abs/path/output_dir/nf_work
-  conda_cache_dir: /abs/path/output_dir/conda_cache
-    # Optional: set to an NFS/CephFS path to override Nextflow's -w (e.g. /mnt/ceph/work)
+  # Optional; defaults to the hidden persistent <output_dir>/.aspire directory.
+  runtime_dir: /abs/path/output_dir/.aspire
+  # Keep true for -resume/--rerun-from. Set false only to discard all task caches.
+  keep_runtime_dir: true
+  # Optional granular overrides:
+  # work_dir: /mnt/ceph/aspire/nf_work
+  # conda_cache_dir: /shared/aspire/conda_cache
 
 resources:
   threads: 6         # per-sample processes (FASTP/MERGE/FILTER) use this many threads
@@ -85,6 +90,7 @@ taxonomy:
 
 mito:
   enabled: true
+  run_mitomaster: true
   chunk_dir:
   chunk_size: 10
   mitomaster_workers: 8
@@ -109,6 +115,9 @@ mito:
   blast_threads: 6
   mito_db: /abs/path/blastdb/mito_ncbi
   biof_db: /abs/path/blastdb/ssu_pipeline_contaminants
+  # FASTA alternatives; when set, these take precedence over database prefixes.
+  mito_fasta:
+  contaminant_fasta:
 
 filter_counts:
   enabled: true
@@ -141,6 +150,7 @@ sankey:
   sample_col: Sample
   group1_col: Type_Group
   color_col: Color
+  palette_file:
   keep_types:
   vertical_order:
     - Bronchial Brush
@@ -162,6 +172,7 @@ metadata_plots:
   sample_col: Sample
   type_col: Type_Group
   color_col: Color
+  palette_file:
   subtraction_group_col: Type_Group
   subtraction_groups: ['Scope Flush', 'Skin Brush', 'Control']
   keep_types:
@@ -473,6 +484,11 @@ lung_status_analysis:
   contralateral_col: Contralateral
   healthy_col: Healthy
   lung_status_col: lung_status
+  status_a_value: TumorSide
+  status_b_value: Contralateral
+  reference_status_value: Healthy
+  permutations: 9999
+  seed: 1
 
 clustermaps:
   enabled: true
@@ -651,10 +667,14 @@ environments:
   batch_correction: processes/asv_batch_correction/env.yml
   outlier_checker: processes/outlier_checker/env.yml
   collectors_curve: processes/collectors_curve/env.yml
+  plot_upset: processes/plot_upset/env.yml
+  bubbleplotter: processes/bubbleplotter/env.yml
+  umap_clustering: processes/umap_clustering/env.yml
   diversity: processes/diversity_analysis/env.yml
   indicspecies: processes/indicspecies/env.yml
   voc_correlation: processes/voc_correlation/env.yml
   clustermaps: processes/clustermaps/env.yml
+  power_analysis: processes/power_analysis_pipeline/env.yml
   taxonomy_patient_aware: processes/taxonomy_patient_aware/env.yml
   lung_status_analysis: processes/lung_status_analysis/env.yml
   spieceasi: processes/spieceasi/env.yml

@@ -90,18 +90,18 @@ def extPatterns = compilePatterns(config.filename_patterns?.ext_patterns, ['\\.f
 def stripRegex = config.filename_patterns?.sample_strip_regex ?: '(_S[0-9]+)?(_L[0-9]{3})?(_R[12])?(_[12])?(_001)?$'
 
 def inputDir = resolvePath(config.paths?.input_dir)
-def outputDir = resolvePath(config.paths?.output_dir)
-def workDirOverride = config.paths?.work_dir ? resolvePath(config.paths.work_dir) : null
-def condaCacheOverride = config.paths?.conda_cache_dir ? resolvePath(config.paths.conda_cache_dir) : null
+def publicOutputDir = resolvePath(config.paths?.output_dir)
 assert inputDir : "paths.input_dir must be provided in the YAML config"
-assert outputDir : "paths.output_dir must be provided in the YAML config"
-if( workDirOverride ) {
-    def workDirFile = new File(workDirOverride)
-    workDirFile.mkdirs()
-    workflow.workDir = Paths.get(workDirFile.canonicalPath)
-    log.info "Using custom Nextflow work directory: ${workflow.workDir}"
-}
-def resolvedCondaCacheDir = condaCacheOverride ?: new File(outputDir, ".conda_cache").canonicalPath
+assert publicOutputDir : "paths.output_dir must be provided in the YAML config"
+def runtimeDir = config.paths?.runtime_dir ? resolvePath(config.paths.runtime_dir) : new File(publicOutputDir, '.aspire').canonicalPath
+def outputDir = new File(runtimeDir, 'publication_staging').canonicalPath
+def workDirPath = config.paths?.work_dir ? resolvePath(config.paths.work_dir) : new File(runtimeDir, 'nf_work').canonicalPath
+def resolvedCondaCacheDir = config.paths?.conda_cache_dir ? resolvePath(config.paths.conda_cache_dir) : new File(runtimeDir, 'conda_cache').canonicalPath
+def workDirFile = new File(workDirPath)
+workDirFile.mkdirs()
+workflow.workDir = Paths.get(workDirFile.canonicalPath)
+log.info "Using Nextflow work directory: ${workflow.workDir}"
+log.info "Using publication staging directory: ${outputDir}"
 def condaCacheDirFile = new File(resolvedCondaCacheDir)
 condaCacheDirFile.mkdirs()
 System.setProperty('NXF_CONDA_CACHEDIR', condaCacheDirFile.canonicalPath)
@@ -144,7 +144,9 @@ def dirMap = [
     mito     : "${outputDir}/mito",
     taxonomy : "${outputDir}/taxonomy",
     stats    : "${outputDir}/stats",
-    logs     : "${outputDir}/logs"
+    logs     : "${outputDir}/logs",
+    metadata : "${outputDir}/metadata",
+    reference: "${outputDir}/reference"
 ]
 new File(dirMap.concat).mkdirs()
 new File(dirMap.sina).mkdirs()
@@ -153,6 +155,8 @@ new File(dirMap.mito).mkdirs()
 new File(dirMap.taxonomy).mkdirs()
 new File(dirMap.stats).mkdirs()
 new File(dirMap.logs).mkdirs()
+new File(dirMap.metadata).mkdirs()
+new File(dirMap.reference).mkdirs()
 
 def sinaReferenceFilename = 'SILVA_138.2_SSURef_NR99_03_07_24_opt.arb'
 def defaultSinaReferenceUrl = 'https://www.arb-silva.de/fileadmin/silva_databases/current/Exports/SILVA_138.2_SSURef_NR99_03_07_24_opt.arb.gz'
@@ -281,10 +285,9 @@ if( !collectorsEnvFile.exists() ) {
 }
 log.info "Using collectors curve Conda/Mamba env definition: ${collectorsCondaEnvPath}"
 
-def defaultAdvancedEnvPath = new File("${projectDir}/processes/shared_envs/advanced.yml").canonicalPath
 def diversityEnvConfigPath = config.environments?.diversity
 def resolvedDiversityEnvPath = diversityEnvConfigPath ? resolveOptionalPath(diversityEnvConfigPath, configRoot) : null
-def diversityCondaEnvPath = resolvedDiversityEnvPath ?: defaultAdvancedEnvPath
+def diversityCondaEnvPath = resolvedDiversityEnvPath ?: new File("${projectDir}/processes/diversity_analysis/env.yml").canonicalPath
 def diversityEnvFile = file(diversityCondaEnvPath)
 if( !diversityEnvFile.exists() ) {
     exit 1, "Diversity conda environment YAML not found: ${diversityCondaEnvPath}"
@@ -293,7 +296,7 @@ log.info "Using diversity Conda/Mamba env definition: ${diversityCondaEnvPath}"
 
 def indicspeciesEnvConfigPath = config.environments?.indicspecies
 def resolvedIndicspeciesEnvPath = indicspeciesEnvConfigPath ? resolveOptionalPath(indicspeciesEnvConfigPath, configRoot) : null
-def indicspeciesCondaEnvPath = resolvedIndicspeciesEnvPath ?: defaultAdvancedEnvPath
+def indicspeciesCondaEnvPath = resolvedIndicspeciesEnvPath ?: new File("${projectDir}/processes/indicspecies/env.yml").canonicalPath
 def indicspeciesEnvFile = file(indicspeciesCondaEnvPath)
 if( !indicspeciesEnvFile.exists() ) {
     exit 1, "Indicspecies conda environment YAML not found: ${indicspeciesCondaEnvPath}"
@@ -302,7 +305,7 @@ log.info "Using indicspecies Conda/Mamba env definition: ${indicspeciesCondaEnvP
 
 def clustermapsEnvConfigPath = config.environments?.clustermaps
 def resolvedClustermapsEnvPath = clustermapsEnvConfigPath ? resolveOptionalPath(clustermapsEnvConfigPath, configRoot) : null
-def clustermapsCondaEnvPath = resolvedClustermapsEnvPath ?: defaultAdvancedEnvPath
+def clustermapsCondaEnvPath = resolvedClustermapsEnvPath ?: new File("${projectDir}/processes/clustermaps/env.yml").canonicalPath
 def clustermapsEnvFile = file(clustermapsCondaEnvPath)
 if( !clustermapsEnvFile.exists() ) {
     exit 1, "Clustermaps conda environment YAML not found: ${clustermapsCondaEnvPath}"
@@ -311,7 +314,7 @@ log.info "Using clustermaps Conda/Mamba env definition: ${clustermapsCondaEnvPat
 
 def spieceasiEnvConfigPath = config.environments?.spieceasi
 def resolvedSpieceasiEnvPath = spieceasiEnvConfigPath ? resolveOptionalPath(spieceasiEnvConfigPath, configRoot) : null
-def spieceasiCondaEnvPath = resolvedSpieceasiEnvPath ?: defaultAdvancedEnvPath
+def spieceasiCondaEnvPath = resolvedSpieceasiEnvPath ?: new File("${projectDir}/processes/spieceasi/env.yml").canonicalPath
 def spieceasiEnvFile = file(spieceasiCondaEnvPath)
 if( !spieceasiEnvFile.exists() ) {
     exit 1, "SPIEC-EASI conda environment YAML not found: ${spieceasiCondaEnvPath}"
@@ -320,7 +323,7 @@ log.info "Using SPIEC-EASI Conda/Mamba env definition: ${spieceasiCondaEnvPath}"
 
 def networkEnvConfigPath = config.environments?.network
 def resolvedNetworkEnvPath = networkEnvConfigPath ? resolveOptionalPath(networkEnvConfigPath, configRoot) : null
-def networkCondaEnvPath = resolvedNetworkEnvPath ?: defaultAdvancedEnvPath
+def networkCondaEnvPath = resolvedNetworkEnvPath ?: new File("${projectDir}/processes/graph_network/env.yml").canonicalPath
 def networkEnvFile = file(networkCondaEnvPath)
 if( !networkEnvFile.exists() ) {
     exit 1, "Network conda environment YAML not found: ${networkCondaEnvPath}"
@@ -338,7 +341,7 @@ log.info "Using network modules Conda/Mamba env definition: ${networkModulesCond
 
 def masterSummaryEnvConfigPath = config.environments?.master_summary
 def resolvedMasterSummaryEnvPath = masterSummaryEnvConfigPath ? resolveOptionalPath(masterSummaryEnvConfigPath, configRoot) : null
-def masterSummaryCondaEnvPath = resolvedMasterSummaryEnvPath ?: defaultAdvancedEnvPath
+def masterSummaryCondaEnvPath = resolvedMasterSummaryEnvPath ?: new File("${projectDir}/processes/master_summary/env.yml").canonicalPath
 def masterSummaryEnvFile = file(masterSummaryCondaEnvPath)
 if( !masterSummaryEnvFile.exists() ) {
     exit 1, "Master summary conda environment YAML not found: ${masterSummaryCondaEnvPath}"
@@ -347,7 +350,7 @@ log.info "Using master summary Conda/Mamba env definition: ${masterSummaryCondaE
 
 def asvMagLinkEnvConfigPath = config.environments?.asv_mag_link
 def resolvedAsvMagLinkEnvPath = asvMagLinkEnvConfigPath ? resolveOptionalPath(asvMagLinkEnvConfigPath, configRoot) : null
-def asvMagLinkCondaEnvPath = resolvedAsvMagLinkEnvPath ?: defaultAdvancedEnvPath
+def asvMagLinkCondaEnvPath = resolvedAsvMagLinkEnvPath ?: new File("${projectDir}/processes/asv_mag_link/env.yml").canonicalPath
 def asvMagLinkEnvFile = file(asvMagLinkCondaEnvPath)
 if( !asvMagLinkEnvFile.exists() ) {
     exit 1, "ASV-MAG linking conda environment YAML not found: ${asvMagLinkCondaEnvPath}"
@@ -356,7 +359,7 @@ log.info "Using ASV-MAG linking Conda/Mamba env definition: ${asvMagLinkCondaEnv
 
 def powerAnalysisEnvConfigPath = config.environments?.power_analysis
 def resolvedPowerAnalysisEnvPath = powerAnalysisEnvConfigPath ? resolveOptionalPath(powerAnalysisEnvConfigPath, configRoot) : null
-def powerAnalysisCondaEnvPath = resolvedPowerAnalysisEnvPath ?: defaultAdvancedEnvPath
+def powerAnalysisCondaEnvPath = resolvedPowerAnalysisEnvPath ?: new File("${projectDir}/processes/power_analysis_pipeline/env.yml").canonicalPath
 def powerAnalysisEnvFile = file(powerAnalysisCondaEnvPath)
 if( !powerAnalysisEnvFile.exists() ) {
     exit 1, "Power analysis conda environment YAML not found: ${powerAnalysisCondaEnvPath}"
@@ -365,7 +368,7 @@ log.info "Using power analysis Conda/Mamba env definition: ${powerAnalysisCondaE
 
 def taxonomyPatientAwareEnvConfigPath = config.environments?.taxonomy_patient_aware
 def resolvedTaxonomyPatientAwareEnvPath = taxonomyPatientAwareEnvConfigPath ? resolveOptionalPath(taxonomyPatientAwareEnvConfigPath, configRoot) : null
-def taxonomyPatientAwareCondaEnvPath = resolvedTaxonomyPatientAwareEnvPath ?: defaultAdvancedEnvPath
+def taxonomyPatientAwareCondaEnvPath = resolvedTaxonomyPatientAwareEnvPath ?: new File("${projectDir}/processes/taxonomy_patient_aware/env.yml").canonicalPath
 def taxonomyPatientAwareEnvFile = file(taxonomyPatientAwareCondaEnvPath)
 if( !taxonomyPatientAwareEnvFile.exists() ) {
     exit 1, "Taxonomy patient-aware conda environment YAML not found: ${taxonomyPatientAwareCondaEnvPath}"
@@ -374,7 +377,7 @@ log.info "Using taxonomy patient-aware Conda/Mamba env definition: ${taxonomyPat
 
 def lungStatusAnalysisEnvConfigPath = config.environments?.lung_status_analysis
 def resolvedLungStatusAnalysisEnvPath = lungStatusAnalysisEnvConfigPath ? resolveOptionalPath(lungStatusAnalysisEnvConfigPath, configRoot) : null
-def lungStatusAnalysisCondaEnvPath = resolvedLungStatusAnalysisEnvPath ?: defaultAdvancedEnvPath
+def lungStatusAnalysisCondaEnvPath = resolvedLungStatusAnalysisEnvPath ?: new File("${projectDir}/processes/lung_status_analysis/env.yml").canonicalPath
 def lungStatusAnalysisEnvFile = file(lungStatusAnalysisCondaEnvPath)
 if( !lungStatusAnalysisEnvFile.exists() ) {
     exit 1, "Lung status analysis conda environment YAML not found: ${lungStatusAnalysisCondaEnvPath}"
@@ -383,7 +386,7 @@ log.info "Using lung status analysis Conda/Mamba env definition: ${lungStatusAna
 
 def plotUpsetEnvConfigPath = config.environments?.plot_upset
 def resolvedPlotUpsetEnvPath = plotUpsetEnvConfigPath ? resolveOptionalPath(plotUpsetEnvConfigPath, configRoot) : null
-def plotUpsetCondaEnvPath = resolvedPlotUpsetEnvPath ?: defaultAdvancedEnvPath
+def plotUpsetCondaEnvPath = resolvedPlotUpsetEnvPath ?: new File("${projectDir}/processes/plot_upset/env.yml").canonicalPath
 def plotUpsetEnvFile = file(plotUpsetCondaEnvPath)
 if( !plotUpsetEnvFile.exists() ) {
     exit 1, "Plot Upset conda environment YAML not found: ${plotUpsetCondaEnvPath}"
@@ -392,7 +395,7 @@ log.info "Using Plot Upset Conda/Mamba env definition: ${plotUpsetCondaEnvPath}"
 
 def bubbleplotterEnvConfigPath = config.environments?.bubbleplotter
 def resolvedBubbleplotterEnvPath = bubbleplotterEnvConfigPath ? resolveOptionalPath(bubbleplotterEnvConfigPath, configRoot) : null
-def bubbleplotterCondaEnvPath = resolvedBubbleplotterEnvPath ?: plotUpsetCondaEnvPath
+def bubbleplotterCondaEnvPath = resolvedBubbleplotterEnvPath ?: new File("${projectDir}/processes/bubbleplotter/env.yml").canonicalPath
 def bubbleplotterEnvFile = file(bubbleplotterCondaEnvPath)
 if( !bubbleplotterEnvFile.exists() ) {
     exit 1, "Bubbleplotter conda environment YAML not found: ${bubbleplotterCondaEnvPath}"
@@ -401,7 +404,7 @@ log.info "Using bubbleplotter Conda/Mamba env definition: ${bubbleplotterCondaEn
 
 def umapClusteringEnvConfigPath = config.environments?.umap_clustering
 def resolvedUmapClusteringEnvPath = umapClusteringEnvConfigPath ? resolveOptionalPath(umapClusteringEnvConfigPath, configRoot) : null
-def umapClusteringCondaEnvPath = resolvedUmapClusteringEnvPath ?: plotUpsetCondaEnvPath
+def umapClusteringCondaEnvPath = resolvedUmapClusteringEnvPath ?: new File("${projectDir}/processes/umap_clustering/env.yml").canonicalPath
 def umapClusteringEnvFile = file(umapClusteringCondaEnvPath)
 if( !umapClusteringEnvFile.exists() ) {
     exit 1, "UMAP clustering conda environment YAML not found: ${umapClusteringCondaEnvPath}"
@@ -418,17 +421,22 @@ if( !vocCorrelationEnvFile.exists() ) {
 }
 log.info "Using VOC correlation Conda/Mamba env definition: ${vocCorrelationCondaEnvPath}"
 
-def manifestPath = config.paths?.manifest ? resolveOptionalPath(config.paths.manifest, configRoot) : null
+def configuredManifestPath = config.paths?.manifest ? resolveOptionalPath(config.paths.manifest, configRoot) : null
 def sampleRecords
-if( manifestPath ) {
-    sampleRecords = loadManifestSamples(manifestPath)
+if( configuredManifestPath ) {
+    sampleRecords = loadManifestSamples(configuredManifestPath)
 } else {
     sampleRecords = collectSampleRecords(inputDir, r1Tokens, r2Tokens, extPatterns, stripRegex, allowSingleEnd)
 }
 if( !sampleRecords ) {
-    exit 1, manifestPath ? "No usable entries detected in manifest ${manifestPath}" : "No usable FASTQ files detected in ${inputDir}"
+    exit 1, configuredManifestPath ? "No usable entries detected in manifest ${configuredManifestPath}" : "No usable FASTQ files detected in ${inputDir}"
 }
-log.info "Discovered ${sampleRecords.size()} input items from ${manifestPath ? "manifest ${manifestPath}" : inputDir}. Sample threads=${sampleThreads}, default threads=${pipelineThreads}"
+def manifestPath = writeNormalizedManifest(
+    sampleRecords,
+    new File(dirMap.metadata, 'run_manifest.tsv'),
+    configuredManifestPath
+)
+log.info "Discovered ${sampleRecords.size()} input items from ${configuredManifestPath ? "manifest ${configuredManifestPath}" : inputDir}. Normalized manifest: ${manifestPath}. Sample threads=${sampleThreads}, default threads=${pipelineThreads}"
 
 Channel
     .from(sampleRecords)
@@ -756,11 +764,15 @@ def defaultMitoOutputDir = new File(dirMap.mito, "mitomap").canonicalPath
 def mitoOutputDirPath = mitoConfig.output_dir ? resolveOutputRelative(mitoConfig.output_dir.toString(), outputDir) : defaultMitoOutputDir
 def mitoBlastDbPath = resolveOptionalPath(mitoConfig.mito_db ?: 'ref_db/mito_ncbi', configRoot)
 def mitoBiofDbPath = resolveOptionalPath(mitoConfig.biof_db ?: 'ref_db/ssu_pipeline_contaminants', configRoot)
+def mitoBlastFastaPath = mitoConfig.mito_fasta ? resolveOptionalPath(mitoConfig.mito_fasta.toString(), configRoot) : null
+def mitoBiofFastaPath = mitoConfig.contaminant_fasta ? resolveOptionalPath(mitoConfig.contaminant_fasta.toString(), configRoot) :
+    (mitoConfig.biof_fasta ? resolveOptionalPath(mitoConfig.biof_fasta.toString(), configRoot) : null)
 def mitoChunkSize = mitoConfig.chunk_size ? (mitoConfig.chunk_size as int) : 10
 def mitomasterWorkers = mitoConfig.mitomaster_workers ? (mitoConfig.mitomaster_workers as int) : 8
 def mitomasterRetries = mitoConfig.mitomaster_retries ? (mitoConfig.mitomaster_retries as int) : 4
 def mitomasterTimeout = mitoConfig.mitomaster_timeout ? (mitoConfig.mitomaster_timeout as int) : 90
 def mitomasterHeaderMode = mitoConfig.mitomaster_header_mode ?: 'first'
+def mitoRunMitomaster = mitoConfig.containsKey('run_mitomaster') ? (mitoConfig.run_mitomaster as boolean) : true
 def mitoBlastThreads = mitoConfig.blast_threads ? (mitoConfig.blast_threads as int) : pipelineThreads
 def mitoPrefix = mitoConfig.prefix ?: 'nontarget'
 def mitoFormats = mitoConfig.formats ?: 'svg,pdf'
@@ -830,8 +842,8 @@ def filterCountsSaveIntermediates = (filterCountsConfig.save_intermediates ?: fa
 def defaultFilterMitoDir = new File(dirMap.mito, "ASVs").canonicalPath
 def filterCountsMitoDir = filterCountsConfig.mito_output_dir ? resolveOutputRelative(filterCountsConfig.mito_output_dir.toString(), outputDir) : defaultFilterMitoDir
 if( mitoEnabled ) {
-    ensureBlastDbExists(mitoBlastDbPath, 'mitochondrial')
-    ensureBlastDbExists(mitoBiofDbPath, 'BioFactorial')
+    ensureBlastReferenceExists(mitoBlastDbPath, mitoBlastFastaPath, 'mitochondrial')
+    ensureBlastReferenceExists(mitoBiofDbPath, mitoBiofFastaPath, 'contaminant')
     new File(mitoChunkDirPath).parentFile?.mkdirs()
     new File(mitoOutputDirPath).mkdirs()
 }
@@ -845,6 +857,19 @@ def sankeySubDir = sankeyConfig.sub_dir ?: '.'
 def sankeySampCol = sankeyConfig.sample_col ?: 'lmp_id'
 def sankeyGroupCol = sankeyConfig.group1_col ?: 'group1'
 def sankeyColorCol = sankeyConfig.color_col ?: 'Color'
+if( sankeyEnabled ) {
+    def sankeyPalettePath = sankeyConfig.palette_file ? resolveOptionalPath(sankeyConfig.palette_file.toString(), configRoot) : null
+    def sankeyAssets = prepareMetadataAssets(
+        sankeyMetadataPath,
+        sankeySampCol.toString(),
+        sankeyGroupCol.toString(),
+        sankeyColorCol.toString(),
+        sankeyPalettePath,
+        new File(dirMap.metadata, "sankey_${safeFilename(sankeyGroupCol.toString())}")
+    )
+    sankeyMetadataPath = sankeyAssets.metadata
+    log.info "Sankey metadata palette: ${sankeyAssets.palette}"
+}
 def sankeyKeepTypesRaw = sankeyConfig.keep_types
 List<String> sankeyKeepTypes = []
 if( sankeyKeepTypesRaw instanceof List ) {
@@ -899,6 +924,19 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def metadataPlotsSampleCol = metadataPlotsConfig.sample_col ?: 'sampleID'
     def metadataPlotsTypeCol = metadataPlotsConfig.type_col ?: (metadataPlotsConfig.group1_col ?: 'Depth')
     def metadataPlotsColorCol = metadataPlotsConfig.color_col ?: 'Color'
+    if( metadataPlotsEnabled ) {
+        def configuredPalettePath = metadataPlotsConfig.palette_file ? resolveOptionalPath(metadataPlotsConfig.palette_file.toString(), configRoot) : null
+        def metadataAssets = prepareMetadataAssets(
+            metadataPlotsMetadataPath,
+            metadataPlotsSampleCol.toString(),
+            metadataPlotsTypeCol.toString(),
+            metadataPlotsColorCol.toString(),
+            configuredPalettePath,
+            new File(dirMap.metadata, safeFilename(metadataPlotsTypeCol.toString()))
+        )
+        metadataPlotsMetadataPath = metadataAssets.metadata
+        log.info "Metadata palette: ${metadataAssets.palette}"
+    }
     def metadataPlotsBiochemAssignmentsPath = metadataPlotsConfig.biochem_assignments ? resolveOptionalPath(metadataPlotsConfig.biochem_assignments, configRoot) : null
     def metadataPlotsBiochemSampleCol = metadataPlotsConfig.biochem_sample_col ?: 'cruise_year_month_depth'
     def metadataPlotsStratificationTimeseriesPath = metadataPlotsConfig.stratification_timeseries ? resolveOptionalPath(metadataPlotsConfig.stratification_timeseries, configRoot) : null
@@ -1018,9 +1056,11 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     if( outlierGroupCols.isEmpty() ) {
         outlierGroupCols = ['none']
     }
-    def outlierTransform = outlierConfig.transform ?: 'clr'
-    def outlierOrientation = outlierConfig.asv_orientation ?: 'features_rows'
-    boolean outlierPreTransformed = (outlierConfig.pre_transformed ?: false) as boolean
+    // OUTLIER_CHECKER consumes batch correction's CLR output (samples x ASVs).
+    def outlierTransform = outlierConfig.transform ?: 'none'
+    def outlierOrientation = outlierConfig.asv_orientation ?: 'samples_rows'
+    boolean outlierPreTransformed = outlierConfig.containsKey('pre_transformed') ?
+        (outlierConfig.pre_transformed as boolean) : true
     boolean outlierScale = (outlierConfig.scale ?: false) as boolean
     boolean outlierUseIso = (outlierConfig.use_iso ?: false) as boolean
     boolean outlierUseSvm = (outlierConfig.use_svm ?: false) as boolean
@@ -1155,6 +1195,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     } else if( umapClusteringGroup2OrderRaw ) {
         umapClusteringGroup2Order = umapClusteringGroup2OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
     }
+    def sharedPaletteConfig = config.indicspecies?.group_palettes instanceof Map ? config.indicspecies.group_palettes : [:]
+    def umapClusteringGroup1Palette = umapClusteringConfig.group1_palette ?: (sharedPaletteConfig[umapClusteringDepthCol] ?: '')
+    def umapClusteringGroup2Palette = umapClusteringConfig.group2_palette ?: (sharedPaletteConfig[umapClusteringSecondaryCol] ?: '')
     def umapClusteringFormats = umapClusteringConfig.formats ?: 'pdf,png,svg'
     def umapClusteringNormalize = umapClusteringConfig.normalize ?: 'clr'
     def umapClusteringTransform = umapClusteringConfig.transform ?: 'sqrt'
@@ -1182,6 +1225,8 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def diversityGroupCol = diversityConfig.group_col ?: (diversityConfig.group1_col ?: metadataPlotsTypeCol)
     def diversityColorCol = diversityConfig.color_col ?: 'Color'
     def diversitySecondaryCol = diversityConfig.group2_col ?: (diversityConfig.secondary_col ?: 'Month')
+    def diversityGroupPalette = diversityConfig.group1_palette ?: (sharedPaletteConfig[diversityGroupCol] ?: '')
+    def diversitySecondaryPalette = diversityConfig.group2_palette ?: (sharedPaletteConfig[diversitySecondaryCol] ?: '')
     def diversityExcludeGroupsRaw = diversityConfig.exclude_groups
     List<String> diversityExcludeGroups = []
     if( diversityExcludeGroupsRaw instanceof List ) {
@@ -1329,6 +1374,8 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         umapClusteringDepthCol: umapClusteringDepthCol,
         umapClusteringColorCol: umapClusteringColorCol,
         umapClusteringSecondaryCol: umapClusteringSecondaryCol,
+        umapClusteringGroup1Palette: umapClusteringGroup1Palette,
+        umapClusteringGroup2Palette: umapClusteringGroup2Palette,
         umapClusteringFormats: umapClusteringFormats,
         umapClusteringNormalize: umapClusteringNormalize,
         umapClusteringTransform: umapClusteringTransform,
@@ -1346,6 +1393,8 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         diversityGroupCol: diversityGroupCol,
         diversityColorCol: diversityColorCol,
         diversitySecondaryCol: diversitySecondaryCol,
+        diversityGroupPalette: diversityGroupPalette,
+        diversitySecondaryPalette: diversitySecondaryPalette,
         diversityUmapNeighbors: diversityUmapNeighbors,
         diversityUmapMinDist: diversityUmapMinDist,
         diversityPermutations: diversityPermutations,
@@ -1558,6 +1607,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     if( !(vocCorrelationDirection in ['positive','negative','both']) ) {
         exit 1, "voc_correlation.correlation_direction must be one of: positive, negative, both"
     }
+    def vocCorrelationCasePalette = vocCorrelationConfig.case_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationCaseCol] ?: '')
+    def vocCorrelationIsaPalette = vocCorrelationConfig.isa_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationTypeCol] ?: '')
 
     def clustermapsConfig = config.clustermaps ?: [:]
     boolean clustermapsRequested = clustermapsConfig.containsKey('enabled') ? (clustermapsConfig.enabled as boolean) : false
@@ -1967,6 +2018,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     }
     def taxonomyPatientAwareAlpha = taxonomyPatientAwareConfig.alpha != null ? (taxonomyPatientAwareConfig.alpha as double) : 0.05d
     def taxonomyPatientAwareTopN = taxonomyPatientAwareConfig.top_n ? (taxonomyPatientAwareConfig.top_n as int) : 12
+    def taxonomyPatientAwareTypePalette = taxonomyPatientAwareConfig.type_palette ?: (indicspeciesGroupPaletteMap[taxonomyPatientAwareTypeCol] ?: '')
+    def taxonomyPatientAwareCasePalette = taxonomyPatientAwareConfig.case_palette ?: (indicspeciesGroupPaletteMap[taxonomyPatientAwareCaseCol] ?: '')
 
     def lungStatusAnalysisConfig = config.lung_status_analysis ?: [:]
     boolean lungStatusAnalysisRequested = lungStatusAnalysisConfig.containsKey('enabled') ? (lungStatusAnalysisConfig.enabled as boolean) : false
@@ -1990,6 +2043,11 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def lungStatusAnalysisContralateralCol = lungStatusAnalysisConfig.contralateral_col ? lungStatusAnalysisConfig.contralateral_col.toString().trim() : 'Contralateral'
     def lungStatusAnalysisHealthyCol = lungStatusAnalysisConfig.healthy_col ? lungStatusAnalysisConfig.healthy_col.toString().trim() : 'Healthy'
     def lungStatusAnalysisStatusCol = lungStatusAnalysisConfig.lung_status_col ? lungStatusAnalysisConfig.lung_status_col.toString().trim() : 'lung_status'
+    def lungStatusAnalysisStatusAValue = lungStatusAnalysisConfig.status_a_value ? lungStatusAnalysisConfig.status_a_value.toString().trim() : 'TumorSide'
+    def lungStatusAnalysisStatusBValue = lungStatusAnalysisConfig.status_b_value ? lungStatusAnalysisConfig.status_b_value.toString().trim() : 'Contralateral'
+    def lungStatusAnalysisReferenceStatusValue = lungStatusAnalysisConfig.reference_status_value ? lungStatusAnalysisConfig.reference_status_value.toString().trim() : 'Healthy'
+    def lungStatusAnalysisPermutations = lungStatusAnalysisConfig.permutations ? (lungStatusAnalysisConfig.permutations as int) : 9999
+    def lungStatusAnalysisSeed = lungStatusAnalysisConfig.seed ? (lungStatusAnalysisConfig.seed as int) : 1
     return [
         metadataPlotsEnabled: metadataPlotsEnabled,
         metadataPlotsMetadataPath: metadataPlotsMetadataPath,
@@ -2032,6 +2090,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationUseLegacySubset: vocCorrelationUseLegacySubset,
         vocCorrelationVocCols: vocCorrelationVocCols,
         vocCorrelationDirection: vocCorrelationDirection,
+        vocCorrelationCasePalette: vocCorrelationCasePalette,
+        vocCorrelationIsaPalette: vocCorrelationIsaPalette,
         clustermapsOutputDirAbs: clustermapsOutputDirAbs,
         clustermapsMitoOutputDirAbs: clustermapsMitoOutputDirAbs,
         clustermapsMitoInputPath: clustermapsMitoInputPath,
@@ -2153,6 +2213,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         taxonomyPatientAwareTransform: taxonomyPatientAwareTransform,
         taxonomyPatientAwareAlpha: taxonomyPatientAwareAlpha,
         taxonomyPatientAwareTopN: taxonomyPatientAwareTopN,
+        taxonomyPatientAwareTypePalette: taxonomyPatientAwareTypePalette,
+        taxonomyPatientAwareCasePalette: taxonomyPatientAwareCasePalette,
         lungStatusAnalysisOutputDirAbs: lungStatusAnalysisOutputDirAbs,
         lungStatusAnalysisSampleCol: lungStatusAnalysisSampleCol,
         lungStatusAnalysisTypeCol: lungStatusAnalysisTypeCol,
@@ -2165,6 +2227,11 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         lungStatusAnalysisContralateralCol: lungStatusAnalysisContralateralCol,
         lungStatusAnalysisHealthyCol: lungStatusAnalysisHealthyCol,
         lungStatusAnalysisStatusCol: lungStatusAnalysisStatusCol,
+        lungStatusAnalysisStatusAValue: lungStatusAnalysisStatusAValue,
+        lungStatusAnalysisStatusBValue: lungStatusAnalysisStatusBValue,
+        lungStatusAnalysisReferenceStatusValue: lungStatusAnalysisReferenceStatusValue,
+        lungStatusAnalysisPermutations: lungStatusAnalysisPermutations,
+        lungStatusAnalysisSeed: lungStatusAnalysisSeed,
         indicspeciesGroupCols: indicspeciesGroupCols,
         indicspeciesEnabled: indicspeciesEnabled,
         indicspeciesPlotEnabled: indicspeciesPlotEnabled,
@@ -2236,7 +2303,11 @@ workflow {
     def runMitoStages = mitoEnabled || filterCountsEnabled
     def filter_counts_stage = null
     if( runMitoStages ) {
-        def mitomaster_stage = MITOMASTER(filtered_channel)
+        def blast_database_stage = PREPARE_BLAST_DATABASES(
+            mitoBlastFastaPath ?: mitoBlastDbPath,
+            mitoBiofFastaPath ?: mitoBiofDbPath
+        )
+        def mitomaster_stage = MITOMASTER(filtered_channel, blast_database_stage.databases)
         def mito_summary = MITO_DECONTAM(mitomaster_stage.mito_artifacts, taxonomy_stage.taxonomy_table)
         if( filterCountsEnabled ) {
             filter_counts_stage = FILTER_COUNTS(filtered_channel, taxonomy_stage.taxonomy_table, mito_summary.nontarget_table)
@@ -3014,6 +3085,39 @@ gzip -n -c "${taxonomyUppercasePlainName}" > "${taxonomyUppercaseGzName}"
 """
 }
 
+process PREPARE_BLAST_DATABASES {
+    cpus 1
+    conda "${mitomasterCondaEnvPath}"
+    publishDir dirMap.reference, mode: 'copy', pattern: 'blast_databases'
+
+    input:
+    val(mito_source)
+    val(contaminant_source)
+
+    output:
+    tuple path("blast_databases/mitochondrial"), path("blast_databases/contaminants"), emit: databases
+
+    script:
+    def mitoSourceCommand = mitoBlastFastaPath ?
+        (mitoBlastFastaPath.toLowerCase().endsWith('.gz') ?
+            "gzip -cd \"${mitoBlastFastaPath}\" > blast_databases/mitochondrial/source.fasta" :
+            "cp \"${mitoBlastFastaPath}\" blast_databases/mitochondrial/source.fasta") :
+        "blastdbcmd -db \"${mitoBlastDbPath}\" -entry all -out blast_databases/mitochondrial/source.fasta"
+    def contaminantSourceCommand = mitoBiofFastaPath ?
+        (mitoBiofFastaPath.toLowerCase().endsWith('.gz') ?
+            "gzip -cd \"${mitoBiofFastaPath}\" > blast_databases/contaminants/source.fasta" :
+            "cp \"${mitoBiofFastaPath}\" blast_databases/contaminants/source.fasta") :
+        "blastdbcmd -db \"${mitoBiofDbPath}\" -entry all -out blast_databases/contaminants/source.fasta"
+    """
+set -euo pipefail
+mkdir -p blast_databases/mitochondrial blast_databases/contaminants
+${mitoSourceCommand}
+${contaminantSourceCommand}
+makeblastdb -in blast_databases/mitochondrial/source.fasta -dbtype nucl -parse_seqids -out blast_databases/mitochondrial/db
+makeblastdb -in blast_databases/contaminants/source.fasta -dbtype nucl -parse_seqids -out blast_databases/contaminants/db
+"""
+}
+
 process MITOMASTER {
     cpus mitoBlastThreads
     conda "${mitomasterCondaEnvPath}"
@@ -3021,21 +3125,14 @@ process MITOMASTER {
 
     input:
     tuple path(filtered_table), path(filtered_fasta)
+    tuple path(mito_db_dir), path(contaminant_db_dir)
 
     output:
     tuple path("mitomaster_output.tsv"), path("mito_ncbi.blast6.tsv"), path("ssu_pipeline_contaminants.blast6.tsv"), emit: mito_artifacts
 
     script:
     def filteredFastaPath = filtered_fasta.toString().trim()
-    """
-set -euo pipefail
-rm -rf "${mitoChunkDirPath}"
-mkdir -p "${mitoChunkDirPath}"
-gzip -cd "${filteredFastaPath}" > filtered_input.fasta
-FILTERED_FASTA=\$(realpath filtered_input.fasta)
-
-seqkit split -s ${mitoChunkSize} -O "${mitoChunkDirPath}" "\${FILTERED_FASTA}"
-
+    def mitomasterCommand = mitoRunMitomaster ? """
 python "${mitomasterScriptPath}" \\
   --data-dir "${mitoChunkDirPath}" \\
   --glob-pattern "*.fa*" \\
@@ -3046,15 +3143,26 @@ python "${mitomasterScriptPath}" \\
   --retries ${mitomasterRetries} \\
   --header-mode "${mitomasterHeaderMode}" \\
   --overwrite
+""" : "printf 'Sequence_ID\\thaplo\\n' > mitomaster_output.tsv"
+    """
+set -euo pipefail
+rm -rf "${mitoChunkDirPath}"
+mkdir -p "${mitoChunkDirPath}"
+gzip -cd "${filteredFastaPath}" > filtered_input.fasta
+FILTERED_FASTA=\$(realpath filtered_input.fasta)
+
+seqkit split -s ${mitoChunkSize} -O "${mitoChunkDirPath}" "\${FILTERED_FASTA}"
+
+${mitomasterCommand}
 
 blastn -query "\${FILTERED_FASTA}" \\
-  -db "${mitoBlastDbPath}" \\
+  -db "${mito_db_dir}/db" \\
   -outfmt "6 qseqid sseqid pident length qlen mismatch gapopen qstart qend sstart send evalue bitscore" \\
   -out mito_ncbi.blast6.tsv \\
   -num_threads ${task.cpus}
 
 blastn -query "\${FILTERED_FASTA}" \\
-  -db "${mitoBiofDbPath}" \\
+  -db "${contaminant_db_dir}/db" \\
   -outfmt "6 qseqid sseqid pident length qlen mismatch gapopen qstart qend sstart send evalue bitscore" \\
   -out ssu_pipeline_contaminants.blast6.tsv \\
   -num_threads ${task.cpus}
@@ -3072,6 +3180,10 @@ process MITO_DECONTAM {
 
     output:
     path("${mitoPrefix}.master.tsv"), emit: nontarget_table
+    path("${mitoPrefix}.summary_*.tsv"), optional: true
+    path("${mitoPrefix}_*.svg"), optional: true
+    path("${mitoPrefix}_*.pdf"), optional: true
+    path("${mitoPrefix}_*.png"), optional: true
 
     script:
     def noPlotsFlag = mitoNoPlots ? ' --no-plots' : ''
@@ -3534,6 +3646,8 @@ python "${umapClusteringScriptPath}" \\
   --group1-col "${umapClusteringDepthCol}" \\
   --color-col "${umapClusteringColorCol}" \\
   --group2-col "${umapClusteringSecondaryCol}" \\
+  --group1-palette "${umapClusteringGroup1Palette}" \\
+  --group2-palette "${umapClusteringGroup2Palette}" \\
 ${umapGroup1OrderArg}${umapGroup2OrderArg}  --formats "${umapClusteringFormats}" \\
   --normalize "${umapClusteringNormalize}" \\
   --transform "${umapClusteringTransform}" \\
@@ -3860,6 +3974,8 @@ python "${plotDiversityScriptPath}" \\
   --sample-col "${diversitySampleCol}" \\
   --group-col "${diversityGroupCol}" \\
   --color-col "${diversityColorCol}" \\
+  --group-palette "${diversityGroupPalette}" \\
+  --secondary-palette "${diversitySecondaryPalette}" \\
 ${secondaryColArg}${excludeGroupsArg}${groupOrderArg}  --alpha-table "${diversityOutputDirAbs}/shannon.tsv" \\
   --distance-bray "${diversityOutputDirAbs}/bray.tsv" \\
   --distance-jaccard "${diversityOutputDirAbs}/jaccard.tsv" \\
@@ -3876,6 +3992,8 @@ if [[ "${diversityRunMitoFlag}" == "1" && -f "${diversityMitoOutputDirAbs}/shann
     --sample-col "${diversitySampleCol}" \\
     --group-col "${diversityGroupCol}" \\
     --color-col "${diversityColorCol}" \\
+    --group-palette "${diversityGroupPalette}" \\
+    --secondary-palette "${diversitySecondaryPalette}" \\
 ${secondaryColArg}${excludeGroupsArg}${groupOrderArg}    --alpha-table "${diversityOutputDirAbs}/shannon.tsv" \\
     --distance-bray "${diversityOutputDirAbs}/bray.tsv" \\
     --distance-jaccard "${diversityOutputDirAbs}/jaccard.tsv" \\
@@ -4277,6 +4395,9 @@ ${legacySubsetArg}${vocColsArgs}  --spieceasi-min-rel-abund ${spieceasiMinRelAbu
   --spieceasi-min-prevalence ${spieceasiMinPrevalence} \\
   --spieceasi-remove-zero-var ${spieceasiRemoveZeroVar} \\
   --correlation-direction "${vocCorrelationDirection}" \\
+  --case-palette "${vocCorrelationCasePalette}" \\
+  --isa-palette "${vocCorrelationIsaPalette}" \\
+  --isa-q-threshold ${indicspeciesQThreshold} \\
   --indicspecies-glob "*_indicator_species*.tsv"
 
 touch voc_correlation.done
@@ -4472,7 +4593,9 @@ python "${plotTaxonomicObservedScriptPath}" \\
   --patient-col "${taxonomyPatientAwarePatientCol}" \\
   --type-col "${taxonomyPatientAwareTypeCol}" \\
   --case-col "${taxonomyPatientAwareCaseCol}" \\
-  --count-col "${taxonomyPatientAwareCountCol}"
+  --count-col "${taxonomyPatientAwareCountCol}" \\
+  --type-palette "${taxonomyPatientAwareTypePalette}" \\
+  --case-palette "${taxonomyPatientAwareCasePalette}"
 
 touch taxonomy_patient_aware.done
 """
@@ -4539,6 +4662,9 @@ for sample_type in "\${LUNG_SAMPLE_TYPES[@]}"; do
     --contralateral-col "${lungStatusAnalysisContralateralCol}" \\
     --healthy-col "${lungStatusAnalysisHealthyCol}" \\
     --lung-status-col "${lungStatusAnalysisStatusCol}" \\
+    --status-a-value "${lungStatusAnalysisStatusAValue}" \\
+    --status-b-value "${lungStatusAnalysisStatusBValue}" \\
+    --reference-status-value "${lungStatusAnalysisReferenceStatusValue}" \\
     --outdir "\${data_dir}"
 
   meta_file="\$(find "\${data_dir}" -maxdepth 1 -name '*_metadata.tsv' | head -n 1)"
@@ -4548,7 +4674,8 @@ for sample_type in "\${LUNG_SAMPLE_TYPES[@]}"; do
     exit 1
   fi
 
-  Rscript "${lungStatusAnalysisScriptPath}" "\${meta_file}" "\${asv_file}" "\${results_dir}"
+  Rscript "${lungStatusAnalysisScriptPath}" "\${meta_file}" "\${asv_file}" "\${results_dir}" \
+    ${lungStatusAnalysisPermutations} ${lungStatusAnalysisSeed}
 
   python "${plotLungStatusScriptPath}" \\
     --metadata "\${meta_file}" \\
@@ -5077,16 +5204,112 @@ def downloadReference(String downloadUrl, File destination) {
     }
 }
 
-def ensureBlastDbExists(String basePath, String label){
+def ensureBlastReferenceExists(String basePath, String fastaPath, String label){
+    if( fastaPath ) {
+        def fasta = new File(fastaPath)
+        if( !fasta.exists() ) {
+            exit 1, "${label} FASTA not found: ${fastaPath}"
+        }
+        return
+    }
     def baseFile = new File(basePath)
-    if( baseFile.exists() ) {
+    if( baseFile.exists() || ['.nhr','.nin','.nsq','.ndb'].any { new File(basePath + it).exists() } ) {
         return
     }
-    def suffixes = ['.nhr','.nin','.nsq','.fa','.fasta','.fna']
-    if( suffixes.any { new File(basePath + it).exists() } ) {
-        return
+    exit 1, "${label} BLAST database not found: ${basePath}. Provide a database prefix or a FASTA input."
+}
+
+def writeNormalizedManifest(List records, File destination, String sourceManifest){
+    destination.parentFile?.mkdirs()
+    def seen = new LinkedHashSet<String>()
+    def lines = ['sample_id\tfastq_r1\tfastq_r2']
+    records.each { rec ->
+        def sampleId = rec.sample_id?.toString()?.trim()
+        if( !sampleId || !seen.add(sampleId) ) {
+            exit 1, "Duplicate or empty sample ID in ${sourceManifest ?: 'FASTQ discovery'}: ${sampleId}"
+        }
+        lines << [sampleId, new File(rec.r1.toString()).canonicalPath,
+                  rec.paired && rec.r2 ? new File(rec.r2.toString()).canonicalPath : ''].join('\t')
     }
-    exit 1, "${label} BLAST database not found: ${basePath}"
+    destination.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+    return destination.canonicalPath
+}
+
+def safeFilename(String value){
+    return value.replaceAll(/[^A-Za-z0-9._-]+/, '_').replaceAll(/^_+|_+$/, '') ?: 'group'
+}
+
+def generatedPaletteColor(int index, int total){
+    // Golden-angle hue spacing remains stable when metadata row order is unchanged.
+    float hue = ((index * 0.61803398875d) % 1.0d) as float
+    int rgb = java.awt.Color.HSBtoRGB(hue, 0.62f, 0.78f)
+    return String.format('#%06X', rgb & 0xFFFFFF)
+}
+
+def prepareMetadataAssets(String metadataPath, String sampleCol, String groupCol, String colorCol,
+                          String palettePath, File outputBase){
+    File source = new File(metadataPath)
+    def rows = source.readLines('UTF-8').findAll { it != null && !it.trim().isEmpty() }
+    if( !rows ) {
+        exit 1, "Metadata table is empty: ${metadataPath}"
+    }
+    def header = rows[0].split(/\t/, -1).collect { it.trim() }
+    int sampleIdx = header.indexOf(sampleCol)
+    int groupIdx = header.indexOf(groupCol)
+    if( sampleIdx < 0 || groupIdx < 0 ) {
+        exit 1, "Metadata must contain configured columns '${sampleCol}' and '${groupCol}': ${metadataPath}"
+    }
+    int colorIdx = header.indexOf(colorCol)
+    def groups = []
+    rows.drop(1).each { line ->
+        def fields = line.split(/\t/, -1)
+        if( fields.length > groupIdx ) {
+            def value = fields[groupIdx].trim()
+            if( value && !groups.contains(value) ) groups << value
+        }
+    }
+    LinkedHashMap<String,String> palette = [:]
+    if( palettePath ) {
+        File paletteFile = new File(palettePath)
+        if( !paletteFile.exists() ) exit 1, "Metadata palette file not found: ${palettePath}"
+        def paletteRows = paletteFile.readLines('UTF-8').findAll { it?.trim() }
+        paletteRows.eachWithIndex { line, idx ->
+            def fields = line.split(/\t|,/, -1).collect { it.trim() }
+            if( fields.size() >= 2 && !(idx == 0 && fields[0].equalsIgnoreCase('value')) ) {
+                palette[fields[0]] = fields[1]
+            }
+        }
+    }
+    groups.eachWithIndex { group, idx ->
+        if( !palette[group] && colorIdx >= 0 ) {
+            def matching = rows.drop(1).find { line ->
+                def fields = line.split(/\t/, -1)
+                fields.length > Math.max(groupIdx, colorIdx) && fields[groupIdx].trim() == group && fields[colorIdx].trim()
+            }
+            if( matching ) palette[group] = matching.split(/\t/, -1)[colorIdx].trim()
+        }
+        if( !palette[group] ) palette[group] = generatedPaletteColor(idx, groups.size())
+    }
+    // Palette files may be shared across studies; publish only observed groups.
+    LinkedHashMap<String,String> observedPalette = [:]
+    groups.each { group -> observedPalette[group] = palette[group] }
+    palette = observedPalette
+    outputBase.parentFile?.mkdirs()
+    File paletteOut = new File(outputBase.parentFile, "${outputBase.name}_palette.tsv")
+    paletteOut.text = 'value\tcolor' + System.lineSeparator() + palette.collect { key, value -> "${key}\t${value}" }.join(System.lineSeparator()) + System.lineSeparator()
+    File metadataOut = new File(outputBase.parentFile, "${outputBase.name}_metadata.tsv")
+    def outputHeader = colorIdx >= 0 ? header : header + [colorCol]
+    def outputRows = [outputHeader.join('\t')]
+    rows.drop(1).each { line ->
+        def fields = line.split(/\t/, -1).toList()
+        while( fields.size() < header.size() ) fields << ''
+        def group = fields[groupIdx].trim()
+        if( colorIdx >= 0 ) fields[colorIdx] = palette[group] ?: fields[colorIdx]
+        else fields << (palette[group] ?: '')
+        outputRows << fields.join('\t')
+    }
+    metadataOut.text = outputRows.join(System.lineSeparator()) + System.lineSeparator()
+    return [metadata: metadataOut.canonicalPath, palette: paletteOut.canonicalPath]
 }
 
 def shellQuote(String value){
@@ -5199,6 +5422,10 @@ def loadManifestSamples(String manifestPath){
             return
         }
         def parts = trimmed.split(/\t/)
+        if( parts.length >= 2 && parts[0].trim().equalsIgnoreCase('sample_id') &&
+            parts[1].trim().toLowerCase() in ['fastq_r1', 'r1', 'read1'] ) {
+            return
+        }
         if( parts.length < 2 ) {
             exit 1, "Manifest line must contain sample_id and R1 path separated by tab: ${line}"
         }

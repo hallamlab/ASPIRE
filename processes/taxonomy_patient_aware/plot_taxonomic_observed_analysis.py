@@ -37,11 +37,11 @@ sns.set_style("white")
 
 PALETTE_STATUS = {"Control": "#bdbdbd", "Cancer": "#A50026"}
 PALETTE_TYPES = {"BAL": "#0072B2", "Lung Brush": "#009E73", "Oral Rinse": "#6A3D9A"}
-BOXPLOT_HEIGHT = 4.8
+BOXPLOT_HEIGHT = 6.0
 AXIS_LABEL_SIZE = 10
 AXIS_TICK_SIZE = 9
 TITLE_SIZE = 11
-BOXPLOT_SUBPLOT_ADJUST = dict(left=0.12, right=0.98, bottom=0.33, top=0.90)
+BOXPLOT_SUBPLOT_ADJUST = dict(left=0.10, right=0.98, bottom=0.42, top=0.90)
 AXIS_LINEWIDTH = 0.5
 TICK_LINEWIDTH = 0.5
 BOXPLOT_LINEWIDTH = 0.5
@@ -74,6 +74,24 @@ def canonicalize_sample_type(x: str) -> str:
     if x_clean in {"lung brush", "bronchial brush", "brochial brush", "brush"}:
         return "Lung Brush"
     return str(x)
+
+
+def parse_palette(text: str) -> dict[str, str]:
+    palette: dict[str, str] = {}
+    for token in str(text or "").split(","):
+        if not token.strip():
+            continue
+        if "=" not in token:
+            raise ValueError(f"Invalid palette entry '{token}'; expected label=#RRGGBB")
+        label, color = (part.strip() for part in token.split("=", 1))
+        palette[canonicalize_sample_type(label)] = color
+    return palette
+
+
+def observed_type_order(values: Iterable[str]) -> list[str]:
+    observed = list(dict.fromkeys(str(value) for value in values if pd.notna(value)))
+    preferred = ["BAL", "Lung Brush", "Oral Rinse"]
+    return [value for value in preferred if value in observed] + [value for value in observed if value not in preferred]
 
 
 def patient_type_taxon_rel(
@@ -260,7 +278,7 @@ def plot_cancer_boxplots(
             continue
         order = order_taxa_by_desc_median(d, chosen)
 
-        fig, ax = plt.subplots(figsize=(max(1.5, len(order) * 0.18), BOXPLOT_HEIGHT))
+        fig, ax = plt.subplots(figsize=(max(8.0, len(order) * 0.72), BOXPLOT_HEIGHT))
         sns.boxplot(
             data=d,
             x="taxon",
@@ -339,8 +357,8 @@ def plot_sample_type_three_group_boxplots(
     if d.empty:
         return
 
-    # Keep only patients with all three sample types for clean paired comparability
-    needed_types = {"BAL", "Oral Rinse", "Lung Brush"}
+    # Keep only patients with all observed sample types for paired comparability.
+    needed_types = set(rel_df[type_col].dropna().astype(str).unique())
     patient_types = d.groupby(patient_col)[type_col].apply(lambda x: set(x.dropna().unique()))
     keep_patients = patient_types[patient_types.apply(lambda s: needed_types.issubset(s))].index
     d = d[d[patient_col].isin(keep_patients)]
@@ -348,7 +366,7 @@ def plot_sample_type_three_group_boxplots(
         return
     order = order_taxa_by_desc_median(d, chosen)
 
-    hue_order = [x for x in ["BAL", "Oral Rinse", "Lung Brush"] if x in d[type_col].unique()]
+    hue_order = observed_type_order(d[type_col].unique())
     fig, ax = plt.subplots(figsize=(max(9, len(order) * 0.85), BOXPLOT_HEIGHT))
     sns.boxplot(
         data=d,
@@ -381,7 +399,7 @@ def plot_sample_type_three_group_boxplots(
     ax.legend(handles[:n], labels[:n], frameon=False, title="Sample type")
     ax.set_xlabel(f"{tax_level}", fontsize=AXIS_LABEL_SIZE)
     ax.set_ylabel("Relative abundance", fontsize=AXIS_LABEL_SIZE)
-    ax.set_title(f"Sample Type Comparison (All 3 Types) - {tax_level}", fontsize=TITLE_SIZE)
+    ax.set_title(f"Sample Type Comparison (All Observed Types) - {tax_level}", fontsize=TITLE_SIZE)
     ax.tick_params(axis="x", rotation=45, labelsize=AXIS_TICK_SIZE)
     ax.tick_params(axis="y", labelsize=AXIS_TICK_SIZE)
     style_axes(ax)
@@ -420,7 +438,7 @@ def plot_sample_type_three_group_boxplots(
     ax_log.legend(handles[:n], labels[:n], frameon=False, title="Sample type")
     ax_log.set_xlabel(f"{tax_level}", fontsize=AXIS_LABEL_SIZE)
     ax_log.set_ylabel("Relative abundance (log scale)", fontsize=AXIS_LABEL_SIZE)
-    ax_log.set_title(f"Sample Type Comparison (All 3 Types, log y) - {tax_level}", fontsize=TITLE_SIZE)
+    ax_log.set_title(f"Sample Type Comparison (All Observed Types, log y) - {tax_level}", fontsize=TITLE_SIZE)
     ax_log.tick_params(axis="x", rotation=45, labelsize=AXIS_TICK_SIZE)
     ax_log.tick_params(axis="y", labelsize=AXIS_TICK_SIZE)
     apply_log_y_axis(ax_log, d)
@@ -435,7 +453,7 @@ def plot_sample_type_three_group_boxplots(
         type_col=type_col,
         hue_order=hue_order,
         base_name="sample_type_three_group_boxplots_split",
-        title_prefix="Sample Type Comparison (All 3 Types)",
+        title_prefix="Sample Type Comparison (All Observed Types)",
     )
 
 
@@ -466,7 +484,7 @@ def plot_sample_type_three_group_boxplots_significant(
     if d.empty:
         return
 
-    needed_types = {"BAL", "Oral Rinse", "Lung Brush"}
+    needed_types = set(rel_df[type_col].dropna().astype(str).unique())
     patient_types = d.groupby(patient_col)[type_col].apply(lambda x: set(x.dropna().unique()))
     keep_patients = patient_types[patient_types.apply(lambda s: needed_types.issubset(s))].index
     d = d[d[patient_col].isin(keep_patients)]
@@ -474,7 +492,7 @@ def plot_sample_type_three_group_boxplots_significant(
         return
     order = order_taxa_by_desc_median(d, chosen)
 
-    hue_order = [x for x in ["BAL", "Oral Rinse", "Lung Brush"] if x in d[type_col].unique()]
+    hue_order = observed_type_order(d[type_col].unique())
     fig, ax = plt.subplots(figsize=(max(9, len(order) * 0.85), BOXPLOT_HEIGHT))
     sns.boxplot(
         data=d,
@@ -507,7 +525,7 @@ def plot_sample_type_three_group_boxplots_significant(
     ax.legend(handles[:n], labels[:n], frameon=False, title="Sample type")
     ax.set_xlabel(f"{tax_level} (significant only)", fontsize=AXIS_LABEL_SIZE)
     ax.set_ylabel("Relative abundance", fontsize=AXIS_LABEL_SIZE)
-    ax.set_title(f"Sample Type Comparison (Significant, All 3 Types) - {tax_level}", fontsize=TITLE_SIZE)
+    ax.set_title(f"Sample Type Comparison (Significant, All Observed Types) - {tax_level}", fontsize=TITLE_SIZE)
     ax.tick_params(axis="x", rotation=45, labelsize=AXIS_TICK_SIZE)
     ax.tick_params(axis="y", labelsize=AXIS_TICK_SIZE)
     style_axes(ax)
@@ -561,7 +579,7 @@ def plot_sample_type_three_group_boxplots_significant(
         type_col=type_col,
         hue_order=hue_order,
         base_name="sample_type_three_group_boxplots_significant_split",
-        title_prefix="Sample Type Comparison (Significant, All 3 Types)",
+        title_prefix="Sample Type Comparison (Significant, All Observed Types)",
     )
 
 
@@ -600,7 +618,7 @@ def plot_cancer_boxplots_significant_panels(
         if d.empty:
             continue
         order = order_taxa_by_desc_median(d, chosen)
-        fig, ax = plt.subplots(figsize=(max(1.5, len(order) * 0.18), BOXPLOT_HEIGHT))
+        fig, ax = plt.subplots(figsize=(max(8.0, len(order) * 0.72), BOXPLOT_HEIGHT))
 
         sns.boxplot(
             data=d,
@@ -702,7 +720,15 @@ def main() -> None:
     p.add_argument("--type-col", default="type_group")
     p.add_argument("--case-col", default="Case")
     p.add_argument("--count-col", default="count")
+    p.add_argument("--type-palette", default="", help="Sample-type label=#hex palette.")
+    p.add_argument("--case-palette", default="", help="Case label=#hex palette.")
     args = p.parse_args()
+
+    PALETTE_TYPES.update(parse_palette(args.type_palette))
+    PALETTE_STATUS.update({
+        ("Control" if label in {"Control", "Non-Cancer"} else label): color
+        for label, color in parse_palette(args.case_palette).items()
+    })
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

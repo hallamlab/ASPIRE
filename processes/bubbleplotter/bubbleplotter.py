@@ -201,7 +201,7 @@ def apply_taxonomy_classification(df: pd.DataFrame,
 
 
 def draw_taxonomy_hierarchy(ax, data, family_col='Family', order_col='Order',
-                           family_x=-0.4, order_x=-0.75, 
+                           family_x=-0.62, order_x=-1.18,
                            linewidth=1.0):
     """
     Draw taxonomy hierarchy with ONLY vertical lines showing nested structure.
@@ -236,7 +236,7 @@ def draw_taxonomy_hierarchy(ax, data, family_col='Family', order_col='Order',
             order_x - 0.08, mid_pos, order,
             ha='right', va='center',
             transform=ax.get_yaxis_transform(),
-            fontsize=12, weight='bold'
+            fontsize=9, weight='bold'
         )
         
         # Only draw vertical line if order has MORE THAN ONE child position
@@ -271,7 +271,7 @@ def draw_taxonomy_hierarchy(ax, data, family_col='Family', order_col='Order',
             family_x - 0.08, mid_pos, family,
             ha='right', va='center',
             transform=ax.get_yaxis_transform(),
-            fontsize=11, style='italic'
+            fontsize=8, style='italic'
         )
         
         # Only draw vertical line if family has MORE THAN ONE child position
@@ -669,7 +669,7 @@ def plot_depth_bubble(
             x_labels=samples,
             y_labels=genera_list,
             width_per_x=0.58,
-            height_per_y=0.28,
+            height_per_y=0.48,
             min_width=18,
             max_width=220,
             min_height=12,
@@ -724,8 +724,8 @@ def plot_depth_bubble(
         ax, depth_data,
         family_col='Family',
         order_col='Order',
-        family_x=-0.4,
-        order_x=-0.75,
+        family_x=-0.62,
+        order_x=-1.18,
         linewidth=1.0
     )
     
@@ -765,9 +765,9 @@ def plot_depth_bubble(
     
     # Add taxonomy level labels at bottom - ALIGNED with their respective columns
     label_y = min_y - 0.8
-    ax.text(-0.4, label_y, 'Family', transform=ax.get_yaxis_transform(), 
+    ax.text(-0.62, label_y, 'Family', transform=ax.get_yaxis_transform(),
             ha='center', va='top', fontsize=13, fontweight='bold', style='italic')
-    ax.text(-0.75, label_y, 'Order', transform=ax.get_yaxis_transform(), 
+    ax.text(-1.18, label_y, 'Order', transform=ax.get_yaxis_transform(),
             ha='center', va='top', fontsize=13, fontweight='bold')
     ax.text(0, label_y, 'Genus', transform=ax.get_yaxis_transform(), 
             ha='left', va='top', fontsize=13, fontweight='bold')
@@ -836,7 +836,7 @@ def plot_summary_bubble(
         x_labels=groups,
         y_labels=genera_list,
         width_per_x=1.1,
-        height_per_y=0.34,
+        height_per_y=0.48,
         min_width=18,
         max_width=180,
         min_height=14,
@@ -889,8 +889,8 @@ def plot_summary_bubble(
         ax, summary_data,
         family_col='Family',
         order_col='Order',
-        family_x=-0.4,
-        order_x=-0.75,
+        family_x=-0.62,
+        order_x=-1.18,
         linewidth=1.0
     )
     
@@ -901,7 +901,7 @@ def plot_summary_bubble(
     # Set limits with padding
     max_y = max(y_positions) if y_positions else len(genera_list)
     min_y = min(y_positions) if y_positions else 0
-    ax.set_xlim(-1.5, len(groups))
+    ax.set_xlim(-2.0, len(groups))
     ax.set_ylim(min_y - 1, max_y + 1)
     ax.set_xlabel(group_col, fontsize=16, fontweight='bold')
     ax.tick_params(axis='x', labelsize=12)
@@ -929,9 +929,9 @@ def plot_summary_bubble(
     
     # Add taxonomy level labels - ALIGNED with their respective columns
     label_y = min_y - 0.8
-    ax.text(-0.4, label_y, 'Family', transform=ax.get_yaxis_transform(),
+    ax.text(-0.62, label_y, 'Family', transform=ax.get_yaxis_transform(),
             ha='center', va='top', fontsize=13, fontweight='bold', style='italic')
-    ax.text(-0.75, label_y, 'Order', transform=ax.get_yaxis_transform(),
+    ax.text(-1.18, label_y, 'Order', transform=ax.get_yaxis_transform(),
             ha='center', va='top', fontsize=13, fontweight='bold')
     ax.text(0, label_y, 'Genus', transform=ax.get_yaxis_transform(),
             ha='left', va='top', fontsize=13, fontweight='bold')

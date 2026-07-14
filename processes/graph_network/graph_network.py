@@ -473,11 +473,11 @@ def build_degree_legend_values(observed_degrees: Iterable[object]) -> List[int]:
         except Exception:
             continue
     if not vals:
-        return [0, 5]
+        return [0]
 
     max_obs = max(vals)
-    step = 5 if max_obs <= 25 else 10
-    legend_max = max(step, int(math.ceil(max_obs / float(step)) * step))
+    step = 1 if max_obs <= 5 else (5 if max_obs <= 25 else 10)
+    legend_max = int(math.ceil(max_obs / float(step)) * step)
     return list(range(0, legend_max + step, step))
 
 
@@ -567,8 +567,16 @@ def draw_selected_nodes_one_by_one(G: nx.Graph, pos: Dict, nodes: List[str], col
 
 
 def label_selected(G: nx.Graph, pos: Dict, select_nodes: List[str], text_attr: str = 'Taxon'):
+    if not select_nodes and G.number_of_nodes() > 0:
+        select_nodes = sorted(
+            G.nodes(),
+            key=lambda node: _safe_float(G.nodes[node].get("Degree", G.degree(node)), 0.0),
+            reverse=True,
+        )[: min(10, G.number_of_nodes())]
     if not _HAS_ADJUSTTEXT:
-        print("[WARN] adjustText not installed; skipping labels.")
+        print("[WARN] adjustText not installed; using direct labels.")
+        labels = {node: str(G.nodes[node].get(text_attr, node)) for node in select_nodes}
+        nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, font_weight="bold")
         return
     texts = []
     for idx, n in enumerate(select_nodes):
@@ -2539,6 +2547,12 @@ def main():
                 variants["isa_all_labeled"],
                 variants["isa_mag_all"],
             })
+
+    if asv_mag_pairing.empty:
+        mag_modes = {mode for mode in modes if "mag" in mode.lower()}
+        if mag_modes:
+            print("[INFO] ASV-MAG linking is unavailable; omitting MAG-specific network modes.")
+            modes.difference_update(mag_modes)
 
     # Backward-compatible aliases.
     if "type_isa" in modes:

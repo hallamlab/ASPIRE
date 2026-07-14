@@ -85,8 +85,8 @@ def plot_pcoa(
 
     # Extract coordinates and variance explained
     coords = pcoa_result.samples.values[:, :2]
-    pc1_var = pcoa_result.proportion_explained[0] * 100
-    pc2_var = pcoa_result.proportion_explained[1] * 100
+    pc1_var = pcoa_result.proportion_explained.iloc[0] * 100
+    pc2_var = pcoa_result.proportion_explained.iloc[1] * 100
 
     pcoa_df = pd.DataFrame(coords, columns=["PC1", "PC2"])
     pcoa_df.index = dist_mat.index
@@ -190,8 +190,11 @@ def plot_alpha_boxplot(
             data=metadata,
             x="lung_status",
             y="shannon",
+            hue="lung_status",
             order=present_order,
+            hue_order=present_order,
             palette=PALETTE_LUNG_STATUS,
+            legend=False,
             fliersize=0,
             ax=ax_sample,
         )
@@ -215,8 +218,11 @@ def plot_alpha_boxplot(
             data=patient_level,
             x="lung_status",
             y="shannon_mean",
+            hue="lung_status",
             order=present_order,
+            hue_order=present_order,
             palette=PALETTE_LUNG_STATUS,
+            legend=False,
             fliersize=0,
             ax=ax_patient,
         )
@@ -302,8 +308,11 @@ def plot_contrast_distances(
         data=dist_df,
         x="contrast",
         y="bray",
+        hue="contrast",
         order=order,
+        hue_order=order,
         palette=palette,
+        legend=False,
         fliersize=0,
         ax=ax,
     )
@@ -330,7 +339,10 @@ def plot_r2_summary(summary: pd.DataFrame, outdir: Path) -> None:
     if summary.empty:
         return
 
-    plot_df = summary.sort_values("permanova_R2", ascending=True).copy()
+    plot_df = summary[pd.to_numeric(summary["permanova_R2"], errors="coerce").notna()].copy()
+    if plot_df.empty:
+        return
+    plot_df = plot_df.sort_values("permanova_R2", ascending=True)
 
     # Create color mapping
     colors = []

@@ -103,6 +103,15 @@ def relative_abundance(count_matrix):
     return count_matrix / totals
 
 
+def case_group_patient_counts(patient_ids, case_status):
+    """Return unique patient counts for the case and control analysis groups."""
+    patient_ids = np.asarray(patient_ids)
+    case_status = np.asarray(case_status).astype(str)
+    cancer = np.unique(patient_ids[case_status == 'Cancer']).size
+    control = np.unique(patient_ids[np.isin(case_status, ['Control', 'Non-Cancer'])]).size
+    return int(cancer), int(control)
+
+
 def bootstrap_patients_true_null(count_matrix, patient_ids, case_status,
                                   n_cancer, n_control, seed=42):
     """
@@ -454,6 +463,14 @@ def main():
 
             print(f"  Samples: {count_matrix.shape[0]}, Taxa: {count_matrix.shape[1]}")
             print(f"  Patients: {len(np.unique(patient_ids))}")
+            n_available_cancer, n_available_control = case_group_patient_counts(patient_ids, case_status)
+            if n_available_cancer == 0 or n_available_control == 0:
+                print(
+                    "  [WARN] Skipping case-control analysis: "
+                    f"available cancer patients={n_available_cancer}, "
+                    f"control patients={n_available_control}."
+                )
+                continue
 
             # Build spike scenarios based on user request
             spike_scenarios = []

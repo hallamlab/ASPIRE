@@ -35,8 +35,6 @@ from pathlib import Path
 from typing import List, Tuple, Sequence, Dict
 
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 
 BLAST6_COLUMNS = [
@@ -130,7 +128,16 @@ def build_master_table(
     mitomaster_df: pd.DataFrame,
     mitochondria_substring: str,
 ) -> pd.DataFrame:
-    seqs = pd.DataFrame({'Sequence_ID': silva_df['Sequence_ID']})
+    # Taxonomy classifiers can omit non-bacterial and otherwise unassigned ASVs.
+    # Retain IDs detected by any non-target method so those hits are not lost
+    # before the pass/fail flags are assembled.
+    sequence_ids = pd.concat([
+        silva_df['Sequence_ID'],
+        mito_blast_df['qseqid'],
+        biof_blast_df['qseqid'],
+        mitomaster_df['Sequence_ID'],
+    ], ignore_index=True).dropna().drop_duplicates()
+    seqs = pd.DataFrame({'Sequence_ID': sequence_ids})
     # Fast membership via sets
     in_biof = set(biof_blast_df['qseqid'])
     in_mito_blast = set(mito_blast_df['qseqid'])
@@ -216,6 +223,8 @@ def save_df(df: pd.DataFrame, path: Path) -> None:
 
 
 def save_plot(fig: plt.Figure, out_base: Path, exts: Sequence[str], dpi: int) -> None:
+    import matplotlib.pyplot as plt
+
     out_base.parent.mkdir(parents=True, exist_ok=True)
     for ext in exts:
         fig.savefig(out_base.with_suffix(f".{ext}"), dpi=dpi, bbox_inches='tight')
@@ -223,6 +232,9 @@ def save_plot(fig: plt.Figure, out_base: Path, exts: Sequence[str], dpi: int) ->
 
 
 def plot_cumulative_microbe_vs_nontarget(df: pd.DataFrame, figsize: Tuple[float, float], style: str, title: str) -> plt.Figure:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     sns.set(style=style) # type: ignore
     fig = plt.figure(figsize=figsize)
     ax = sns.lineplot(
@@ -247,6 +259,9 @@ def plot_cumulative_microbe_vs_nontarget(df: pd.DataFrame, figsize: Tuple[float,
 
 
 def plot_cumulative_microbial_vs_host(df: pd.DataFrame, figsize: Tuple[float, float], style: str, title: str) -> plt.Figure:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     sns.set(style=style) # type: ignore
     fig = plt.figure(figsize=figsize)
     ax = sns.lineplot(
@@ -270,6 +285,9 @@ def plot_cumulative_microbial_vs_host(df: pd.DataFrame, figsize: Tuple[float, fl
 
 
 def plot_non_target_bar(df_counts: pd.DataFrame, figsize: Tuple[float, float], style: str, title: str) -> plt.Figure:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     sns.set(style=style) # type: ignore
     fig = plt.figure(figsize=figsize)
     # Use seaborn catplot returns FacetGrid; instead, draw barplot on our fig/ax

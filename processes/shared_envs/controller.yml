@@ -3,4 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - nextflow
+  - mamba
+  - pandas
+  - pyyaml
   - yq

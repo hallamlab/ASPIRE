@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Patch
 
 # ----------------------- Matplotlib/Seaborn defaults ------------------------
 mpl.rcParams["pdf.fonttype"] = 42      # Keep text as text in PDF
@@ -335,6 +336,7 @@ def choose_mito_sample_names(raw_cols: list[str], valid_samples: set[str], mode:
 def draw_clustermap(
     pivot: pd.DataFrame,
     col_colors_df: pd.DataFrame,
+    color_specs: list[tuple[str, dict[str, str]]],
     outfile_prefix: Path,
     tick_vals_orig: list[int],
     vmax_display: int,
@@ -386,6 +388,34 @@ def draw_clustermap(
         base_w=figsize_w,
     )
 
+    def add_annotation_legends(grid) -> None:
+        """Add legends for metadata color strips without covering the heatmap."""
+        y_anchor = 1.0
+        observed_colors = {
+            col: set(col_colors_df[col].dropna().astype(str))
+            for col in col_colors_df.columns
+        }
+        for col, palette in color_specs:
+            if col not in observed_colors:
+                continue
+            handles = [
+                Patch(facecolor=color, edgecolor="none", label=str(label))
+                for label, color in palette.items()
+                if str(color) in observed_colors[col]
+            ]
+            if not handles:
+                continue
+            legend = grid.fig.legend(
+                handles=handles,
+                title=col,
+                loc="upper left",
+                bbox_to_anchor=(1.01, y_anchor),
+                frameon=False,
+                borderaxespad=0,
+            )
+            grid.fig.add_artist(legend)
+            y_anchor -= min(0.08 + 0.045 * len(handles), 0.42)
+
     # 1) fixed sample-code order
     g = sns.clustermap(
         pivot_log,
@@ -413,6 +443,7 @@ def draw_clustermap(
     g.ax_heatmap.set_xticks(g.ax_heatmap.get_xticks())
     g.ax_heatmap.set_xticklabels(pivot_log.columns, rotation=90, ha="center")
     g.ax_heatmap.tick_params(axis="x", bottom=True, labelbottom=True, length=5)
+    add_annotation_legends(g)
 
     formats = formats or ["pdf", "png"]
     for fmt in formats:
@@ -444,6 +475,7 @@ def draw_clustermap(
     cbar.set_ticklabels([f"{v:,}" for v in tick_vals_orig])
     cbar.set_label("ASV Count", rotation=270, labelpad=15)
     g.ax_heatmap.tick_params(axis="x", bottom=True, labelbottom=True, length=5)
+    add_annotation_legends(g)
 
     clustered_prefix = outfile_prefix.with_name(outfile_prefix.stem.replace("_code", "_clustered"))
     for fmt in formats:
@@ -633,6 +665,7 @@ def main():
         draw_clustermap(
             pivot=pivot,
             col_colors_df=col_colors_df,
+            color_specs=color_specs,
             outfile_prefix=prefix,
             tick_vals_orig=tick_vals_orig,
             vmax_display=vmax_display,
@@ -691,6 +724,7 @@ def main():
             draw_clustermap(
                 pivot=pivot,
                 col_colors_df=col_colors_df,
+                color_specs=color_specs,
                 outfile_prefix=prefix,
                 tick_vals_orig=tick_vals_orig,
                 vmax_display=vmax_display,

@@ -652,11 +652,12 @@ for (gcol in group_specs) {
     next
   }
 
-  # For other grouping columns (non-type_group, non-status), use restricted permutations.
-  use_blocking <- gcol %in% blocked_specs
+  # Blocking is analysis-specific: within-patient factors such as Type_Group
+  # should be blocked, while between-patient factors such as Case must not be.
+  use_blocking <- tolower(gcol) %in% tolower(blocked_specs)
   patient_blocks <- NULL
   blocking_ids <- NULL
-  if (!is.null(opt$`block-col`) && nzchar(opt$`block-col`)) {
+  if (use_blocking && !is.null(opt$`block-col`) && nzchar(opt$`block-col`)) {
     if (!(opt$`block-col` %in% colnames(meta_keep))) {
       stop("Block column '", opt$`block-col`, "' not found in metadata. Available: ",
            paste(colnames(meta_keep), collapse = ", "))
@@ -664,7 +665,6 @@ for (gcol in group_specs) {
     blocking_ids <- as.character(meta_keep[[opt$`block-col`]])
     patient_blocks <- droplevels(factor(blocking_ids))
     message("Grouping '", gcol, "' uses explicit blocking column '", opt$`block-col`, "'.")
-    use_blocking <- TRUE
   } else if (use_blocking) {
     if (opt$`patient-col` %in% colnames(meta_keep)) {
       blocking_ids <- as.character(meta_keep[[opt$`patient-col`]])
@@ -682,7 +682,22 @@ for (gcol in group_specs) {
       stop("Blocking requested for grouping column '", gcol, "' but no blocking IDs were resolved.")
     }
 
-    if (gcol == "type_group" && isTRUE(opt$`type-group-require-complete`)) {
+    groups_per_block <- tapply(as.character(grouping), blocking_ids, function(values) {
+      length(unique(values[!is.na(values)]))
+    })
+    if (all(groups_per_block < 2)) {
+      warning(
+        "Grouping '", gcol, "' is constant within every block; disabling blocked permutations."
+      )
+      use_blocking <- FALSE
+      patient_blocks <- NULL
+      blocking_ids <- NULL
+    }
+  }
+
+  if (use_blocking && !is.null(patient_blocks)) {
+
+    if (tolower(gcol) == "type_group" && isTRUE(opt$`type-group-require-complete`)) {
       needed_types <- unique(as.character(grouping))
       keep_patients <- meta_keep %>%
         transmute(
@@ -741,7 +756,7 @@ for (gcol in group_specs) {
   res2_full <- summarize_multipatt(fit2)
   write_tables(res2_sign, res2_full, paste0(gcol_slug, "_indicator_species_DULEG"))
   
-  if (gcol == "type_group") {
+  if (tolower(gcol) == "type_group") {
     write_tables(res1_sign, res1_full, "Type_Group_indicator_species")
     write_tables(res2_sign, res2_full, "Type_Group_indicator_species_DULEG")
   }
