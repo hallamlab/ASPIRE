@@ -2,8 +2,10 @@ name: asv_controller
 channels:
   - conda-forge
 dependencies:
+  - jq
   - nextflow
   - mamba
+  - openjdk>=17,<27
   - pandas
   - pyyaml
   - yq

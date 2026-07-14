@@ -1655,7 +1655,8 @@ def load_asv_mag_pairing(path: Optional[str]) -> pd.DataFrame:
         out["best_genome_id"] = pd.NA
     if "mag_phylum" not in out.columns:
         out["mag_phylum"] = pd.NA
-    if "mag_mimag_tier" not in out.columns:
+    has_mimag_tier = "mag_mimag_tier" in out.columns
+    if not has_mimag_tier:
         out["mag_mimag_tier"] = pd.NA
     out["mag_mimag_tier"] = (
         out["mag_mimag_tier"]
@@ -1668,7 +1669,8 @@ def load_asv_mag_pairing(path: Optional[str]) -> pd.DataFrame:
 
     def summarize_asv(grp: pd.DataFrame) -> pd.Series:
         paired = grp.loc[grp["pairing_status"].ne("unpaired")].copy()
-        paired = paired.loc[paired["mag_mimag_tier"].isin(ALLOWED_MAG_MIMAG_TIERS)].copy()
+        if has_mimag_tier and paired["mag_mimag_tier"].ne("").any():
+            paired = paired.loc[paired["mag_mimag_tier"].isin(ALLOWED_MAG_MIMAG_TIERS)].copy()
         genomes = sorted({str(x) for x in paired["best_genome_id"].dropna() if str(x).strip()})
         phyla = sorted({str(x).strip() for x in paired["mag_phylum"].dropna() if str(x).strip()})
         has_mag_pair = len(genomes) > 0

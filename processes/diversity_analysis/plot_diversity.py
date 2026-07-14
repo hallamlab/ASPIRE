@@ -139,7 +139,8 @@ def create_palette_from_metadata(meta: pd.DataFrame, group_col: str,
     If color_col exists, use it; otherwise auto-assign colors.
     """
     # Get unique groups and ensure consistent type (str)
-    groups = meta[group_col].astype(str).unique()
+    group_values = meta[group_col].dropna()
+    groups = group_values.astype(str).unique()
     
     if color_col and color_col in meta.columns:
         # Use provided colors, ensuring keys are strings
@@ -323,12 +324,18 @@ def plot_alpha_boxplot(df: pd.DataFrame, group_col: str, value_col: str,
     
     # Ensure group_order items are strings
     group_order = [str(g) for g in group_order]
+    plot_df = df[df[group_col].isin(group_order) & df[value_col].notna()].copy()
+    if plot_df.empty or not group_order:
+        warnings.warn(
+            f"No plottable rows for alpha boxplot '{value_col}' by '{group_col}'; skipping."
+        )
+        return
     
     fig, ax = plt.subplots(figsize=(max(8, len(group_order) * 1.2), 6))
     
     # Fix: explicitly set hue to avoid deprecation warning
     sns.boxplot(
-        data=df, x=group_col, y=value_col, hue=group_col,
+        data=plot_df, x=group_col, y=value_col, hue=group_col,
         order=group_order, palette=palette,
         linewidth=1.5, ax=ax, legend=False  # Important: legend=False to avoid duplicate
     )
@@ -763,6 +770,9 @@ def run_analysis_pipeline(
     df = metadata.copy()
     df[sample_col] = normalize_sample_id_series(df[sample_col])
     df[group_col] = df[group_col].astype(str)
+    df = df[df[group_col].notna() & (df[group_col].str.strip() != "") & (df[group_col] != "nan")].copy()
+    exclude_groups = [str(g) for g in exclude_groups] if exclude_groups else []
+    group_order = [str(g) for g in group_order] if group_order else None
 
     # Apply filters
     if filter_col and filter_col in df.columns:
@@ -785,6 +795,11 @@ def run_analysis_pipeline(
     
     if verbose:
         print(f"[INFO] Groups ({len(group_order)}): {group_order}")
+    if not group_order:
+        warnings.warn(
+            f"No valid groups remain for '{group_col}' after filtering; skipping diversity analysis."
+        )
+        return
     
     # Create palette if not provided
     if not group_palette:

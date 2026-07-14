@@ -119,7 +119,12 @@ def compute_module_sample_matrix(counts: pd.DataFrame, modules: pd.DataFrame) ->
 def build_sample_module_tables(module_sample_matrix: pd.DataFrame, metadata: pd.DataFrame, sample_col: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     if module_sample_matrix.empty:
         empty_long = pd.DataFrame(columns=[sample_col, "module_label", "module_score", "module_rank_within_sample", "is_top_module"])
-        empty_top = pd.DataFrame(columns=[sample_col, "top_module", "top_module_score", "second_module", "second_module_score", "third_module", "third_module_score"])
+        empty_top = pd.DataFrame(columns=[
+            sample_col, "n_modules_present",
+            "top_module", "top_module_score",
+            "second_module", "second_module_score",
+            "third_module", "third_module_score",
+        ])
         return empty_long, empty_top, pd.DataFrame()
 
     long_df = (
@@ -299,7 +304,7 @@ def main() -> None:
         ])
 
     module_asv = module_asv.merge(asv_mag, on="Taxon", how="left")
-    module_asv["has_mag_pair"] = module_asv["has_mag_pair"].fillna(False).astype(bool)
+    module_asv["has_mag_pair"] = module_asv["has_mag_pair"].map(lambda value: bool(value) if pd.notna(value) else False)
     for col in ["n_mag_links", "n_unique_mags"]:
         module_asv[col] = pd.to_numeric(module_asv[col], errors="coerce").fillna(0).astype(int)
     for col in ["mag_genome_ids", "mag_species", "mag_genera", "mag_phyla", "pairing_statuses"]:
@@ -382,10 +387,11 @@ def main() -> None:
     module_summary.to_csv(outdir / "module_mag_anchor_summary.tsv", sep="\t", index=False)
     sample_module_scores.to_csv(outdir / "sample_module_scores.tsv", sep="\t", index=False)
     sample_top_modules.to_csv(outdir / "sample_top_modules.tsv", sep="\t", index=False)
+
+    matrix_out = module_sample_matrix.transpose()
+    matrix_out.index.name = args.sample_col
+    matrix_out.to_csv(outdir / "sample_module_score_matrix.tsv", sep="\t")
     if not module_sample_matrix.empty:
-        matrix_out = module_sample_matrix.transpose()
-        matrix_out.index.name = args.sample_col
-        matrix_out.to_csv(outdir / "sample_module_score_matrix.tsv", sep="\t")
         plot_module_sample_heatmap(
             module_sample_matrix,
             sample_order,

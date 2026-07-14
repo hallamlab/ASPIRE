@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import os
 import re
 import shutil
 import subprocess
@@ -30,6 +31,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/aspire_matplotlib")
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -125,6 +128,21 @@ def open_fasta(path: Path):
     return path.open("r")
 
 
+def normalize_existing_path_string(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    path = Path(text)
+    try:
+        if path.exists():
+            return str(path.resolve())
+    except OSError:
+        pass
+    return str(path)
+
+
 def canonical_stem(path: Path) -> str:
     name = path.name
     for suffix in (".gz", ".gff3", ".gff", ".fasta", ".fna", ".fa", ".fas", ".ffn", ".faa"):
@@ -168,6 +186,7 @@ def derive_native_genome_id_from_stem(stem: str, token_index: int | None = None,
             stem = parts[token_index]
         elif warn_label is not None:
             warn(f"Configured id_token_index={token_index} is out of range for {warn_label}; using canonical stem instead.")
+    stem = re.sub(r"\.full$", "", stem, flags=re.IGNORECASE)
     return normalize_join_id(stem)
 
 
@@ -277,7 +296,7 @@ def index_genome_fastas(genome_dir: Path | None) -> dict[str, Path]:
     if genome_dir is None:
         return index
     for path in iter_paths(genome_dir, FASTA_SUFFIXES):
-        index[normalize_join_id(canonical_stem(path))] = path
+        index[derive_native_genome_id(path)] = path
     return index
 
 
@@ -725,6 +744,77 @@ def load_mag_metadata(
     return meta, path
 
 
+def prepare_mag_metadata_frame(
+    meta: pd.DataFrame,
+    metadata_source: Path | str,
+    source_label: str = "source",
+    multi_source: bool = False,
+    id_token_index: int | None = None,
+    genome_qc_dir: Path | None = None,
+) -> pd.DataFrame:
+    join_col = None
+    for candidate in ("Genome_Id", "Bin Id", "genome_id"):
+        if candidate in meta.columns:
+            join_col = candidate
+            break
+    if join_col is None:
+        warn(f"MAG metadata table lacks a joinable genome identifier column: {metadata_source}")
+        return pd.DataFrame()
+
+    meta = meta.copy()
+    meta["mag_native_genome_id_raw"] = meta[join_col].astype(str)
+    meta["mag_native_genome_id"] = meta[join_col].map(lambda x: derive_native_genome_id_from_stem(str(x), id_token_index))
+    meta["genome_id"] = meta["mag_native_genome_id"].map(lambda x: compose_genome_id(x, source_label, multi_source))
+    meta["mag_genome_uid"] = meta["genome_id"].map(normalize_join_id)
+    meta = meta.loc[meta["genome_id"] != ""].drop_duplicates(subset=["genome_id"], keep="first")
+
+    preferred = [
+        "Genome_Id", "Bin Id", "Completeness", "Contamination", "Strain heterogeneity",
+        "num_seqs", "sum_len", "N50", "qscore", "pass_BARRNAP", "contains_16S",
+        "has_16S", "16S_rRNA", "rrna_16S_score", "mimag_tier", "integrity_score",
+        "recoverability_score", "mimag_quality_index", "recovered_feature_count",
+        "recovery_pattern_label", "Domain", "Phylum", "Class", "Order", "Family",
+        "Genus", "Species", "sample", "category", "fasta_path", "fasta_path_normalized",
+        "copied_fasta_path", "copied_fasta_path_normalized", "ani_fasta_path",
+        "ani_fasta_path_normalized", "source_dir", "source_dir_normalized",
+    ]
+    keep = ["genome_id", "mag_genome_uid", "mag_native_genome_id", "mag_native_genome_id_raw"] + [col for col in preferred if col in meta.columns]
+    meta = meta.loc[:, keep]
+    rename_map = {}
+    for col in meta.columns:
+        if col in {"genome_id", "mag_genome_uid", "mag_native_genome_id", "mag_native_genome_id_raw"}:
+            continue
+        rename_map[col] = f"mag_{sanitize_token(col).lower()}"
+    meta = meta.rename(columns=rename_map)
+    meta["mag_source_label"] = source_label
+    meta["mag_genome_qc_dir"] = str(genome_qc_dir) if genome_qc_dir is not None else ""
+    meta["mag_metadata_source"] = str(metadata_source)
+    return meta
+
+
+def load_master_metadata(master_tsv: Path) -> pd.DataFrame:
+    info(f"Loading selected-set metadata from: {master_tsv}")
+    meta = pd.read_csv(master_tsv, sep="\t", low_memory=False)
+    if meta.empty:
+        warn(f"Selected-set metadata table is empty: {master_tsv}")
+        return pd.DataFrame()
+
+    required_cols = ["source_dir", "copied_fasta_path"]
+    missing = [col for col in required_cols if col not in meta.columns]
+    if missing:
+        die(f"Selected-set metadata is missing required columns {missing}: {master_tsv}")
+
+    meta = meta.copy()
+    meta["source_dir_normalized"] = meta["source_dir"].map(normalize_existing_path_string)
+    meta["copied_fasta_path_normalized"] = meta["copied_fasta_path"].map(normalize_existing_path_string)
+    if "fasta_path" in meta.columns:
+        meta["fasta_path_normalized"] = meta["fasta_path"].map(normalize_existing_path_string)
+    if "ani_fasta_path" in meta.columns:
+        meta["ani_fasta_path_normalized"] = meta["ani_fasta_path"].map(normalize_existing_path_string)
+
+    return meta
+
+
 def build_exact_barrnap_map(mag_metadata: pd.DataFrame) -> tuple[dict[str, str], dict[str, Path]]:
     exact_map: dict[str, str] = {}
     exact_genome_fastas: dict[str, Path] = {}
@@ -736,6 +826,18 @@ def build_exact_barrnap_map(mag_metadata: pd.DataFrame) -> tuple[dict[str, str],
         eligible = eligible.loc[truthy_series(eligible["mag_eligible_for_linking"])].copy()
 
     candidate_cols = [c for c in ("mag_bin_id", "mag_genome_id") if c in eligible.columns]
+    candidate_path_cols = [
+        c
+        for c in (
+            "mag_copied_fasta_path_normalized",
+            "mag_copied_fasta_path",
+            "mag_fasta_path_normalized",
+            "mag_fasta_path",
+            "mag_ani_fasta_path_normalized",
+            "mag_ani_fasta_path",
+        )
+        if c in eligible.columns
+    ]
     for _, row in eligible.iterrows():
         genome_id = str(row.get("genome_id", "")).strip()
         if not genome_id:
@@ -747,14 +849,17 @@ def build_exact_barrnap_map(mag_metadata: pd.DataFrame) -> tuple[dict[str, str],
             key = exact_match_key_from_stem(str(value))
             if key:
                 exact_map[key] = genome_id
-        fasta_path = row.get("mag_fasta_path")
-        if pd.notna(fasta_path):
+        for path_col in candidate_path_cols:
+            fasta_path = row.get(path_col)
+            if pd.isna(fasta_path):
+                continue
             fasta_file = Path(str(fasta_path))
             if fasta_file.exists():
                 exact_genome_fastas[genome_id] = fasta_file
                 key = exact_match_key_from_stem(fasta_file.stem)
                 if key:
                     exact_map[key] = genome_id
+                break
 
     return exact_map, exact_genome_fastas
 
@@ -762,8 +867,11 @@ def build_exact_barrnap_map(mag_metadata: pd.DataFrame) -> tuple[dict[str, str],
 def truthy_series(series: pd.Series) -> pd.Series:
     if pd.api.types.is_bool_dtype(series):
         return series.fillna(False)
+    numeric = pd.to_numeric(series, errors="coerce")
+    numeric_truth = numeric.notna() & (numeric != 0)
     lowered = series.astype(str).str.strip().str.lower()
-    return lowered.isin({"true", "t", "1", "yes", "y", "pass", "passed"})
+    text_truth = lowered.isin({"true", "t", "1", "1.0", "yes", "y", "pass", "passed"})
+    return numeric_truth | text_truth
 
 
 def build_sources(
@@ -771,12 +879,87 @@ def build_sources(
     genome_fasta_dirs: list[Path] | None,
     genome_qc_dirs: list[Path] | None,
     id_token_indexes: list[int] | None,
+    master_tsv: Path | None = None,
 ) -> list[GenomeQcSource]:
     barrnap_dirs = [p.resolve() for p in barrnap_dirs]
     genome_qc_dirs = [p.resolve() for p in (genome_qc_dirs or [])]
     genome_fasta_dirs = [p.resolve() for p in (genome_fasta_dirs or [])]
 
     sources: list[GenomeQcSource] = []
+    if master_tsv is not None:
+        if barrnap_dirs or genome_qc_dirs or genome_fasta_dirs:
+            die("--master-tsv cannot be combined with --barrnap-dir, --genome-fasta-dir, or --genome-qc-dir.")
+
+        master_meta = load_master_metadata(master_tsv.resolve())
+        if master_meta.empty:
+            die(f"No rows found in selected-set metadata: {master_tsv}")
+
+        source_dir_values = [Path(p) for p in master_meta["source_dir_normalized"].dropna().astype(str).tolist() if p]
+        unique_source_dirs = list(dict.fromkeys(source_dir_values))
+        n_sources = len(unique_source_dirs)
+        multi_source = n_sources > 1
+        source_id_token_indexes = resolve_aligned_option(id_token_indexes, n_sources, "id_token_indexes")
+        source_labels = make_source_labels(unique_source_dirs)
+
+        for idx, source_dir in enumerate(unique_source_dirs):
+            barrnap_dir = source_dir / "barrnap"
+            if not barrnap_dir.exists() or not barrnap_dir.is_dir():
+                die(f"Selected-set source_dir is missing barrnap/: {source_dir}")
+
+            source_meta = master_meta.loc[master_meta["source_dir_normalized"] == str(source_dir)].copy()
+            source_label = source_labels[source_dir]
+            mag_metadata = prepare_mag_metadata_frame(
+                meta=source_meta,
+                metadata_source=master_tsv,
+                source_label=source_label,
+                multi_source=multi_source,
+                id_token_index=source_id_token_indexes[idx],
+                genome_qc_dir=source_dir,
+            )
+            if mag_metadata.empty:
+                warn(f"[{source_label}] No usable genome metadata rows found in {master_tsv}; skipping source.")
+                continue
+
+            if "mag_copied_fasta_path" in mag_metadata.columns:
+                mag_metadata["mag_in_final_fasta_set"] = mag_metadata["mag_copied_fasta_path"].map(
+                    lambda value: bool(str(value).strip()) and str(value).strip().lower() != "nan"
+                )
+            else:
+                mag_metadata["mag_in_final_fasta_set"] = False
+
+            if "mag_pass_barrnap" in mag_metadata.columns:
+                mag_metadata["mag_eligible_for_linking"] = mag_metadata["mag_in_final_fasta_set"] & truthy_series(
+                    mag_metadata["mag_pass_barrnap"]
+                )
+            else:
+                mag_metadata["mag_eligible_for_linking"] = mag_metadata["mag_in_final_fasta_set"]
+
+            allowed_genomes = set(
+                mag_metadata.loc[truthy_series(mag_metadata["mag_eligible_for_linking"]), "mag_native_genome_id"]
+                .dropna()
+                .astype(str)
+            )
+            exact_barrnap_map, exact_genome_fastas = build_exact_barrnap_map(mag_metadata)
+            if exact_barrnap_map:
+                info(f"[{source_label}] Using {len(exact_barrnap_map)} representative-specific barrnap keys from selected-set metadata.")
+
+            sources.append(
+                GenomeQcSource(
+                    source_label=source_label,
+                    genome_qc_dir=source_dir,
+                    barrnap_dir=barrnap_dir,
+                    genome_fasta_dir=None,
+                    allowed_genomes=allowed_genomes,
+                    exact_barrnap_map=exact_barrnap_map,
+                    exact_genome_fasta_map=exact_genome_fastas,
+                    mag_metadata=mag_metadata,
+                    multi_source=multi_source,
+                    id_token_index=source_id_token_indexes[idx],
+                )
+            )
+
+        return sources
+
     n_sources = len(genome_qc_dirs) if genome_qc_dirs else len(barrnap_dirs)
     multi_source = n_sources > 1
     source_id_token_indexes = resolve_aligned_option(id_token_indexes, n_sources, "id_token_indexes")
@@ -1165,6 +1348,11 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Optional token index used to derive representative genome IDs from barrnap filenames after splitting the canonical stem on '.'. Provide once or once per source in the same order as genome_qc_dirs/barrnap_dirs.",
     )
+    p.add_argument(
+        "--master-tsv",
+        type=Path,
+        help="Selected-set master.tsv with source_dir and copied_fasta_path columns. Mutually exclusive with --barrnap-dir, --genome-fasta-dir, and --genome-qc-dir.",
+    )
     p.add_argument("--outdir", required=True, type=Path, help="Output directory.")
     p.add_argument("--threads", type=int, default=1, help="Threads for blastn.")
     p.add_argument("--min-pident", type=float, default=97.0, help="Minimum percent identity.")
@@ -1183,6 +1371,7 @@ def main() -> None:
         genome_fasta_dirs=args.genome_fasta_dirs or [],
         genome_qc_dirs=args.genome_qc_dirs or [],
         id_token_indexes=args.id_token_indexes or [],
+        master_tsv=args.master_tsv,
     )
     mag_metadata_frames = [src.mag_metadata for src in sources if not src.mag_metadata.empty]
     mag_metadata = pd.concat(mag_metadata_frames, ignore_index=True) if mag_metadata_frames else pd.DataFrame()
