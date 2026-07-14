@@ -22,6 +22,7 @@ MODULE_DIRS = {
     "diversity": "diversity",
     "indicspecies": "indicator_analysis",
     "voc_correlation": "voc_correlation",
+    "measurement_association": "measurement_association",
     "power_analysis": "power_analysis",
     "taxonomy_patient_aware": "taxonomy",
     "lung_status_analysis": "lung_status_analysis",
