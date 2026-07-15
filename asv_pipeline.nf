@@ -478,6 +478,10 @@ if( !tableScriptFile.exists() ) {
 def concatConfig = config.concat ?: [:]
 def concatRelabelEnabled = concatConfig.containsKey('relabel') ? (concatConfig.relabel as boolean) : true
 def concatLabelSep = concatConfig.label_sep ?: ':'
+def filterConfig = config.filter ?: [:]
+def filterMaxEe = filterConfig.max_ee != null ? (filterConfig.max_ee as double) : 1.0d
+def filterMinLen = filterConfig.min_len != null ? (filterConfig.min_len as int) : 245
+def filterMaxLen = filterConfig.max_len != null ? (filterConfig.max_len as int) : 1500
 
 def parseSinaScriptFile = new File("${projectDir}/processes/sina_trim/parse_sina_log.py")
 if( !parseSinaScriptFile.exists() ) {
@@ -3121,20 +3125,18 @@ process FILTER_READS {
     tuple val(meta), path(merged_fastq)
 
     output:
-    tuple val(meta), path("${meta.sample_id}.filtered.fasta.gz")
+    tuple val(meta), path("filtered.fasta.gz")
 
     script:
-    def filterCfg = config.filter ?: [:]
-    def filteredOut = "${meta.sample_id}.filtered.fasta"
     """
 set -euo pipefail
 gzip -cd "${merged_fastq}" > merged.fastq
 vsearch --fastx_filter merged.fastq \\
-        --fastq_maxee ${filterCfg.max_ee ?: 1.0} \\
-        --fastq_minlen ${filterCfg.min_len ?: 245} \\
-        --fastq_maxlen ${filterCfg.max_len ?: 1500} \\
-        --fastaout "${filteredOut}"
-gzip -n "${filteredOut}"
+        --fastq_maxee ${filterMaxEe} \\
+        --fastq_minlen ${filterMinLen} \\
+        --fastq_maxlen ${filterMaxLen} \\
+        --fastaout filtered.fasta
+gzip -n filtered.fasta
 """
 }
 
@@ -3150,11 +3152,10 @@ process RELABEL_FILTERED {
     tuple val(meta), path(filtered_fasta)
 
     output:
-    tuple val(meta), path("${meta.sample_id}.filtered.relabel.fasta.gz"), emit: relabeled
+    tuple val(meta), path("filtered_relabel.fasta.gz"), emit: relabeled
 
     script:
     def labelSep = concatLabelSep
-    def relabeledOut = "${meta.sample_id}.filtered.relabel.fasta.gz"
     """
 awk -v pref="${meta.sample_id}" -v sep="${labelSep}" '{
   if (\$0 ~ /^>/) {
@@ -3162,7 +3163,7 @@ awk -v pref="${meta.sample_id}" -v sep="${labelSep}" '{
     if (\$0 !~ "^>" pref sep) \$0 = ">" pref sep substr(\$0, 2)
   }
   print
-}' <(gzip -cd "${filtered_fasta}") | gzip -n > "${relabeledOut}"
+}' <(gzip -cd "${filtered_fasta}") | gzip -n > filtered_relabel.fasta.gz
 """
 }
 
