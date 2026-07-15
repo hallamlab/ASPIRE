@@ -1102,6 +1102,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def collectorsSampleCol = collectorsConfig.sample_col ?: metadataPlotsSampleCol
     def collectorsGroupCol = collectorsConfig.group_col ?: (collectorsConfig.group1_col ?: metadataPlotsTypeCol)
     def collectorsColorCol = collectorsConfig.color_col ?: 'Color'
+    def collectorsGroupColors = collectorsConfig.group_colors ?: (collectorsConfig.group_palette ?: '')
     def collectorsGroupOrderRaw = collectorsConfig.group_order ?: metadataPlotsGroupOrder
     List<String> collectorsGroupOrder = normalizePresetList(collectorsGroupOrderRaw, [], config.order_presets ?: [:])
     def collectorsPermutations = collectorsConfig.permutations ? (collectorsConfig.permutations as int) : 999
@@ -1127,6 +1128,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def plotUpsetSampleIdCol = plotUpsetConfig.sample_id_col ?: metadataPlotsSampleCol
     def plotUpsetGroupCol = plotUpsetConfig.group_col ?: (plotUpsetConfig.group1_col ?: metadataPlotsTypeCol)
     def plotUpsetColorCol = plotUpsetConfig.color_col ?: metadataPlotsColorCol
+    def plotUpsetGroupPalette = plotUpsetConfig.group_palette ?: ''
     def plotUpsetGroupOrderRaw = plotUpsetConfig.group_order ?: metadataPlotsGroupOrder
     List<String> plotUpsetGroupOrder = normalizePresetList(plotUpsetGroupOrderRaw, [], config.order_presets ?: [:])
     def plotUpsetSubsetGroupsRaw = plotUpsetConfig.subset_groups
@@ -3597,6 +3599,7 @@ process PLOT_UPSET {
     def taxonomyArg = plotUpsetTaxonomyPath ? """  --taxonomy-path "${plotUpsetTaxonomyPath}" \\\n""" : ''
     def groupOrderArg = plotUpsetGroupOrder && !plotUpsetGroupOrder.isEmpty() ? """  --group-order "${plotUpsetGroupOrder.join(',')}" \\\n""" : ''
     def subsetGroupsArg = plotUpsetSubsetGroups && !plotUpsetSubsetGroups.isEmpty() ? """  --subset-groups "${plotUpsetSubsetGroups.join(',')}" \\\n""" : ''
+    def groupPaletteArg = plotUpsetGroupPalette ? """  --group-palette "${plotUpsetGroupPalette}" \\\n""" : ''
     def skipVennArg = plotUpsetSkipVenn ? "  --skip-venn \\\n" : ''
     def rawOnlyArg = plotUpsetRawOnly ? "  --raw-only \\\n" : ''
     def finalOnlyArg = plotUpsetFinalOnly ? "  --final-only \\\n" : ''
@@ -3619,7 +3622,7 @@ python "${plotUpsetScriptPath}" \\
 ${taxonomyArg}  --sample-id-col "${plotUpsetSampleIdCol}" \\
   --group-col "${plotUpsetGroupCol}" \\
   --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${subsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}  --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}  --formats "${plotUpsetFormats}" \\
   --font-size ${plotUpsetFontSize}
 
 if [[ "${plotUpsetDomain}" == "both" ]]; then
@@ -3630,7 +3633,7 @@ if [[ "${plotUpsetDomain}" == "both" ]]; then
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
     --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMicroMetadataPath}" \\
     --asv-raw-path "${rawMicroAsvTargetPath}" \\
@@ -3644,7 +3647,7 @@ ${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotU
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
     --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMitoMetadataPath}" \\
     --asv-raw-path "${rawMitoAsvTargetPath}" \\
@@ -3658,7 +3661,7 @@ else
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
     --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMetadataPathSingle}" \\
     --asv-raw-path "${rawAsvTargetPathSingle}" \\
@@ -4031,6 +4034,7 @@ process COLLECTORS_CURVE {
 
     script:
     def collectorsGroupOrderArg = collectorsGroupOrder && !collectorsGroupOrder.isEmpty() ? """  --group-order "${collectorsGroupOrder.join(',')}" \\\n""" : ''
+    def collectorsGroupColorsArg = collectorsGroupColors ? """  --group-colors "${collectorsGroupColors}" \\\n""" : ''
     """
 set -euo pipefail
 
@@ -4040,7 +4044,7 @@ python "${collectorsCurveScriptPath}" \\
   --sample-col "${collectorsSampleCol}" \\
   --group-col "${collectorsGroupCol}" \\
   --color-col "${collectorsColorCol}" \\
-${collectorsGroupOrderArg}  --permutations ${collectorsPermutations} \\
+${collectorsGroupColorsArg}${collectorsGroupOrderArg}  --permutations ${collectorsPermutations} \\
   --seed ${collectorsSeed} \\
   --out_prefix "${collectorsOutPrefixAbs}" \\
   --title "${collectorsTitle}" \\

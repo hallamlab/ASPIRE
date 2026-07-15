@@ -389,10 +389,32 @@ def read_asv_table(path: Path) -> pd.DataFrame:
 def read_metadata(path: Path, group_col: str, color_col: str) -> pd.DataFrame:
     md = pd.read_csv(path, sep="\t", dtype=str)
     # Validate required columns
-    for col in [group_col, color_col]:
-        if col not in md.columns:
-            raise ValueError(f"Metadata missing required column: '{col}'. Available: {list(md.columns)}")
+    if group_col not in md.columns:
+        raise ValueError(f"Metadata missing required column: '{group_col}'. Available: {list(md.columns)}")
+    if color_col and color_col not in md.columns:
+        print(f"[WARN] Metadata color column '{color_col}' not found; using explicit/fallback palette.")
     return md
+
+def parse_group_palette(arg: str | None) -> Dict[str, str]:
+    palette: Dict[str, str] = {}
+    if not arg:
+        return palette
+    for part in str(arg).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" in part:
+            key, val = part.split("=", 1)
+        elif ":" in part:
+            key, val = part.split(":", 1)
+        else:
+            print(f"[WARN] Ignoring malformed palette entry: {part}")
+            continue
+        key = key.strip()
+        val = val.strip()
+        if key and val:
+            palette[key] = val
+    return palette
 
 def read_taxonomy(path: Path) -> pd.DataFrame:
     tx = pd.read_csv(path, sep="\t")
@@ -676,6 +698,7 @@ def run_domain(
     skip_venn: bool,
     formats: Sequence[str],
     font_size: float,
+    group_palette: Optional[Mapping[str, str]] = None,
     output_tag: str = "",
 ) -> None:
     ensure_dir(inp.out_base)
@@ -686,9 +709,15 @@ def run_domain(
     md = read_metadata(inp.meta, group_col, color_col)
     tx = read_taxonomy(inp.tax)
     
-    # Build palette from metadata (group -> color mapping)
-    palette_df = md[[group_col, color_col]].dropna(subset=[group_col]).drop_duplicates()
-    palette = dict(zip(palette_df[group_col], palette_df[color_col]))
+    # Build palette from explicit config first, then metadata (group -> color mapping).
+    palette = {str(k): v for k, v in (group_palette or {}).items()}
+    if color_col and color_col in md.columns:
+        palette_df = md[[group_col, color_col]].dropna(subset=[group_col]).drop_duplicates()
+        metadata_palette = dict(zip(palette_df[group_col].astype(str), palette_df[color_col]))
+        metadata_palette.update(palette)
+        palette = metadata_palette
+    if not palette:
+        palette = {str(g): "" for g in md[group_col].dropna().astype(str).unique()}
     
     # Sort groups (or apply explicit order when provided)
     if group_order:
@@ -810,6 +839,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--sample-id-col", default="sampleID", help="Metadata column with sample IDs")
     ap.add_argument("--group-col", required=True, help="Metadata column for grouping (e.g., Depth, SampleType)")
     ap.add_argument("--color-col", default="Color", help="Metadata column with color values (hex codes)")
+    ap.add_argument("--group-palette", default=None,
+                    help="Explicit group color mapping, e.g. GroupA=#1f77b4,GroupB=#ff7f0e. Overrides --color-col values.")
     ap.add_argument("--subset-groups", default=None,
                     help="Optional comma-separated list of groups to include (subset of all groups)")
     ap.add_argument("--group-order", default=None,
@@ -849,6 +880,7 @@ def main() -> None:
     group_order = None
     if args.group_order:
         group_order = [g.strip() for g in args.group_order.split(",") if g.strip()]
+    group_palette = parse_group_palette(args.group_palette)
     
     # Determine which data to process
     use_raw = args.use_raw
@@ -885,6 +917,7 @@ def main() -> None:
             skip_venn=args.skip_venn,
             formats=formats,
             font_size=args.font_size,
+            group_palette=group_palette,
             output_tag=args.output_tag,
         )
         print(f"[OK] Finished {dom}")
