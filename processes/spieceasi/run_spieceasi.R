@@ -243,7 +243,14 @@ run_spieceasi_with_function_object <- function(data, opt) {
     log = TRUE
   )
 
-  msg("Selecting model with pulsar using %s...", opt$pulsar_criterion)
+  requested_criterion <- opt$pulsar_criterion
+  actual_criterion <- if (requested_criterion == "bstars") "stars" else requested_criterion
+  bounded_stars <- requested_criterion == "bstars"
+  if (bounded_stars) {
+    msg("Selecting model with pulsar using bounded StARS (criterion=stars, lb.stars=TRUE, ub.stars=TRUE)...")
+  } else {
+    msg("Selecting model with pulsar using %s...", actual_criterion)
+  }
   est <- pulsar::pulsar(
     data = X,
     fun = estimator_fun,
@@ -252,9 +259,17 @@ run_spieceasi_with_function_object <- function(data, opt) {
     seed = opt$seed,
     ncores = opt$ncores,
     thresh = opt$thresh,
-    criterion = opt$pulsar_criterion
+    criterion = actual_criterion,
+    lb.stars = bounded_stars,
+    ub.stars = bounded_stars
   )
-  est[[opt$pulsar_criterion]]$opt.index <- pulsar::opt.index(est, opt$pulsar_criterion)
+  est[[actual_criterion]]$opt.index <- pulsar::opt.index(est, actual_criterion)
+  if (is.null(est$stars)) {
+    est$stars <- est[[actual_criterion]]
+  }
+  est$aspire_requested_criterion <- requested_criterion
+  est$aspire_actual_criterion <- actual_criterion
+  est$aspire_bounded_stars <- bounded_stars
 
   msg("Fitting final estimate with %s...", opt$method)
   suppressWarnings(fit <- pulsar::refit(est))
