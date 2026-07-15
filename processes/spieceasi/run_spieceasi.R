@@ -26,7 +26,7 @@ opt_list <- list(
   # Filtering
   make_option("--min-rel-abund", type="double", default=0.0, dest="min_rel_abund",
               help="Keep ASVs reaching at least this relative abundance in >=1 sample. Accepts fraction (0-1) or percent (0-100) [default %default]."),
-  make_option("--min-prevalence", type="double", default=0.0, dest="min_prevalence",
+  make_option("--min-prevalence", type="double", default=0.25, dest="min_prevalence",
               help="Keep ASVs present in at least this prevalence threshold. Accepts fraction (0-1) or percent (0-100) [default %default]."),
   make_option("--force-keep-asvs", type="character", default=NULL, dest="force_keep_asvs",
               help="Optional TSV/list of ASV IDs to retain regardless of min abundance/prevalence filters. ISA summary TSVs are supported; zero-variance filtering still applies."),
@@ -36,7 +36,7 @@ opt_list <- list(
   # SpiecEasi params
   make_option("--method", type="character", default="glasso",
               help="SpiecEasi method: glasso | mb [default %default]."),
-  make_option("--lambda-min-ratio", type="double", default=1e-2, dest="lambda_min_ratio",
+  make_option("--lambda-min-ratio", type="double", default=0.1, dest="lambda_min_ratio",
               help="lambda.min.ratio [default %default]."),
   make_option("--nlambda", type="integer", default=20,
               help="Number of lambda values [default %default]."),
@@ -44,6 +44,8 @@ opt_list <- list(
               help="pulsar rep.num [default %default]."),
   make_option("--thresh", type="double", default=0.1,
               help="pulsar selection threshold [default %default]."),
+  make_option("--pulsar-criterion", type="character", default="bstars", dest="pulsar_criterion",
+              help="pulsar model selection criterion: stars | bstars [default %default]."),
   make_option("--ncores", type="integer", default=4,
               help="Number of cores for pulsar [default %default]."),
   make_option("--seed", type="integer", default=10010,
@@ -91,6 +93,10 @@ if (!is.finite(opt$rep_num) || opt$rep_num < 2) {
 }
 if (!is.finite(opt$nlambda) || opt$nlambda < 2) {
   stop("--nlambda must be >= 2", call. = FALSE)
+}
+opt$pulsar_criterion <- tolower(opt$pulsar_criterion)
+if (!(opt$pulsar_criterion %in% c("stars", "bstars"))) {
+  stop("--pulsar-criterion must be one of: stars, bstars", call. = FALSE)
 }
 if (!is.finite(opt$ncores) || opt$ncores < 1) {
   stop("--ncores must be >= 1", call. = FALSE)
@@ -237,7 +243,7 @@ run_spieceasi_with_function_object <- function(data, opt) {
     log = TRUE
   )
 
-  msg("Selecting model with pulsar using stars...")
+  msg("Selecting model with pulsar using %s...", opt$pulsar_criterion)
   est <- pulsar::pulsar(
     data = X,
     fun = estimator_fun,
@@ -246,9 +252,9 @@ run_spieceasi_with_function_object <- function(data, opt) {
     seed = opt$seed,
     ncores = opt$ncores,
     thresh = opt$thresh,
-    criterion = "stars"
+    criterion = opt$pulsar_criterion
   )
-  est$stars$opt.index <- pulsar::opt.index(est, "stars")
+  est[[opt$pulsar_criterion]]$opt.index <- pulsar::opt.index(est, opt$pulsar_criterion)
 
   msg("Fitting final estimate with %s...", opt$method)
   suppressWarnings(fit <- pulsar::refit(est))

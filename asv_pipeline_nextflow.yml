@@ -614,14 +614,15 @@ spieceasi:
   group2_palette: Non-Cancer=#FFFFFF,Cancer=#A50026,Cancer+Non-Cancer=#000000,not_indicator=#D3D3D3
   focus_group1_label: Bronchial Brush
   transpose: true
-  min_rel_abund: 0.005
-  min_prevalence: 0.05
+  min_rel_abund: 0.0
+  min_prevalence: 0.25
   remove_zero_var: true
   method: glasso
-  lambda_min_ratio: 0.01
+  lambda_min_ratio: 0.1
   nlambda: 20
   rep_num: 50
   thresh: 0.1
+  pulsar_criterion: bstars
   ncores: 8
   seed: 10010
   edge_threshold: 0.05
@@ -658,6 +659,26 @@ asv_mag_link:
   min_qcov: 90.0
   top_n: 5
   plot_top_n: 20
+
+asv_mag_network:
+  enabled: false
+  output_dir: asv_mag_network
+  prefix: asv_mag_network
+  graph_variant: all
+  min_pident: 99.5
+  min_qcov: 100.0
+  asv_taxonomy_source: ncbi
+  mag_taxonomy_source: gtdb
+  mag_id_mode: exact
+  mag_abundance:
+  mag_abundance_format: long
+  mag_abundance_genome_col: genome_id
+  mag_abundance_sample_col: sample_id
+  mag_abundance_value_col: read_count
+  min_shared_samples: 5
+  abundance_transform: log1p
+  functional_module_min_fraction: 0.5
+  functional_annotations: []
 
 master_summary:
   enabled: true
@@ -713,3 +734,4 @@ environments:
   network: processes/graph_network/env.yml
   master_summary: processes/master_summary/env.yml
   asv_mag_link: processes/asv_mag_link/env.yml
+  asv_mag_network: processes/asv_mag_network/env.yml

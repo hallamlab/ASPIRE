@@ -419,6 +419,47 @@ measurement_association:
   top_vectors: 12
   formats: pdf,png,svg
 
+grouping_diagnostics:
+  enabled: true
+  output_dir: grouping_diagnostics
+  sample_col: sampleid
+  group_cols:
+    - Depth
+    - o2_subcompartment_final
+    - o2_compartment
+    - gmm_component
+    - Season
+  baseline_group: Depth
+  primary_group: o2_subcompartment_final
+  group_palettes:
+    Depth: *depth_palette
+    o2_subcompartment_final: *o2_subcompartment_palette
+    o2_compartment: *o2_compartment_palette
+    gmm_component: *gmm_component_palette
+    Season: *season_palette
+  group_orders:
+    Depth: *depth_order
+    o2_subcompartment_final: *o2_subcompartment_order
+    o2_compartment: *o2_compartment_order
+    gmm_component: *gmm_component_order
+    Season: *season_order
+  distance_metrics:
+    - bray
+  transform: relative
+  permutations: 999
+  random_state: 42
+  formats: pdf,png,svg
+  soft_labeling:
+    enabled: true
+    k: 7
+  power:
+    enabled: true
+    sample_sizes: [3, 5, 10, 15, 20]
+    simulations: 50
+    permutations: 99
+    alpha: 0.05
+    min_groups: 2
+
 power_analysis:
   enabled: false
 
@@ -542,14 +583,15 @@ spieceasi:
   group1_palette: *anomaly_type_palette
   group2_palette: *global_event_type_palette
   transpose: true
-  min_rel_abund: 0.005
-  min_prevalence: 0.05
+  min_rel_abund: 0.0
+  min_prevalence: 0.25
   remove_zero_var: true
   method: glasso
-  lambda_min_ratio: 0.01
+  lambda_min_ratio: 0.1
   nlambda: 20
   rep_num: 50
   thresh: 0.1
+  pulsar_criterion: bstars
   ncores: 12
   seed: 10010
   edge_threshold: 0.05
@@ -587,6 +629,27 @@ asv_mag_link:
   min_qcov: 90.0
   top_n: 5
   plot_top_n: 20
+
+asv_mag_network:
+  enabled: true
+  output_dir: asv_mag_network
+  prefix: asv_mag_network
+  graph_variant: all
+  min_pident: 99.5
+  min_qcov: 100.0
+  asv_taxonomy_source: ncbi
+  mag_taxonomy_source: gtdb
+  mag_id_mode: suffix_after_double_underscore
+  mag_abundance:
+  mag_abundance_format: long
+  mag_abundance_genome_col: genome_id
+  mag_abundance_sample_col: sample_id
+  mag_abundance_value_col: read_count
+  min_shared_samples: 5
+  abundance_transform: log1p
+  functional_module_min_fraction: 0.5
+  functional_annotations:
+    - /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
 
 master_summary:
   enabled: true
@@ -633,6 +696,7 @@ environments:
   indicspecies: ../processes/indicspecies/env.yml
   voc_correlation: ../processes/voc_correlation/env.yml
   measurement_association: ../processes/measurement_association/env.yml
+  grouping_diagnostics: ../processes/grouping_diagnostics/env.yml
   clustermaps: ../processes/clustermaps/env.yml
   taxonomy_patient_aware: ../processes/taxonomy_patient_aware/env.yml
   lung_status_analysis: ../processes/lung_status_analysis/env.yml
@@ -641,6 +705,7 @@ environments:
   network: ../processes/graph_network/env.yml
   master_summary: ../processes/master_summary/env.yml
   asv_mag_link: ../processes/asv_mag_link/env.yml
+  asv_mag_network: ../processes/asv_mag_network/env.yml
   power_analysis: ../processes/power_analysis_pipeline/env.yml
   plot_upset: ../processes/plot_upset/env.yml
   bubbleplotter: ../processes/bubbleplotter/env.yml
