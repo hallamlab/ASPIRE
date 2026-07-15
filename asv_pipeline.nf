@@ -4733,7 +4733,7 @@ set -euo pipefail
 mkdir -p "${vocCorrelationOutputDirAbs}"
 echo "plot_voc_corr.py md5: ${plotVocCorrScriptHash}"
 
-python "${plotVocCorrScriptPath}" \\
+python3 "${plotVocCorrScriptPath}" \\
   --asv-meta "${asv_meta_table}" \\
   --asv-counts "${asv_counts}" \\
   --voc "${vocCorrelationVocTablePath}" \\
