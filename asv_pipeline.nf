@@ -3144,18 +3144,17 @@ process RELABEL_FILTERED {
     tag { meta.sample_id }
     cpus 1
     conda "${condaEnvPath}"
-    publishDir dirMap.concat, mode: 'copy', pattern: '*.fasta.gz', saveAs: { filename ->
-        filename == 'filtered_relabel.fasta.gz' ? "${meta.sample_id}.filtered.relabel.fasta.gz" : filename
-    }
+    publishDir dirMap.concat, mode: 'copy', pattern: '*.fasta.gz'
 
     input:
     tuple val(meta), path(filtered_fasta)
 
     output:
-    tuple val(meta), path("filtered_relabel.fasta.gz"), emit: relabeled
+    tuple val(meta), path("*.filtered.relabel.fasta.gz"), emit: relabeled
 
     script:
     def labelSep = concatLabelSep
+    def relabeledOut = "${meta.sample_id}.filtered.relabel.fasta.gz"
     """
 awk -v pref="${meta.sample_id}" -v sep="${labelSep}" '{
   if (\$0 ~ /^>/) {
@@ -3163,7 +3162,7 @@ awk -v pref="${meta.sample_id}" -v sep="${labelSep}" '{
     if (\$0 !~ "^>" pref sep) \$0 = ">" pref sep substr(\$0, 2)
   }
   print
-}' <(gzip -cd "${filtered_fasta}") | gzip -n > filtered_relabel.fasta.gz
+}' <(gzip -cd "${filtered_fasta}") | gzip -n > "${relabeledOut}"
 """
 }
 
