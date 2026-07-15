@@ -1716,9 +1716,10 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def groupingDiagnosticsPrimaryGroup = groupingDiagnosticsConfig.primary_group ? groupingDiagnosticsConfig.primary_group.toString().trim() : ''
     def groupingDiagnosticsPaletteMap = extractNamedStringMap(groupingDiagnosticsConfig as Map, groupingDiagnosticsGroupCols, 'group_palettes', 'palette')
     def groupingDiagnosticsOrderMap = extractNamedListMap(groupingDiagnosticsConfig as Map, groupingDiagnosticsGroupCols, 'group_orders', 'order')
+    def groupingDiagnosticsSharedPaletteConfig = config.indicspecies?.group_palettes instanceof Map ? config.indicspecies.group_palettes : [:]
     groupingDiagnosticsGroupCols.each { col ->
-        if( !groupingDiagnosticsPaletteMap.containsKey(col) && sharedPaletteConfig[col] ) {
-            groupingDiagnosticsPaletteMap[col] = sharedPaletteConfig[col]
+        if( !groupingDiagnosticsPaletteMap.containsKey(col) && groupingDiagnosticsSharedPaletteConfig[col] ) {
+            groupingDiagnosticsPaletteMap[col] = groupingDiagnosticsSharedPaletteConfig[col]
         }
     }
     if( metadataPlotsTypeCol && metadataPlotsGroupOrder && groupingDiagnosticsGroupCols.contains(metadataPlotsTypeCol) && !groupingDiagnosticsOrderMap.containsKey(metadataPlotsTypeCol) ) {

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,7 @@ REQUIRED_DATASET_FILES = (
 )
 REQUIRED_METADATA_COLUMNS = {"sample_id", "Participant_ID", "Case", "Type_Group", "lung_status", "batch"}
 FASTQ_SUFFIXES = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
+THREAD_KEYS = {"threads", "ncores", "num_core", "num_cores", "n_core", "cpus", "conqur_num_core"}
 
 
 def sha256(path: Path) -> str:
@@ -140,9 +142,29 @@ def absolute_project_paths(value, project_dir: Path):
     return value
 
 
-def build_config(template: Path, dataset: Path, output: Path, runtime: Path, project_dir: Path):
+def default_thread_count() -> int:
+    available = os.cpu_count() or 1
+    return max(1, int(available * 0.8))
+
+
+def apply_thread_defaults(value, threads: int):
+    if isinstance(value, dict):
+        updated = {}
+        for key, item in value.items():
+            if str(key) in THREAD_KEYS and isinstance(item, int):
+                updated[key] = threads
+            else:
+                updated[key] = apply_thread_defaults(item, threads)
+        return updated
+    if isinstance(value, list):
+        return [apply_thread_defaults(item, threads) for item in value]
+    return value
+
+
+def build_config(template: Path, dataset: Path, output: Path, runtime: Path, project_dir: Path, threads: int):
     config = yaml.safe_load(template.read_text())
     config = absolute_project_paths(config, project_dir)
+    config = apply_thread_defaults(config, threads)
 
     metadata = str((dataset / "sample_metadata.tsv").resolve())
     config["paths"].update(
@@ -174,7 +196,15 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path, help="Final ASPIRE output directory")
     parser.add_argument("--runtime", type=Path, help="Runtime directory; defaults to <output>/.aspire")
     parser.add_argument("--config-out", required=True, type=Path, help="Generated YAML path")
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=default_thread_count(),
+        help="Thread/core count for generated mock config; defaults to 80%% of detected CPUs",
+    )
     args = parser.parse_args()
+    if args.threads < 1:
+        raise SystemExit("--threads must be at least 1")
 
     dataset = args.dataset.expanduser().resolve()
     output = args.output.expanduser().resolve()
@@ -195,12 +225,13 @@ def main() -> None:
     portable_manifest = args.config_out.with_suffix(".manifest.tsv").resolve()
     portable_manifest, manifest_ids = write_portable_manifest(dataset, portable_manifest)
     validate_tabular_inputs(dataset, manifest_ids)
-    config = build_config(template, dataset, output, runtime, project_dir)
+    config = build_config(template, dataset, output, runtime, project_dir, args.threads)
     config["paths"]["manifest"] = str(portable_manifest)
     args.config_out.parent.mkdir(parents=True, exist_ok=True)
     args.config_out.write_text(yaml.safe_dump(config, sort_keys=False))
     print(f"Wrote mock-run configuration: {args.config_out.resolve()}")
     print(f"Wrote mock-run manifest: {portable_manifest} ({len(manifest_ids)} samples)")
+    print(f"Configured mock-run threads: {args.threads}")
     print(f"Run: ./run_asv_pipeline.sh {args.config_out.resolve()} --no-resume")
 
 

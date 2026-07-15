@@ -74,7 +74,10 @@ The script checks the fixture, writes absolute paths for the local machine,
 sets the persistent runtime directory to `<output>/.aspire`, and prints the exact run command. The committed
 `examples/mock.local.yml` is the template; users should not edit its
 developer-specific paths manually. The generated configuration retains the
-runtime directory so interrupted and completed runs remain resumable.
+runtime directory so interrupted and completed runs remain resumable. By default,
+the generated configuration sets ASPIRE thread/core options to 80% of detected
+CPUs on the current machine. Use `--threads N` with `configure_mock_run.sh` to
+override that value.
 
 ## Run
 
