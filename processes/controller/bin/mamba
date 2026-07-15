@@ -43,8 +43,13 @@ for arg in "${mamba_args[@]}"; do
   previous_arg="$arg"
 done
 if [[ " ${mamba_args[*]} " == *" env create "* && "$has_override_channels" -eq 0 ]]; then
-  mamba_args+=(--override-channels)
-  echo "[controller] Using only channels declared by the ASPIRE environment file." >&2
+  override_env_pattern="${ASPIRE_MAMBA_OVERRIDE_ENV_PATTERN:-(^|/)(spieceasi/env\.yml)$}"
+  if [[ -n "$environment_file" && "$environment_file" =~ $override_env_pattern ]]; then
+    echo "[controller] Allowing configured Conda channels while solving this mixed-channel environment." >&2
+  else
+    mamba_args+=(--override-channels)
+    echo "[controller] Using only channels declared by the ASPIRE environment file." >&2
+  fi
 fi
 if [[ " ${mamba_args[*]} " == *" env create "* && "$has_channel_priority" -eq 0 ]]; then
   flexible_env_pattern="${ASPIRE_MAMBA_FLEXIBLE_ENV_PATTERN:-(^|/)(qiime2\.yml|taxonomy/env\.yml|spieceasi/env\.yml)$}"
