@@ -1,8 +1,11 @@
 #!/usr/bin/env Rscript
 suppressPackageStartupMessages({
   library(optparse)
-  library(tidyverse)
+  library(dplyr)
+  library(purrr)
   library(readr)
+  library(tibble)
+  library(tidyr)
   library(indicspecies)
   library(permute)  # for how()
 })

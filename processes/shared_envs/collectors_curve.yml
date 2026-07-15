@@ -1,7 +1,6 @@
 name: collectors_curve_env
 channels:
   - conda-forge
-  - bioconda
 dependencies:
   - python=3.11
   - pandas
