@@ -24,7 +24,7 @@ class EnvironmentContractTest(unittest.TestCase):
             "The outlier checker writes plots and must include its plotting libraries.",
         )
 
-    def test_diversity_environment_includes_patient_aware_r_dependencies(self) -> None:
+    def test_diversity_environment_is_python_only(self) -> None:
         environment = yaml.safe_load(
             (PROJECT / "processes/diversity_analysis/env.yml").read_text()
         )
@@ -33,17 +33,9 @@ class EnvironmentContractTest(unittest.TestCase):
             for item in environment["dependencies"]
             if isinstance(item, str)
         }
-        required = {
-            "r-base",
-            "r-optparse",
-            "r-dplyr",
-            "r-tidyr",
-            "r-vegan",
-            "r-permute",
-        }
-        self.assertTrue(
-            required <= dependencies,
-            "Patient-aware diversity requires all directly imported R packages.",
+        self.assertFalse(
+            any(dep.startswith("r-") for dep in dependencies),
+            "Diversity analysis currently runs Python scripts only; avoid carrying stale R packages.",
         )
 
 

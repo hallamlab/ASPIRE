@@ -22,12 +22,15 @@ MODULE_DIRS = {
     "diversity": "diversity",
     "indicspecies": "indicator_analysis",
     "voc_correlation": "voc_correlation",
+    "measurement_association": "measurement_association",
+    "grouping_diagnostics": "grouping_diagnostics",
     "power_analysis": "power_analysis",
     "taxonomy_patient_aware": "taxonomy",
     "lung_status_analysis": "lung_status_analysis",
     "clustermaps": "clustermaps",
     "spieceasi": "network_analysis",
     "asv_mag_link": "asv_mag_link",
+    "asv_mag_network": "asv_mag_network",
     "mito": "non_target_filtering",
     "taxonomy": "taxonomy",
     "stats": "general_stats",
@@ -278,6 +281,10 @@ def data_accounting_summary(modules_dir: Path) -> str:
         ("Read-depth swarmplot", modules_dir / "metadata_plots" / "plots", ("type_group_swarmplot_micro.svg", "type_group_swarmplot_micro_raw.svg"), "*swarmplot*.svg", "Final read-depth distributions across analyzed groups."),
         ("ASV overlap UpSet", modules_dir / "upset" / "plots", ("final_micro_upset.svg", "final_upset.svg"), "*upset*.svg", "ASV presence and overlap across analyzed groups."),
         ("Collector's curve", modules_dir / "collectors_curve" / "plots", ("collectors_curve_overlay.svg", "collectors_curve_faceted.svg"), "*collector*.svg", "Accumulation of observed ASVs as samples are added, providing a descriptive view of sampling coverage."),
+        ("Grouping diagnostics", modules_dir / "grouping_diagnostics" / "plots", ("grouping_metric_summary.svg", "grouping_metric_summary.png"), "grouping_metric_summary.*", "PERMANOVA, silhouette, and within-versus-between distance summaries for configured metadata groupings."),
+        ("Grouping ordination", modules_dir / "grouping_diagnostics" / "plots", ("grouping_ordination_bray.svg", "grouping_ordination_bray.png"), "grouping_ordination_*", "Community ordination panels colored by each configured grouping variable."),
+        ("Grouping power", modules_dir / "grouping_diagnostics" / "plots", ("grouping_power.svg", "grouping_power.png"), "grouping_power.*", "Balanced resampling support curves for the configured grouping variables."),
+        ("ASV-MAG network mapping", modules_dir / "asv_mag_network" / "plots" / "qc", ("asv_mag_network_mapping_classes.svg", "asv_mag_network_mapping_classes.png"), "asv_mag_network_mapping_classes.*", "Taxonomy-filtered ASV-MAG mapping classes used to annotate ASV association networks."),
     )
     visuals = []
     for title, root, names, pattern, description in visual_specs:

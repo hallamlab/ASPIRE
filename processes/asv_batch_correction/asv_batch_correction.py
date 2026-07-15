@@ -2475,6 +2475,113 @@ def plot_countspace_preservation(
     return metrics
 
 
+def _metric_value(metrics: pd.DataFrame, name: str) -> float:
+    hit = metrics.loc[metrics["metric"] == name, "value"]
+    if hit.empty:
+        return np.nan
+    return float(hit.iloc[0])
+
+
+def choose_correction_policy(
+    metrics: pd.DataFrame,
+    policy: str,
+    min_sample_rho: float,
+    min_bray_rho: float,
+    max_batch_eta_ratio: float,
+    min_batch_eta_drop: float,
+    min_bio_eta_ratio: float,
+    biological_name: str,
+) -> Tuple[str, List[str]]:
+    """Return selected source ("corrected" or "raw") plus decision reasons."""
+    if policy == "always":
+        return "corrected", ["correction_policy=always"]
+    if policy == "never":
+        return "raw", ["correction_policy=never"]
+
+    reasons: List[str] = []
+    checks: List[bool] = []
+
+    sample_rho = _metric_value(metrics, "sample_spearman_median_raw_vs_pseudo")
+    bray_rho = _metric_value(metrics, "bray_distance_spearman_raw_vs_pseudo")
+    eta_batch_raw = _metric_value(metrics, "eta_batch_pc1_raw")
+    eta_batch_corrected = _metric_value(metrics, "eta_batch_pc1_corrected_pseudo")
+    eta_bio_raw = _metric_value(metrics, f"eta_{biological_name}_pc1_raw")
+    eta_bio_corrected = _metric_value(metrics, f"eta_{biological_name}_pc1_corrected_pseudo")
+
+    ok_sample = np.isfinite(sample_rho) and sample_rho >= min_sample_rho
+    checks.append(bool(ok_sample))
+    reasons.append(f"sample_spearman_pseudo={sample_rho:.4g} >= {min_sample_rho}: {ok_sample}")
+
+    ok_bray = np.isfinite(bray_rho) and bray_rho >= min_bray_rho
+    checks.append(bool(ok_bray))
+    reasons.append(f"bray_spearman_pseudo={bray_rho:.4g} >= {min_bray_rho}: {ok_bray}")
+
+    if np.isfinite(eta_batch_raw) and np.isfinite(eta_batch_corrected):
+        if eta_batch_raw < min_batch_eta_drop:
+            ok_batch = False
+            reasons.append(
+                f"eta_batch_raw={eta_batch_raw:.4g} < min_batch_eta_drop={min_batch_eta_drop}; no correction needed"
+            )
+        else:
+            ok_batch = (
+                eta_batch_corrected <= eta_batch_raw * max_batch_eta_ratio
+                or (eta_batch_raw - eta_batch_corrected) >= min_batch_eta_drop
+            )
+            reasons.append(
+                "batch_eta_pseudo="
+                f"{eta_batch_corrected:.4g}, raw={eta_batch_raw:.4g}, "
+                f"ratio_limit={max_batch_eta_ratio}, min_drop={min_batch_eta_drop}: {ok_batch}"
+            )
+    else:
+        ok_batch = False
+        reasons.append("batch eta metrics unavailable: False")
+    checks.append(bool(ok_batch))
+
+    if np.isfinite(eta_bio_raw) and np.isfinite(eta_bio_corrected) and eta_bio_raw > 0:
+        ok_bio = eta_bio_corrected >= eta_bio_raw * min_bio_eta_ratio
+        checks.append(bool(ok_bio))
+        reasons.append(
+            f"bio_eta_pseudo={eta_bio_corrected:.4g} >= raw({eta_bio_raw:.4g})*{min_bio_eta_ratio}: {ok_bio}"
+        )
+    else:
+        reasons.append("biological eta unavailable or zero; skipped")
+
+    selected = "corrected" if all(checks) else "raw"
+    return selected, reasons
+
+
+def write_selected_batch_outputs(
+    raw_counts: pd.DataFrame,
+    corrected_counts_float: pd.DataFrame,
+    corrected_counts_pseudo: pd.DataFrame,
+    asv_clr_before: pd.DataFrame,
+    asv_clr_after: pd.DataFrame,
+    selected_source: str,
+    reasons: List[str],
+    out_dir: Path,
+) -> None:
+    """Write selected raw/corrected outputs consumed by downstream ASPIRE branches."""
+    use_corrected = selected_source == "corrected"
+    abundance_samples = corrected_counts_float if use_corrected else raw_counts
+    pseudocount_samples = corrected_counts_pseudo if use_corrected else raw_counts.round().astype(int)
+    clr_selected = asv_clr_after if use_corrected else asv_clr_before
+
+    abundance_samples.to_csv(out_dir / "asv_selected_abundance.samples_rows.tsv", sep="\t")
+    abundance_samples.T.to_csv(out_dir / "asv_selected_abundance.features_rows.tsv", sep="\t")
+    pseudocount_samples.to_csv(out_dir / "asv_selected_pseudocount.samples_rows.tsv", sep="\t")
+    pseudocount_samples.T.to_csv(out_dir / "asv_selected_pseudocount.features_rows.tsv", sep="\t")
+    clr_selected.to_csv(out_dir / "asv_clr_selected.tsv", sep="\t")
+
+    decision = pd.DataFrame({
+        "selected_source": [selected_source],
+        "reason": ["; ".join(reasons)],
+    })
+    decision.to_csv(out_dir / "batch_correction_decision.tsv", sep="\t", index=False)
+    print(f"  [i] Batch correction selected source: {selected_source}")
+    for reason in reasons:
+        print(f"      - {reason}")
+
+
 # ============================================================================
 # Main Pipeline
 # ============================================================================
@@ -2531,6 +2638,20 @@ def main():
                         help="ConQuR delta parameter")
     parser.add_argument("--conqur-auto-install", action="store_true",
                         help="Auto-install ConQuR in R env if missing (requires internet)")
+
+    # Correction acceptance policy
+    parser.add_argument("--correction-policy", choices=["auto", "always", "never"], default="auto",
+                        help="Whether downstream outputs should use corrected counts, raw counts, or auto-selected counts")
+    parser.add_argument("--auto-min-sample-rho", type=float, default=0.85,
+                        help="Auto policy: minimum median sample-wise Spearman raw vs corrected pseudo-counts")
+    parser.add_argument("--auto-min-bray-rho", type=float, default=0.75,
+                        help="Auto policy: minimum Spearman preservation of Bray-Curtis distances")
+    parser.add_argument("--auto-max-batch-eta-ratio", type=float, default=0.95,
+                        help="Auto policy: corrected batch eta must be no more than this fraction of raw eta")
+    parser.add_argument("--auto-min-batch-eta-drop", type=float, default=0.01,
+                        help="Auto policy: minimum absolute batch eta drop, also used as a no-batch-effect floor")
+    parser.add_argument("--auto-min-bio-eta-ratio", type=float, default=0.70,
+                        help="Auto policy: corrected biological eta must retain at least this fraction of raw eta")
     
     # UMAP parameters (manual)
     parser.add_argument("--umap-neighbors", type=int, default=15,
@@ -2787,7 +2908,7 @@ def main():
     primary_bio_series = bio_color_data[0][0] if bio_color_data else None
     primary_bio_name = bio_color_data[0][2] if bio_color_data else "Biological"
     print("[5/9] Generating count-space preservation diagnostics...")
-    plot_countspace_preservation(
+    preservation_metrics = plot_countspace_preservation(
         raw_counts=asv_raw,
         corrected_counts_float=corrected_counts_float,
         corrected_counts_pseudo=corrected_counts_pseudo,
@@ -2890,6 +3011,26 @@ def main():
         asv_clr_after,
         batch_series,
         out_dir / "batch_correction_statistics.tsv",
+    )
+    selected_source, decision_reasons = choose_correction_policy(
+        metrics=preservation_metrics,
+        policy=args.correction_policy,
+        min_sample_rho=args.auto_min_sample_rho,
+        min_bray_rho=args.auto_min_bray_rho,
+        max_batch_eta_ratio=args.auto_max_batch_eta_ratio,
+        min_batch_eta_drop=args.auto_min_batch_eta_drop,
+        min_bio_eta_ratio=args.auto_min_bio_eta_ratio,
+        biological_name=primary_bio_name,
+    )
+    write_selected_batch_outputs(
+        raw_counts=asv_raw,
+        corrected_counts_float=corrected_counts_float,
+        corrected_counts_pseudo=corrected_counts_pseudo,
+        asv_clr_before=asv_clr_before,
+        asv_clr_after=asv_clr_after,
+        selected_source=selected_source,
+        reasons=decision_reasons,
+        out_dir=out_dir,
     )
     
     print("\n" + "="*70)

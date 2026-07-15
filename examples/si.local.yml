@@ -1,0 +1,712 @@
+paths:
+  input_dir: /cephfs/rjm_work/si_asv/V4_ncbi_input
+  output_dir: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output
+  manifest: /cephfs/rjm_work/si_asv/ref_db/sample_manifest.tsv
+
+resources:
+  threads: 12
+  single_end: false
+
+palette_presets:
+  depth: &depth_palette "10=#b4e1fa,20=#7cc3f2,40=#4ca3e3,60=#2171b5,75=#90ee90,80=#aaffc3,85=#aaffc3,90=#cfff70,97=#e6f542,100=#ffcc99,110=#ff9966,120=#ff6e54,135=#cc3300,150=#9900cc,165=#663399,185=#2c003e,200=#000000"
+  season: &season_palette "Winter=#5b7bb2,Spring=#55a868,Summer=#e3b505,Fall=#c44e52,DJF=#5b7bb2,MAM=#55a868,JJA=#e3b505,SON=#c44e52"
+  anomaly_type: &anomaly_type_palette "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
+  global_event_type: &global_event_type_palette "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
+  o2_compartment: &o2_compartment_palette "oxic=#1f78b4,suboxic=#4daf4a,dysoxic=#f28e2b,anoxic=#7b3294"
+  o2_subcompartment_final: &o2_subcompartment_palette "oxic__gmm0=#1f78b4,oxic__gmm2=#4ea5d9,oxic__gmm4=#89c2e5,oxic__other=#cfe8f3,suboxic__gmm1=#4daf4a,suboxic__gmm3=#7bc87c,suboxic__other=#ccebc5,dysoxic__gmm0=#f28e2b,dysoxic__gmm3=#d95f0e,dysoxic__other=#f8c58c,anoxic__gmm1=#7b3294,anoxic__other=#c2a5cf"
+  gmm_component: &gmm_component_palette "0=#1f78b4,0.0=#1f78b4,1=#33a02c,1.0=#33a02c,2=#e6ab02,2.0=#e6ab02,3=#f28e2b,3.0=#f28e2b,4=#6a3d9a,4.0=#6a3d9a"
+
+order_presets:
+  depth: &depth_order [10, 20, 40, 60, 75, 80, 85, 90, 97, 100, 110, 120, 135, 150, 165, 185, 200]
+  season: &season_order [Winter, Spring, Summer, Fall]
+  anomaly_type: &anomaly_type_order [normal, mixing_event, high_stratification]
+  global_event_type: &global_event_type_order [normal, mixing_event, high_stratification]
+  o2_compartment: &o2_compartment_order [oxic, suboxic, dysoxic, anoxic]
+  o2_subcompartment_final: &o2_subcompartment_order [oxic__gmm0, oxic__gmm2, oxic__gmm4, oxic__other, suboxic__gmm1, suboxic__gmm3, suboxic__other, dysoxic__gmm0, dysoxic__gmm3, dysoxic__other, anoxic__gmm1, anoxic__other]
+  gmm_component: &gmm_component_order [0.0, 1.0, 2.0, 3.0, 4.0]
+
+filename_patterns:
+  r1_tokens:
+    - R1
+    - 1
+  r2_tokens:
+    - R2
+    - 2
+  ext_patterns:
+    - "\\.fastq\\.gz$"
+    - "\\.fq\\.gz$"
+    - "\\.fastq$"
+    - "\\.fq$"
+  sample_strip_regex: "(_S[0-9]+)?(_L[0-9]{3})?(_R[12])?(_[12])?(_001)?$"
+
+fastp:
+  trim_front_r1: 19
+  trim_tail_r1: 20
+  trim_front_r2: 20
+  trim_tail_r2: 20
+
+merge:
+  max_diffs: 20
+  min_overlap: 5
+  trunc_quality: 5
+  allow_stagger: true
+
+table_filter:
+  min_sample_sum: 5000
+  min_asv_sum: 0
+
+filter:
+  max_ee: 1.0
+  min_len: 245
+  max_len: 1500
+
+concat:
+  relabel: true
+  label_sep: ":"
+
+unoise:
+  min_size: 3
+
+swarm:
+  distance: 1
+
+sina:
+  reference:
+  reference_url: https://www.arb-silva.de/fileadmin/silva_databases/release_138_2/ARB_files/SILVA_138.2_SSURef_NR99_03_07_24_opt.arb.gz
+  download_subdir: sina_reference
+  regions:
+    - V4
+  trim_to: V4
+  batch_size: 1000000
+  keep_gaps: false
+  threads: 16
+  verbose: false
+
+taxonomy:
+  ref_taxonomy:
+  ref_taxonomy_url: https://data.qiime2.org/2024.10/common/silva-138-99-tax.qza
+  ref_taxonomy_filename: silva-138_2-ssu-nr99-tax.qza
+  ref_sequences:
+  ref_sequences_url: https://data.qiime2.org/2024.10/common/silva-138-99-seqs.qza
+  ref_sequences_filename: silva-138_2-ssu-nr99-seqs-DNA.qza
+  download_subdir: taxonomy_reference
+  output_dir: taxonomy
+  output_tsv: ASV_SILVA_tax.full-length.vsearch.tsv
+  stats_tsv: ASV_SILVA_stats.full-length.vsearch.tsv
+  uppercase_fasta: ASVs.upper.fasta
+  threads: 16
+
+mito:
+  enabled: true
+  chunk_dir:
+  chunk_size: 10
+  mitomaster_workers: 8
+  mitomaster_retries: 4
+  mitomaster_timeout: 90
+  mitomaster_header_mode: first
+  output_dir: mito/mitomap
+  prefix: nontarget
+  formats: svg,pdf
+  min_pident: 97.0
+  min_percov: 51.0
+  mitochondria_substring: mitochondria
+  feature_col: "Feature ID"
+  taxon_col: Taxon
+  consensus_col: Consensus
+  steps: "BioFactorial,Qiime_NB_FULL,MITOMASTER,BLAST_mito"
+  host_first_step: BioFactorial
+  figsize: 10x6
+  style: whitegrid
+  dpi: 300
+  no_plots: false
+  blast_threads: 16
+  mito_db: /cephfs/rjm_work/si_asv/ref_db/mito_ncbi
+  biof_db: /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants
+
+filter_counts:
+  enabled: true
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  output: ASV_target.tsv
+  group_col: Depth
+  min_group_size: 3
+  abundance_threshold: 0.005
+  sample_id_col: sampleid
+  min_consensus: 0.0
+  taxon_col: Taxon
+  consensus_col: Consensus
+  biofactorial_col: BioFactorial
+  mito_cols:
+    - MITOMASTER
+    - BLAST_mito
+  save_intermediates: true
+  mito_output_dir: mito/ASVs
+
+general_stats:
+  enabled: true
+
+sankey:
+  enabled: true
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  sub_dir: .
+  sample_col: sampleid
+  group1_col: Depth
+  color_col: Color
+  keep_types:
+  group_order: *depth_order
+  output_prefix: metadata/data_loss_sankey
+  title: Data Loss Flow
+  make_labeled: true
+  make_unlabeled: true
+
+metadata_plots:
+  enabled: true
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  sub_dir: .
+  sample_col: sampleid
+  type_col: Depth
+  color_col: Color
+  biochem_assignments: /cephfs/rjm_work/basin_output/biochem_pipeline/env_o2_split_by_gmm/tables/merged_o2_split_by_gmm.csv
+  biochem_sample_col: cruise_year_month_depth
+  biochem_meta_join_cols: Cruise,Depth
+  biochem_join_cols: Cruise,Depth_anchored
+  biochem_include_cols: []
+  stratification_timeseries: /cephfs/rjm_work/basin_output/biochem_pipeline/env_stratification_index/stratification_timeseries.tsv
+  strat_meta_join_col: Cruise
+  strat_join_col: Cruise
+  strat_include_cols: []
+  keep_types:
+  group_order: *depth_order
+  include_rank: []
+  run_micro: true
+  run_mito: true
+
+batch_correction:
+  enabled: true
+  output_dir: batch_correction
+  sample_id_col: sampleid
+  batch_col: plateID
+  asv_orientation: features_rows
+  biological_covariates: Depth,o2_subcompartment_final
+  biological_color_col: Depth,o2_subcompartment_final
+  color_palette_col: Color
+  conqur_mode: libsize
+  conqur_num_core: 12
+  conqur_batch_ref:
+  conqur_logistic_lasso: false
+  conqur_quantile_type: standard
+  conqur_simple_match: false
+  conqur_lambda_quantile: 2p/n
+  conqur_interplt: false
+  conqur_delta: 0.4999
+  conqur_auto_install: true
+  correction_policy: auto
+  auto_min_sample_rho: 0.85
+  auto_min_bray_rho: 0.75
+  auto_max_batch_eta_ratio: 0.95
+  auto_min_batch_eta_drop: 0.01
+  auto_min_bio_eta_ratio: 0.70
+  umap_neighbors: 15
+  umap_min_dist: 0.1
+  hdbscan_min_cluster_size: 5
+  hdbscan_min_samples:
+  hdbscan_selection_method: eom
+  optimize_clustering: false
+  target_clusters: 3-8
+  n_features_plot: 5
+  random_state: 42
+
+outlier_detection:
+  enabled: true
+  output_dir: outliers_corrected
+  sample_col: sampleid
+  group_cols:
+    - o2_subcompartment_final
+    - Depth
+    - Season
+  transform: none
+  asv_orientation: samples_rows
+  pre_transformed: true
+  scale: false
+  use_iso: true
+  use_svm: true
+  use_hdb: true
+  vote_threshold: 3
+  iso_contamination: auto
+  iso_estimators: 200
+  iso_random_state: 42
+  svm_kernel: rbf
+  svm_gamma: scale
+  svm_nu: 0.1
+  hdbscan_min_cluster_size: 5
+  hdbscan_min_samples: 5
+  hdbscan_metric: euclidean
+
+collectors_curve:
+  enabled: true
+  sample_col: sampleid
+  group_col: o2_subcompartment_final
+  color_col: Color
+  group_order: *o2_subcompartment_order
+  group_palette: *o2_subcompartment_palette
+  permutations: 999
+  seed: 42
+  out_prefix: metadata/collectors_curve
+  title: "Collector's Curves"
+  formats: pdf,svg
+  xpad: 0.5
+  max_cols: 3
+  show_perms: 10
+  presence_threshold: 0.0
+
+plot_upset:
+  enabled: true
+  sub_dir: .
+  domain: micro
+  taxonomy_path:
+  sample_id_col: sampleid
+  group_col: o2_subcompartment_final
+  color_col: Color
+  group_order: *o2_subcompartment_order
+  group_palette: *o2_subcompartment_palette
+  subset_groups:
+  skip_venn: true
+  raw_only: false
+  final_only: false
+  formats: pdf,svg,png
+  font_size: 10
+
+bubbleplotter:
+  enabled: true
+  output_prefix: metadata/bubble_plot_asv
+  count_col: corr_count
+  sample_col: sampleid
+  group1_col: o2_subcompartment_final
+  group2_col: Depth
+  color_col: Color
+  group1_order: *o2_subcompartment_order
+  group2_order: *depth_order
+  formats: pdf,png,svg
+  figsize: "32,60"
+  bubble_scale: 10
+  no_auto_size: false
+
+umap_clustering:
+  enabled: true
+  output_prefix: metadata/umap_clustering
+  sample_col: sampleid
+  count_col: corr_count
+  group1_col: o2_subcompartment_final
+  group2_col: Depth
+  color_col: Color
+  group1_order: *o2_subcompartment_order
+  group2_order: *depth_order
+  group1_palette: *o2_subcompartment_palette
+  group2_palette: *depth_palette
+  formats: pdf,png,svg
+  normalize: clr
+  transform: sqrt
+  no_scale: true
+  n_neighbors: 15
+  min_dist: 0.1
+  umap_metric: cosine
+  min_cluster_size: 10
+  min_samples: 5
+  hdbscan_metric: euclidean
+
+diversity:
+  enabled: true
+  output_dir: diversity
+  mito_output_dir: mito/diversity
+  mito_input:
+  sample_col: sampleid
+  group_col: o2_subcompartment_final
+  group1_col: o2_subcompartment_final
+  group2_col: Depth
+  color_col: Color
+  block_col: Cruise
+  secondary_col: Depth
+  exclude_groups: []
+  group_order: *o2_subcompartment_order
+  group1_palette: *o2_subcompartment_palette
+  group2_palette: *depth_palette
+  run_mito: true
+  umap_neighbors: 30
+  umap_min_dist: 0.01
+  permanova_perms: 999
+  random_state: 42
+  verbose: true
+  patient_aware:
+    enabled: false
+
+indicspecies:
+  enabled: true
+  sample_col: sampleid
+  color_col: Color
+  block_col: Cruise
+  group_cols:
+    - anomaly_type
+    - global_event_type
+    - o2_subcompartment_final
+    - o2_compartment
+    - gmm_component
+  group_palettes:
+    anomaly_type: *anomaly_type_palette
+    global_event_type: *global_event_type_palette
+    o2_subcompartment_final: *o2_subcompartment_palette
+    o2_compartment: *o2_compartment_palette
+    gmm_component: *gmm_component_palette
+  group_orders:
+    anomaly_type: *anomaly_type_order
+    global_event_type: *global_event_type_order
+    o2_subcompartment_final: *o2_subcompartment_order
+    o2_compartment: *o2_compartment_order
+    gmm_component: *gmm_component_order
+  focus_labels: {}
+  perms: 999
+  min_n: 2
+  plot_enabled: true
+  plot_pairs_mode: all
+  plot_output_dir: indicspecies/plots
+  use_duleg: true
+  aligned_plot_enabled: false
+  aligned_plot_output_dir: indicspecies/aligned
+  aligned_alpha: 0.05
+  aligned_min_stat: 0.0
+  aligned_top_n: 25
+  venn:
+  taxonomy: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
+
+voc_correlation:
+  enabled: false
+
+measurement_association:
+  enabled: true
+  output_dir: measurement_association
+  measurement_table: /cephfs/rjm_work/basin_output/biochem_pipeline/biochem_processing/02_oxygen_best_available.tsv
+  sample_col: sampleid
+  asv_id_col: ASV_ID
+  measurement_sample_col: sampleid
+  metadata_join_cols: [Cruise, Depth]
+  measurement_join_cols: [Cruise, Depth]
+  measurement_cols:
+    - Oxygen_best_available
+    - PO4
+    - SI
+    - NOx_SeaTech
+    - NOx_New
+    - NO2
+    - NO3
+    - NH4
+    - H2S
+    - N2
+    - O2
+    - CO2
+    - N2O
+    - CH4
+    - Temperature
+    - Salinity
+    - Density
+  exclude_cols: []
+  group_col: o2_subcompartment_final
+  group_palette: *o2_subcompartment_palette
+  max_asvs: 300
+  min_total: 0.0
+  min_prevalence: 0.05
+  top_correlations: 100
+  correlation_direction: both
+  ordination_methods: cca,rda,dbrda
+  permutations: 999
+  top_vectors: 12
+  formats: pdf,png,svg
+
+grouping_diagnostics:
+  enabled: true
+  output_dir: grouping_diagnostics
+  sample_col: sampleid
+  group_cols:
+    - Depth
+    - o2_subcompartment_final
+    - o2_compartment
+    - gmm_component
+    - Season
+  baseline_group: Depth
+  primary_group: o2_subcompartment_final
+  group_palettes:
+    Depth: *depth_palette
+    o2_subcompartment_final: *o2_subcompartment_palette
+    o2_compartment: *o2_compartment_palette
+    gmm_component: *gmm_component_palette
+    Season: *season_palette
+  group_orders:
+    Depth: *depth_order
+    o2_subcompartment_final: *o2_subcompartment_order
+    o2_compartment: *o2_compartment_order
+    gmm_component: *gmm_component_order
+    Season: *season_order
+  distance_metrics:
+    - bray
+  transform: relative
+  permutations: 999
+  random_state: 42
+  formats: pdf,png,svg
+  soft_labeling:
+    enabled: true
+    k: 7
+  power:
+    enabled: true
+    sample_sizes: [3, 5, 10, 15, 20]
+    simulations: 50
+    permutations: 99
+    alpha: 0.05
+    min_groups: 2
+
+power_analysis:
+  enabled: false
+
+taxonomy_patient_aware:
+  enabled: false
+
+lung_status_analysis:
+  enabled: false
+
+clustermaps:
+  enabled: true
+  output_dir: clustermaps
+  mito_output_dir: mito/clustermaps
+  mito_input:
+  isa_file: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/indicspecies/
+  run_mito: true
+  sample_col: sampleid
+  sample_code_col: sample_code
+  asv_id_col: ASV_ID
+  group1_col: Depth
+  group2_col: Season
+  group3_col: o2_subcompartment_final
+  group1_order: *depth_order
+  group2_order: *season_order
+  exclude_group1:
+  group1_palette: *depth_palette
+  group2_palette: *season_palette
+  group3_palette: *o2_subcompartment_palette
+  ranks: Phylum,Class,Order,Family,Genus,Species,ASV_ID
+  topN: Phylum=30,Class=30,Order=30,Family=30,Genus=30,Species=30,ASV_ID=100
+  count_col: corr_count
+  isa_min_stat: 0.6
+  isa_significance_cols:
+  isa_stat_cols:
+  formats: pdf,png,svg
+  figwidth: 24
+  row_height: 0.12
+  min_height: 8
+  max_height: 1200
+  mito_sample_mode: auto
+
+spieceasi:
+  enabled: true
+  output_dir: spieceasi
+  prefix: spieceasi
+  network_enabled: true
+  modules_enabled: true
+  module_methods: leiden
+  module_primary_method: leiden
+  module_resolutions: 0.8,1.0,1.2
+  module_reps: 50
+  module_consensus_threshold: 0.95
+  module_seed: 42
+  module_best_only: true
+  module_best_min_size: 5
+  module_best_min_stability: 0.7
+  module_isa_only: false
+  module_color_by_isa: false
+  module_isa_source: anomaly_type
+  module_isa_min_stat: 0.25
+  module_isa_max_q: 0.05
+  modules_sub:
+  modules_all:
+  graph_pos_all:
+  graph_pos_sub:
+  node_features:
+  isa_overlay_groups:
+    - anomaly_type
+    - global_event_type
+    - o2_subcompartment_final
+    - o2_compartment
+    - gmm_component
+  group_palettes:
+    anomaly_type: *anomaly_type_palette
+    global_event_type: *global_event_type_palette
+    o2_subcompartment_final: *o2_subcompartment_palette
+    o2_compartment: *o2_compartment_palette
+    gmm_component: *gmm_component_palette
+  group_orders:
+    anomaly_type: *anomaly_type_order
+    global_event_type: *global_event_type_order
+    o2_subcompartment_final: *o2_subcompartment_order
+    o2_compartment: *o2_compartment_order
+    gmm_component: *gmm_component_order
+  focus_labels: {}
+  network_modes:
+    - degree_all
+    - abundance_all
+    - betweenness_all
+    - betweenness_all_labeled
+    - group1_isa_all
+    - group1_isa_all_labeled
+    - group1_isa_mag_all
+    - group1_isa_mag_all_labeled
+    - group2_isa_all
+    - group2_isa_all_labeled
+    - group2_isa_mag_all
+    - group2_isa_mag_all_labeled
+    - group3_isa_all
+    - group3_isa_all_labeled
+    - group3_isa_mag_all
+    - group4_isa_all
+    - group4_isa_all_labeled
+    - group4_isa_mag_all
+    - group5_isa_all
+    - group5_isa_all_labeled
+    - group5_isa_mag_all
+    - module_all
+    - module_all_labeled
+    - mag_pair_all
+    - mag_pair_all_labeled
+    - mag_pair_tax_all
+    - mag_pair_tax_all_labeled
+    - phylum_abund_all
+    - phylum_isa_all
+    - phylum_isa_all_labeled
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  color_col: Color
+  group1_order: *anomaly_type_order
+  group2_order: *global_event_type_order
+  group1_palette: *anomaly_type_palette
+  group2_palette: *global_event_type_palette
+  transpose: true
+  min_rel_abund: 0.0
+  min_prevalence: 0.25
+  remove_zero_var: true
+  method: glasso
+  lambda_min_ratio: 0.1
+  nlambda: 20
+  rep_num: 50
+  thresh: 0.1
+  pulsar_criterion: bstars
+  ncores: 12
+  seed: 10010
+  edge_threshold: 0.05
+  keep_negative: true
+  all_pos_only: true
+  layout_iters: 1000
+  force_filter: true
+  force_spieceasi: true
+  force_graphs: true
+  layout_seed: 42
+  layout_scale: 3.0
+  degree_scale: 80.0
+  degree_size_mode: legacy
+  degree_min_area: 0.0
+  edge_width_scale: 10.0
+  isa_scale: 700.0
+  abundance_size_mode: legacy
+  abundance_reference: 5000.0
+  abundance_reference_area: 80.0
+  abundance_min_area: 8.0
+  abundance_max_area: 420.0
+  abundance_scale_power: 1.6
+
+asv_mag_link:
+  enabled: true
+  master_tsv:
+  genome_qc_dir: /media/nfs/Ryan/SABer/SI_data/SI_METAGs/SABer_260109/genome_qc_results/elemental_cycles/nitrogen/sag_xpg_species_phylogenies/M00529_Denitrification_nitrate_nitrogen_filtered_cohort_bacterial_mq_16s_gt0.5/selected_set
+  genome_qc_dirs:
+  id_token_indexes:
+  barrnap_dir:
+  genome_fasta_dir:
+  output_dir: asv_mag_link
+  threads: 8
+  min_pident: 99.0
+  min_qcov: 90.0
+  top_n: 5
+  plot_top_n: 20
+
+asv_mag_network:
+  enabled: true
+  output_dir: asv_mag_network
+  prefix: asv_mag_network
+  graph_variant: all
+  min_pident: 99.5
+  min_qcov: 100.0
+  asv_taxonomy_source: ncbi
+  mag_taxonomy_source: gtdb
+  mag_id_mode: suffix_after_double_underscore
+  mag_abundance:
+  mag_abundance_format: long
+  mag_abundance_genome_col: genome_id
+  mag_abundance_sample_col: sample_id
+  mag_abundance_value_col: read_count
+  min_shared_samples: 5
+  abundance_transform: log1p
+  functional_module_min_fraction: 0.5
+  functional_annotations:
+    - /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
+
+master_summary:
+  enabled: true
+  output_dir: summary/tables
+  clustermaps_dir: clustermaps
+  indicspecies_dir: indicspecies
+  spieceasi_dir: spieceasi
+  asv_mag_dir: asv_mag_link
+  max_direct_cols: 300
+  whitelist:
+    - anomaly_type_indicator_species_summary.tsv
+    - anomaly_type_indicator_species_results.tsv
+    - global_event_type_indicator_species_summary.tsv
+    - global_event_type_indicator_species_results.tsv
+    - o2_subcompartment_final_indicator_species_summary.tsv
+    - o2_subcompartment_final_indicator_species_results.tsv
+    - o2_compartment_indicator_species_summary.tsv
+    - o2_compartment_indicator_species_results.tsv
+    - gmm_component_indicator_species_summary.tsv
+    - gmm_component_indicator_species_results.tsv
+    - spieceasi_node_features.csv
+    - spieceasi_modules_sub.tsv
+    - spieceasi_modules_all.tsv
+    - module_asv_anchor_table.tsv
+    - clustermap_ASV_ID_plot.tsv
+    - asv2mag_pairing.tsv
+    - asv2mag_summary.tsv
+    - asv2mag_genome_summary.tsv
+
+environments:
+  main: ../processes/fastp_qc/env.yml
+  sina: ../processes/sina_trim/env.yml
+  taxonomy: ../processes/taxonomy/env.yml
+  mitomaster: ../processes/mitomaster/env.yml
+  mito_checker: ../processes/mito_decontam/env.yml
+  filter_counts: ../processes/shared_envs/asv_pipeline.yml
+  general_stats: ../processes/general_stats/env.yml
+  sankey: ../processes/sankey/env.yml
+  plot_metadata: ../processes/plot_metadata/env.yml
+  batch_correction: ../processes/asv_batch_correction/env.yml
+  outlier_checker: ../processes/outlier_checker/env.yml
+  collectors_curve: ../processes/collectors_curve/env.yml
+  diversity: ../processes/diversity_analysis/env.yml
+  indicspecies: ../processes/indicspecies/env.yml
+  voc_correlation: ../processes/voc_correlation/env.yml
+  measurement_association: ../processes/measurement_association/env.yml
+  grouping_diagnostics: ../processes/grouping_diagnostics/env.yml
+  clustermaps: ../processes/clustermaps/env.yml
+  taxonomy_patient_aware: ../processes/taxonomy_patient_aware/env.yml
+  lung_status_analysis: ../processes/lung_status_analysis/env.yml
+  spieceasi: ../processes/spieceasi/env.yml
+  network_modules: ../processes/network_modules/env.yml
+  network: ../processes/graph_network/env.yml
+  master_summary: ../processes/master_summary/env.yml
+  asv_mag_link: ../processes/asv_mag_link/env.yml
+  asv_mag_network: ../processes/asv_mag_network/env.yml
+  power_analysis: ../processes/power_analysis_pipeline/env.yml
+  plot_upset: ../processes/plot_upset/env.yml
+  bubbleplotter: ../processes/bubbleplotter/env.yml
+  umap_clustering: ../processes/umap_clustering/env.yml

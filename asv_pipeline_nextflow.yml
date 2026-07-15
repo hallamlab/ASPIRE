@@ -206,6 +206,12 @@ batch_correction:
   conqur_interplt: false
   conqur_delta: 0.4999
   conqur_auto_install: true
+  correction_policy: auto
+  auto_min_sample_rho: 0.85
+  auto_min_bray_rho: 0.75
+  auto_max_batch_eta_ratio: 0.95
+  auto_min_batch_eta_drop: 0.01
+  auto_min_bio_eta_ratio: 0.70
   umap_neighbors: 15
   umap_min_dist: 0.1
   hdbscan_min_cluster_size: 5
@@ -429,6 +435,29 @@ voc_correlation:
   correlation_direction: positive
   voc_columns: []
 
+measurement_association:
+  enabled: false
+  output_dir: measurement_association
+  measurement_table:
+  sample_col: Sample
+  asv_id_col: ASV_ID
+  measurement_sample_col: Sample
+  metadata_join_cols: []
+  measurement_join_cols: []
+  measurement_cols: []
+  exclude_cols: []
+  group_col: Type_Group
+  group_palette:
+  max_asvs: 300
+  min_total: 0.0
+  min_prevalence: 0.0
+  top_correlations: 100
+  correlation_direction: both
+  ordination_methods: cca,rda,dbrda
+  permutations: 999
+  top_vectors: 12
+  formats: pdf,png,svg
+
 power_analysis:
   enabled: false
   output_dir: power_analysis
@@ -585,14 +614,15 @@ spieceasi:
   group2_palette: Non-Cancer=#FFFFFF,Cancer=#A50026,Cancer+Non-Cancer=#000000,not_indicator=#D3D3D3
   focus_group1_label: Bronchial Brush
   transpose: true
-  min_rel_abund: 0.005
-  min_prevalence: 0.05
+  min_rel_abund: 0.0
+  min_prevalence: 0.25
   remove_zero_var: true
   method: glasso
-  lambda_min_ratio: 0.01
+  lambda_min_ratio: 0.1
   nlambda: 20
   rep_num: 50
   thresh: 0.1
+  pulsar_criterion: bstars
   ncores: 8
   seed: 10010
   edge_threshold: 0.05
@@ -617,6 +647,7 @@ spieceasi:
 
 asv_mag_link:
   enabled: false
+  master_tsv:
   genome_qc_dir:
   genome_qc_dirs:
   id_token_indexes:
@@ -628,6 +659,26 @@ asv_mag_link:
   min_qcov: 90.0
   top_n: 5
   plot_top_n: 20
+
+asv_mag_network:
+  enabled: false
+  output_dir: asv_mag_network
+  prefix: asv_mag_network
+  graph_variant: all
+  min_pident: 99.5
+  min_qcov: 100.0
+  asv_taxonomy_source: ncbi
+  mag_taxonomy_source: gtdb
+  mag_id_mode: exact
+  mag_abundance:
+  mag_abundance_format: long
+  mag_abundance_genome_col: genome_id
+  mag_abundance_sample_col: sample_id
+  mag_abundance_value_col: read_count
+  min_shared_samples: 5
+  abundance_transform: log1p
+  functional_module_min_fraction: 0.5
+  functional_annotations: []
 
 master_summary:
   enabled: true
@@ -673,6 +724,7 @@ environments:
   diversity: processes/diversity_analysis/env.yml
   indicspecies: processes/indicspecies/env.yml
   voc_correlation: processes/voc_correlation/env.yml
+  measurement_association: processes/measurement_association/env.yml
   clustermaps: processes/clustermaps/env.yml
   power_analysis: processes/power_analysis_pipeline/env.yml
   taxonomy_patient_aware: processes/taxonomy_patient_aware/env.yml
@@ -682,3 +734,4 @@ environments:
   network: processes/graph_network/env.yml
   master_summary: processes/master_summary/env.yml
   asv_mag_link: processes/asv_mag_link/env.yml
+  asv_mag_network: processes/asv_mag_network/env.yml

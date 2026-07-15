@@ -22,12 +22,16 @@ fi
 
 mamba_args=("$@")
 has_channel_priority=0
+has_override_channels=0
 environment_file=""
 previous_arg=""
 for arg in "${mamba_args[@]}"; do
   case "$arg" in
     --strict-channel-priority|--no-channel-priority|--channel-priority|--channel-priority=*)
       has_channel_priority=1
+      ;;
+    --override-channels)
+      has_override_channels=1
       ;;
   esac
   if [[ "$previous_arg" == "--file" || "$previous_arg" == "-f" ]]; then
@@ -38,6 +42,10 @@ for arg in "${mamba_args[@]}"; do
   esac
   previous_arg="$arg"
 done
+if [[ " ${mamba_args[*]} " == *" env create "* && "$has_override_channels" -eq 0 ]]; then
+  mamba_args+=(--override-channels)
+  echo "[controller] Using only channels declared by the ASPIRE environment file." >&2
+fi
 if [[ " ${mamba_args[*]} " == *" env create "* && "$has_channel_priority" -eq 0 ]]; then
   flexible_env_pattern="${ASPIRE_MAMBA_FLEXIBLE_ENV_PATTERN:-(^|/)(qiime2\.yml|taxonomy/env\.yml)$}"
   if [[ -n "$environment_file" && "$environment_file" =~ $flexible_env_pattern ]]; then

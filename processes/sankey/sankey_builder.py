@@ -231,6 +231,7 @@ def group_counts_by_group(long_counts: pd.DataFrame, metadata: pd.DataFrame,
     Replicates with the same sample ID and group are naturally summed.
     """
     merged = long_counts.merge(metadata[[samp_col, group_col]], on=samp_col, how='inner')
+    merged[group_col] = merged[group_col].astype(str)
     grp = merged.groupby(group_col, as_index=False)['count'].sum()
     grp.rename(columns={'count': 'num_reads'}, inplace=True)
     return grp
@@ -473,6 +474,7 @@ def main():
         print(f"[i] ASV micro: {asv_micro_path}")
 
     meta = read_metadata(metadata_path, args.samp_col, args.group1_col, keep_types)
+    meta[args.group1_col] = meta[args.group1_col].astype(str)
 
     # ASV matrices -> long -> merge -> sum
     # Use consistent sample ID parsing across all ASV matrices

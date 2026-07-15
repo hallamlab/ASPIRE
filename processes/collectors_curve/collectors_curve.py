@@ -343,6 +343,8 @@ def main():
     # Colors & appearance
     ap.add_argument("--color-col", default="Color",
                     help="Color column")
+    ap.add_argument("--group-colors", default="",
+                    help="Explicit group color mapping, e.g. GroupA=#1f77b4,GroupB=#ff7f0e. Overrides --color-col values.")
     ap.add_argument("--group-order", default="",
                     help="Comma-separated explicit group order for facets/legend.")
     ap.add_argument("--title", default="",
@@ -384,6 +386,9 @@ def main():
         warnings.warn(
             f"Color column '{args.color_col}' not found in metadata; using fallback palette."
         )
+    explicit_palette = parse_group_colors(args.group_colors)
+    if explicit_palette:
+        user_palette.update(explicit_palette)
 
     requested_order = parse_list_csv(args.group_order)
     fallback_order = requested_order if requested_order else (list(user_palette.keys()) if user_palette else None)

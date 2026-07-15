@@ -315,6 +315,8 @@ Stages that do not list a custom ASPIRE script are executed directly by Nextflow
 | `INDICSPECIES_PLOTS` | `processes/indicspecies_plots/plot_indicspecies.py` | Generates standard indicator species plots and summaries. |
 | `INDICSPECIES_PLOTS` aligned sub-branch | `processes/indicspecies_aligned_plots/plot_indicspecies_aligned.py` | Generates optional aligned indicator species summaries and figures. |
 | `VOC_CORRELATION` | `processes/voc_correlation/plot_voc_corr.py` | Matches VOC and ASV samples, filters ASVs, computes ASV-VOC Spearman correlations, applies FDR and direction filtering, and generates VOC/correlation plots. |
+| `MEASUREMENT_ASSOCIATION` | `processes/measurement_association/measurement_association.py` | Associates ASV abundances with configured sample measurements using Spearman correlations, clustermaps, and constrained ordination biplots. |
+| `MEASUREMENT_ASSOCIATION` ordination sub-branch | `processes/measurement_association/run_measurement_association.R` | Runs CCA, RDA, and dbRDA models with the R `vegan` package. |
 | `CLUSTERMAPS` | `processes/clustermaps/plot_clustermaps.py` | Generates ASV and metadata clustermaps from configured count and metadata inputs. |
 | `POWER_ANALYSIS_PIPELINE` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by the power-analysis branch. |
 | `POWER_ANALYSIS_PIPELINE` | `processes/power_analysis_pipeline/run_power_analysis_pipeline.sh` | Launches the power-analysis subworkflow. |
@@ -390,7 +392,7 @@ Use this for host or other known non-target ranks that should be removed even if
 - `modules/metadata_plots/tables/master_table_micro.tsv`
 - run metadata summaries and plots
 
-When batch correction is enabled, corrected count and metadata tables are produced and downstream branches that support corrected inputs use them.
+When batch correction is enabled, ASPIRE writes before/after diagnostics and then selects the downstream count table according to `batch_correction.correction_policy`. In `auto` mode, corrected counts are used only if they reduce batch structure while preserving count-space and configured biological structure; otherwise downstream branches receive the raw uncorrected table. The decision is written to `batch_correction/batch_correction_decision.tsv`.
 
 ## VOC Correlation
 
@@ -412,6 +414,27 @@ VOC abundance plots are different from correlation plots:
 - `sample_voc_brush_clustermap*` shows per-sample VOC abundance z-scores, not correlations. Blue indicates lower-than-average VOC abundance for that VOC, white is near the VOC mean, and orange indicates higher-than-average abundance.
 - `patient_case_voc_barplots_brush*` displays per-VOC patient z-scores so VOCs are visually comparable on one axis; statistical tests are still run on original patient-level VOC values.
 
+## Measurement Association
+
+`MEASUREMENT_ASSOCIATION` is the generalized association layer for VOC-like, biogeochemical, or other sample-level measurement tables. It uses the metadata-linked ASV outputs, optionally joins an external measurement table, filters ASVs, computes ASV-measurement Spearman correlations with FDR correction, and writes CCA/RDA/dbRDA biplot inputs and figures.
+
+Typical configuration:
+
+```yaml
+measurement_association:
+  enabled: true
+  measurement_table: /path/to/measurements.tsv
+  sample_col: Sample
+  measurement_sample_col: Sample
+  measurement_cols: [Oxygen, Nitrate, Temperature, Salinity]
+  group_col: Type_Group
+  group_palette: "A=#1f78b4,B=#33a02c"
+  correlation_direction: both
+  ordination_methods: cca,rda,dbrda
+```
+
+If `measurement_table` is omitted, numeric measurement columns are selected from the merged metadata table. Outputs are written under `measurement_association/` by default, including `tables/asv_measurement_spearman_long.tsv`, `plots/asv_measurement_spearman_clustermap.*`, ordination score tables, ANOVA tables, and CCA/RDA/dbRDA biplots.
+
 ## Optional Analysis Branches
 
 Major optional modules are controlled by YAML `enabled` flags:
@@ -426,6 +449,7 @@ Major optional modules are controlled by YAML `enabled` flags:
 - `diversity`: Shannon, Bray-Curtis, Jaccard, and optional patient-aware diversity workflows.
 - `indicator_analysis`: indicator species tables, standard plots, and aligned indicator plots.
 - `voc_correlation`: VOC-ASV association analysis and VOC abundance visualizations.
+- `measurement_association`: generalized sample-measurement associations, clustermaps, and CCA/RDA/dbRDA biplots.
 - `clustermaps`: ASV and metadata heatmaps.
 - `network_analysis`: SPIEC-EASI inference, module detection, network visualization, and optional module/MAG anchor tables.
 - `power_analysis`: patient-aware power analysis using metadata-linked ASV tables.

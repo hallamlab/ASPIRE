@@ -1015,7 +1015,9 @@ def main():
     # Resolve canonical paths
     def resolve(rel_or_abs: str | Path) -> Path:
         p = Path(rel_or_abs)
-        return p if p.is_absolute() else (data_dir / sub_dir / p)
+        if p.is_absolute() or p.exists():
+            return p
+        return data_dir / sub_dir / p
 
     fastq_stats_path = resolve(args.fastq_stats)
     asv_micro_path = resolve(args.asv_micro)

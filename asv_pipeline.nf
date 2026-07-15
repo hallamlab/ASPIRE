@@ -1,14 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-import groovy.yaml.YamlSlurper
-import groovy.json.JsonOutput
-import java.net.URL
-import java.nio.file.Paths
-import java.security.MessageDigest
-import java.util.regex.Pattern
-import java.util.zip.GZIPInputStream
-
 def projectRootDir = new File(projectDir.toString())
 def defaultConfigPath = "${projectDir}/asv_pipeline_nextflow.yml"
 def paramsMap = [:]
@@ -46,7 +38,7 @@ if( providedConfigPath ) {
     if( !configFile.exists() ) {
         exit 1, "Config file not found: ${configFile}"
     }
-    config = new YamlSlurper().parse(configFile)
+    config = new groovy.yaml.YamlSlurper().parse(configFile)
     configRoot = configFile.parentFile ?: projectRootDir
     log.info "Loaded config from ${configFile}"
 } else if( hasInlineConfig ) {
@@ -62,7 +54,7 @@ if( providedConfigPath ) {
     if( !configFile.exists() ) {
         exit 1, "Config file not found: ${defaultConfigPath}"
     }
-    config = new YamlSlurper().parse(configFile)
+    config = new groovy.yaml.YamlSlurper().parse(configFile)
     configRoot = configFile.parentFile ?: projectRootDir
     log.info "Loaded default config from ${configFile}"
 }
@@ -79,7 +71,7 @@ def resolvePath(String pathValue) {
 }
 
 def fileMd5(File inputFile) {
-    return MessageDigest.getInstance('MD5').digest(inputFile.bytes).encodeHex().toString()
+    return java.security.MessageDigest.getInstance('MD5').digest(inputFile.bytes).encodeHex().toString()
 }
 
 def r1Tokens = normalizeList(config.filename_patterns?.r1_tokens, ['R1','1'])
@@ -99,7 +91,7 @@ def workDirPath = config.paths?.work_dir ? resolvePath(config.paths.work_dir) : 
 def resolvedCondaCacheDir = config.paths?.conda_cache_dir ? resolvePath(config.paths.conda_cache_dir) : new File(runtimeDir, 'conda_cache').canonicalPath
 def workDirFile = new File(workDirPath)
 workDirFile.mkdirs()
-workflow.workDir = Paths.get(workDirFile.canonicalPath)
+workflow.workDir = java.nio.file.Paths.get(workDirFile.canonicalPath)
 log.info "Using Nextflow work directory: ${workflow.workDir}"
 log.info "Using publication staging directory: ${outputDir}"
 def condaCacheDirFile = new File(resolvedCondaCacheDir)
@@ -357,6 +349,15 @@ if( !asvMagLinkEnvFile.exists() ) {
 }
 log.info "Using ASV-MAG linking Conda/Mamba env definition: ${asvMagLinkCondaEnvPath}"
 
+def asvMagNetworkEnvConfigPath = config.environments?.asv_mag_network
+def resolvedAsvMagNetworkEnvPath = asvMagNetworkEnvConfigPath ? resolveOptionalPath(asvMagNetworkEnvConfigPath, configRoot) : null
+def asvMagNetworkCondaEnvPath = resolvedAsvMagNetworkEnvPath ?: new File("${projectDir}/processes/asv_mag_network/env.yml").canonicalPath
+def asvMagNetworkEnvFile = file(asvMagNetworkCondaEnvPath)
+if( !asvMagNetworkEnvFile.exists() ) {
+    exit 1, "ASV-MAG network conda environment YAML not found: ${asvMagNetworkCondaEnvPath}"
+}
+log.info "Using ASV-MAG network Conda/Mamba env definition: ${asvMagNetworkCondaEnvPath}"
+
 def powerAnalysisEnvConfigPath = config.environments?.power_analysis
 def resolvedPowerAnalysisEnvPath = powerAnalysisEnvConfigPath ? resolveOptionalPath(powerAnalysisEnvConfigPath, configRoot) : null
 def powerAnalysisCondaEnvPath = resolvedPowerAnalysisEnvPath ?: new File("${projectDir}/processes/power_analysis_pipeline/env.yml").canonicalPath
@@ -420,6 +421,26 @@ if( !vocCorrelationEnvFile.exists() ) {
     exit 1, "VOC correlation conda environment YAML not found: ${vocCorrelationCondaEnvPath}"
 }
 log.info "Using VOC correlation Conda/Mamba env definition: ${vocCorrelationCondaEnvPath}"
+
+def measurementAssociationEnvConfigPath = config.environments?.measurement_association
+def resolvedMeasurementAssociationEnvPath = measurementAssociationEnvConfigPath ? resolveOptionalPath(measurementAssociationEnvConfigPath, configRoot) : null
+def defaultMeasurementAssociationEnvPath = new File("${projectDir}/processes/measurement_association/env.yml").canonicalPath
+def measurementAssociationCondaEnvPath = resolvedMeasurementAssociationEnvPath ?: defaultMeasurementAssociationEnvPath
+def measurementAssociationEnvFile = file(measurementAssociationCondaEnvPath)
+if( !measurementAssociationEnvFile.exists() ) {
+    exit 1, "Measurement association conda environment YAML not found: ${measurementAssociationCondaEnvPath}"
+}
+log.info "Using measurement association Conda/Mamba env definition: ${measurementAssociationCondaEnvPath}"
+
+def groupingDiagnosticsEnvConfigPath = config.environments?.grouping_diagnostics
+def resolvedGroupingDiagnosticsEnvPath = groupingDiagnosticsEnvConfigPath ? resolveOptionalPath(groupingDiagnosticsEnvConfigPath, configRoot) : null
+def defaultGroupingDiagnosticsEnvPath = new File("${projectDir}/processes/grouping_diagnostics/env.yml").canonicalPath
+def groupingDiagnosticsCondaEnvPath = resolvedGroupingDiagnosticsEnvPath ?: defaultGroupingDiagnosticsEnvPath
+def groupingDiagnosticsEnvFile = file(groupingDiagnosticsCondaEnvPath)
+if( !groupingDiagnosticsEnvFile.exists() ) {
+    exit 1, "Grouping diagnostics conda environment YAML not found: ${groupingDiagnosticsCondaEnvPath}"
+}
+log.info "Using grouping diagnostics Conda/Mamba env definition: ${groupingDiagnosticsCondaEnvPath}"
 
 def configuredManifestPath = config.paths?.manifest ? resolveOptionalPath(config.paths.manifest, configRoot) : null
 def sampleRecords
@@ -585,6 +606,12 @@ if( !plotAsvMagLinkScriptFile.exists() ) {
     exit 1, "plot_asv_mag_link.py not found in project directory"
 }
 def plotAsvMagLinkScriptPath = plotAsvMagLinkScriptFile.canonicalPath
+def asvMagNetworkScriptFile = new File("${projectDir}/processes/asv_mag_network/asv_mag_network.py")
+if( !asvMagNetworkScriptFile.exists() ) {
+    exit 1, "asv_mag_network.py not found in project directory"
+}
+def asvMagNetworkScriptPath = asvMagNetworkScriptFile.canonicalPath
+def asvMagNetworkScriptHash = fileMd5(asvMagNetworkScriptFile)
 def moduleMagAnchorsScriptFile = new File("${projectDir}/processes/module_mag_anchors/summarize_module_mag_anchors.py")
 if( !moduleMagAnchorsScriptFile.exists() ) {
     exit 1, "summarize_module_mag_anchors.py not found in project directory"
@@ -641,6 +668,24 @@ if( !plotVocCorrScriptFile.exists() ) {
 }
 def plotVocCorrScriptPath = plotVocCorrScriptFile.canonicalPath
 def plotVocCorrScriptHash = fileMd5(plotVocCorrScriptFile)
+def measurementAssociationScriptFile = new File("${projectDir}/processes/measurement_association/measurement_association.py")
+if( !measurementAssociationScriptFile.exists() ) {
+    exit 1, "measurement_association.py not found in project directory"
+}
+def measurementAssociationScriptPath = measurementAssociationScriptFile.canonicalPath
+def measurementAssociationScriptHash = fileMd5(measurementAssociationScriptFile)
+def measurementAssociationRScriptFile = new File("${projectDir}/processes/measurement_association/run_measurement_association.R")
+if( !measurementAssociationRScriptFile.exists() ) {
+    exit 1, "run_measurement_association.R not found in project directory"
+}
+def measurementAssociationRScriptPath = measurementAssociationRScriptFile.canonicalPath
+def measurementAssociationRScriptHash = fileMd5(measurementAssociationRScriptFile)
+def groupingDiagnosticsScriptFile = new File("${projectDir}/processes/grouping_diagnostics/grouping_diagnostics.py")
+if( !groupingDiagnosticsScriptFile.exists() ) {
+    exit 1, "grouping_diagnostics.py not found in project directory"
+}
+def groupingDiagnosticsScriptPath = groupingDiagnosticsScriptFile.canonicalPath
+def groupingDiagnosticsScriptHash = fileMd5(groupingDiagnosticsScriptFile)
 def emptyModulesScriptFile = new File("${projectDir}/processes/master_summary/empty_modules.tsv")
 if( !emptyModulesScriptFile.exists() ) {
     exit 1, "empty_modules.tsv not found in project directory"
@@ -878,12 +923,7 @@ if( sankeyKeepTypesRaw instanceof List ) {
     sankeyKeepTypes = sankeyKeepTypesRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
 }
 def sankeyVerticalOrderRaw = sankeyConfig.vertical_order ?: sankeyConfig.group_order
-List<String> sankeyVerticalOrder = []
-if( sankeyVerticalOrderRaw instanceof List ) {
-    sankeyVerticalOrder = sankeyVerticalOrderRaw.collect { it.toString().trim() }.findAll { it }
-} else if( sankeyVerticalOrderRaw ) {
-    sankeyVerticalOrder = sankeyVerticalOrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-}
+List<String> sankeyVerticalOrder = normalizePresetList(sankeyVerticalOrderRaw, [], config.order_presets ?: [:])
 def sankeyOutputPrefix = sankeyConfig.output_prefix ?: "metadata/data_loss_sankey"
 def sankeyTitle = sankeyConfig.title ?: "Data Loss Flow"
 def sankeyMakeLabeled = (sankeyConfig.make_labeled == null) ? true : (sankeyConfig.make_labeled as boolean)
@@ -989,12 +1029,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         metadataPlotsSubtractionGroups = metadataSubtractionGroupsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
     }
     def metadataGroupOrderRaw = metadataPlotsConfig.group_order
-    List<String> metadataPlotsGroupOrder = []
-    if( metadataGroupOrderRaw instanceof List ) {
-        metadataPlotsGroupOrder = metadataGroupOrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( metadataGroupOrderRaw ) {
-        metadataPlotsGroupOrder = metadataGroupOrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> metadataPlotsGroupOrder = normalizePresetList(metadataGroupOrderRaw, [], config.order_presets ?: [:])
     def metadataIncludeRankRaw = metadataPlotsConfig.include_rank
     List<String> metadataIncludeRank = []
     if( metadataIncludeRankRaw instanceof List ) {
@@ -1040,6 +1075,15 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     boolean batchConqurInterplt = (batchCorrectionConfig.conqur_interplt ?: false) as boolean
     def batchConqurDelta = batchCorrectionConfig.conqur_delta != null ? (batchCorrectionConfig.conqur_delta as double) : 0.4999d
     boolean batchConqurAutoInstall = (batchCorrectionConfig.conqur_auto_install ?: false) as boolean
+    def batchCorrectionPolicy = batchCorrectionConfig.correction_policy ? batchCorrectionConfig.correction_policy.toString().trim().toLowerCase() : 'auto'
+    if( !(batchCorrectionPolicy in ['auto','always','never']) ) {
+        exit 1, "batch_correction.correction_policy must be one of: auto, always, never"
+    }
+    def batchAutoMinSampleRho = batchCorrectionConfig.auto_min_sample_rho != null ? (batchCorrectionConfig.auto_min_sample_rho as double) : 0.85d
+    def batchAutoMinBrayRho = batchCorrectionConfig.auto_min_bray_rho != null ? (batchCorrectionConfig.auto_min_bray_rho as double) : 0.75d
+    def batchAutoMaxBatchEtaRatio = batchCorrectionConfig.auto_max_batch_eta_ratio != null ? (batchCorrectionConfig.auto_max_batch_eta_ratio as double) : 0.95d
+    def batchAutoMinBatchEtaDrop = batchCorrectionConfig.auto_min_batch_eta_drop != null ? (batchCorrectionConfig.auto_min_batch_eta_drop as double) : 0.01d
+    def batchAutoMinBioEtaRatio = batchCorrectionConfig.auto_min_bio_eta_ratio != null ? (batchCorrectionConfig.auto_min_bio_eta_ratio as double) : 0.70d
 
     def outlierConfig = config.outlier_detection ?: [:]
     boolean outlierEnabled = batchCorrectionEnabled && (outlierConfig.containsKey('enabled') ? (outlierConfig.enabled as boolean) : true)
@@ -1081,13 +1125,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def collectorsSampleCol = collectorsConfig.sample_col ?: metadataPlotsSampleCol
     def collectorsGroupCol = collectorsConfig.group_col ?: (collectorsConfig.group1_col ?: metadataPlotsTypeCol)
     def collectorsColorCol = collectorsConfig.color_col ?: 'Color'
+    def collectorsGroupColors = collectorsConfig.group_colors ?: (collectorsConfig.group_palette ?: '')
     def collectorsGroupOrderRaw = collectorsConfig.group_order ?: metadataPlotsGroupOrder
-    List<String> collectorsGroupOrder = []
-    if( collectorsGroupOrderRaw instanceof List ) {
-        collectorsGroupOrder = collectorsGroupOrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( collectorsGroupOrderRaw ) {
-        collectorsGroupOrder = collectorsGroupOrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> collectorsGroupOrder = normalizePresetList(collectorsGroupOrderRaw, [], config.order_presets ?: [:])
     def collectorsPermutations = collectorsConfig.permutations ? (collectorsConfig.permutations as int) : 999
     def collectorsSeed = collectorsConfig.seed ? (collectorsConfig.seed as int) : 42
     def collectorsOutPrefix = collectorsConfig.out_prefix ?: 'metadata/collectors_curve'
@@ -1111,13 +1151,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def plotUpsetSampleIdCol = plotUpsetConfig.sample_id_col ?: metadataPlotsSampleCol
     def plotUpsetGroupCol = plotUpsetConfig.group_col ?: (plotUpsetConfig.group1_col ?: metadataPlotsTypeCol)
     def plotUpsetColorCol = plotUpsetConfig.color_col ?: metadataPlotsColorCol
+    def plotUpsetGroupPalette = plotUpsetConfig.group_palette ?: ''
     def plotUpsetGroupOrderRaw = plotUpsetConfig.group_order ?: metadataPlotsGroupOrder
-    List<String> plotUpsetGroupOrder = []
-    if( plotUpsetGroupOrderRaw instanceof List ) {
-        plotUpsetGroupOrder = plotUpsetGroupOrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( plotUpsetGroupOrderRaw ) {
-        plotUpsetGroupOrder = plotUpsetGroupOrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> plotUpsetGroupOrder = normalizePresetList(plotUpsetGroupOrderRaw, [], config.order_presets ?: [:])
     def plotUpsetSubsetGroupsRaw = plotUpsetConfig.subset_groups
     List<String> plotUpsetSubsetGroups = []
     if( plotUpsetSubsetGroupsRaw instanceof List ) {
@@ -1150,19 +1186,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def bubbleplotterColorCol = bubbleplotterConfig.color_col ?: metadataPlotsColorCol
     def bubbleplotterMonthCol = bubbleplotterConfig.group2_col ?: (bubbleplotterConfig.month_col ?: 'Month')
     def bubbleplotterGroup1OrderRaw = bubbleplotterConfig.group1_order ?: metadataPlotsGroupOrder
-    List<String> bubbleplotterGroup1Order = []
-    if( bubbleplotterGroup1OrderRaw instanceof List ) {
-        bubbleplotterGroup1Order = bubbleplotterGroup1OrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( bubbleplotterGroup1OrderRaw ) {
-        bubbleplotterGroup1Order = bubbleplotterGroup1OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> bubbleplotterGroup1Order = normalizePresetList(bubbleplotterGroup1OrderRaw, [], config.order_presets ?: [:])
     def bubbleplotterGroup2OrderRaw = bubbleplotterConfig.group2_order ?: (config.indicspecies?.group2_order ?: '')
-    List<String> bubbleplotterGroup2Order = []
-    if( bubbleplotterGroup2OrderRaw instanceof List ) {
-        bubbleplotterGroup2Order = bubbleplotterGroup2OrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( bubbleplotterGroup2OrderRaw ) {
-        bubbleplotterGroup2Order = bubbleplotterGroup2OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> bubbleplotterGroup2Order = normalizePresetList(bubbleplotterGroup2OrderRaw, [], config.order_presets ?: [:])
     def bubbleplotterFigsize = bubbleplotterConfig.figsize ?: '32,60'
     def bubbleplotterScale = bubbleplotterConfig.bubble_scale != null ? (bubbleplotterConfig.bubble_scale as double) : 10d
     boolean bubbleplotterNoAutoSize = bubbleplotterConfig.containsKey('no_auto_size') ? (bubbleplotterConfig.no_auto_size as boolean) : true
@@ -1182,19 +1208,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def umapClusteringColorCol = umapClusteringConfig.color_col ?: metadataPlotsColorCol
     def umapClusteringSecondaryCol = umapClusteringConfig.group2_col ?: (umapClusteringConfig.secondary_col ?: (umapClusteringConfig.month_col ?: 'Month'))
     def umapClusteringGroup1OrderRaw = umapClusteringConfig.group1_order ?: metadataPlotsGroupOrder
-    List<String> umapClusteringGroup1Order = []
-    if( umapClusteringGroup1OrderRaw instanceof List ) {
-        umapClusteringGroup1Order = umapClusteringGroup1OrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( umapClusteringGroup1OrderRaw ) {
-        umapClusteringGroup1Order = umapClusteringGroup1OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> umapClusteringGroup1Order = normalizePresetList(umapClusteringGroup1OrderRaw, [], config.order_presets ?: [:])
     def umapClusteringGroup2OrderRaw = umapClusteringConfig.group2_order ?: (config.indicspecies?.group2_order ?: '')
-    List<String> umapClusteringGroup2Order = []
-    if( umapClusteringGroup2OrderRaw instanceof List ) {
-        umapClusteringGroup2Order = umapClusteringGroup2OrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( umapClusteringGroup2OrderRaw ) {
-        umapClusteringGroup2Order = umapClusteringGroup2OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> umapClusteringGroup2Order = normalizePresetList(umapClusteringGroup2OrderRaw, [], config.order_presets ?: [:])
     def sharedPaletteConfig = config.indicspecies?.group_palettes instanceof Map ? config.indicspecies.group_palettes : [:]
     def umapClusteringGroup1Palette = umapClusteringConfig.group1_palette ?: (sharedPaletteConfig[umapClusteringDepthCol] ?: '')
     def umapClusteringGroup2Palette = umapClusteringConfig.group2_palette ?: (sharedPaletteConfig[umapClusteringSecondaryCol] ?: '')
@@ -1235,12 +1251,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         diversityExcludeGroups = diversityExcludeGroupsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
     }
     def diversityGroupOrderRaw = diversityConfig.group_order ?: metadataPlotsGroupOrder
-    List<String> diversityGroupOrder = []
-    if( diversityGroupOrderRaw instanceof List ) {
-        diversityGroupOrder = diversityGroupOrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( diversityGroupOrderRaw ) {
-        diversityGroupOrder = diversityGroupOrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> diversityGroupOrder = normalizePresetList(diversityGroupOrderRaw, [], config.order_presets ?: [:])
     boolean diversityRunMito = diversityConfig.containsKey('run_mito') ? (diversityConfig.run_mito as boolean) : true
     def diversityUmapNeighbors = diversityConfig.umap_neighbors ? (diversityConfig.umap_neighbors as int) : 30
     def diversityUmapMinDist = diversityConfig.umap_min_dist != null ? (diversityConfig.umap_min_dist as double) : 0.01d
@@ -1323,6 +1334,12 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         batchConqurQuantileType: batchConqurQuantileType,
         batchConqurLambdaQuantile: batchConqurLambdaQuantile,
         batchConqurDelta: batchConqurDelta,
+        batchCorrectionPolicy: batchCorrectionPolicy,
+        batchAutoMinSampleRho: batchAutoMinSampleRho,
+        batchAutoMinBrayRho: batchAutoMinBrayRho,
+        batchAutoMaxBatchEtaRatio: batchAutoMaxBatchEtaRatio,
+        batchAutoMinBatchEtaDrop: batchAutoMinBatchEtaDrop,
+        batchAutoMinBioEtaRatio: batchAutoMinBioEtaRatio,
         outlierOutputDirAbs: outlierOutputDirAbs,
         outlierSampleIdCol: outlierSampleIdCol,
         outlierTransform: outlierTransform,
@@ -1437,8 +1454,10 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         outlierUseSvm: outlierUseSvm,
         outlierUseHdb: outlierUseHdb,
         collectorsEnabled: collectorsEnabled,
+        collectorsGroupColors: collectorsGroupColors,
         collectorsGroupOrder: collectorsGroupOrder,
         plotUpsetEnabled: plotUpsetEnabled,
+        plotUpsetGroupPalette: plotUpsetGroupPalette,
         plotUpsetGroupOrder: plotUpsetGroupOrder,
         plotUpsetSubsetGroups: plotUpsetSubsetGroups,
         plotUpsetSkipVenn: plotUpsetSkipVenn,
@@ -1561,9 +1580,9 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def indicspeciesFocusGroup1Label = indicspeciesFocusLabelMap[indicspeciesGroup1] ?: ''
     def indicspeciesFocusGroup2Label = indicspeciesGroup2 ? (indicspeciesFocusLabelMap[indicspeciesGroup2] ?: '') : ''
     def indicspeciesGroupColsCsv = indicspeciesGroupCols.join(',')
-    def indicspeciesGroupPaletteJson = JsonOutput.toJson(indicspeciesGroupPaletteMap)
-    def indicspeciesGroupOrderJson = JsonOutput.toJson(indicspeciesGroupOrderMap)
-    def indicspeciesFocusLabelJson = JsonOutput.toJson(indicspeciesFocusLabelMap)
+    def indicspeciesGroupPaletteJson = groovy.json.JsonOutput.toJson(indicspeciesGroupPaletteMap)
+    def indicspeciesGroupOrderJson = groovy.json.JsonOutput.toJson(indicspeciesGroupOrderMap)
+    def indicspeciesFocusLabelJson = groovy.json.JsonOutput.toJson(indicspeciesFocusLabelMap)
     boolean indicspeciesLabelFocusedAsvs = indicspeciesConfig.containsKey('label_focused_asvs') ? (indicspeciesConfig.label_focused_asvs as boolean) : false
     boolean indicspeciesAlignedEnabled = indicspeciesConfig.containsKey('aligned_plot_enabled') ? (indicspeciesConfig.aligned_plot_enabled as boolean) : false
     boolean indicspeciesUseDuleg = indicspeciesConfig.containsKey('use_duleg') ? (indicspeciesConfig.use_duleg as boolean) : false
@@ -1610,6 +1629,128 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def vocCorrelationCasePalette = vocCorrelationConfig.case_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationCaseCol] ?: '')
     def vocCorrelationIsaPalette = vocCorrelationConfig.isa_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationTypeCol] ?: '')
 
+    def measurementAssociationConfig = config.measurement_association ?: [:]
+    boolean measurementAssociationRequested = measurementAssociationConfig.containsKey('enabled') ? (measurementAssociationConfig.enabled as boolean) : false
+    if( measurementAssociationRequested && !metadataPlotsEnabled ) {
+        exit 1, "measurement_association.enabled requires metadata_plots.enabled to be true"
+    }
+    boolean measurementAssociationEnabled = measurementAssociationRequested
+    def measurementAssociationOutputDir = measurementAssociationConfig.output_dir ?: 'measurement_association'
+    def measurementAssociationOutputDirAbs = resolveOutputRelative(measurementAssociationOutputDir.toString(), outputDir)
+    def measurementAssociationTablePath = measurementAssociationConfig.measurement_table ? resolveOptionalPath(measurementAssociationConfig.measurement_table, configRoot) : null
+    if( measurementAssociationEnabled && measurementAssociationTablePath && !new File(measurementAssociationTablePath).exists() ) {
+        exit 1, "measurement_association.measurement_table was configured but does not exist: ${measurementAssociationTablePath}"
+    }
+    def measurementAssociationSampleCol = measurementAssociationConfig.sample_col ? measurementAssociationConfig.sample_col.toString().trim() : metadataPlotsSampleCol
+    def measurementAssociationAsvIdCol = measurementAssociationConfig.asv_id_col ? measurementAssociationConfig.asv_id_col.toString().trim() : 'ASV_ID'
+    def measurementAssociationMeasurementSampleCol = measurementAssociationConfig.measurement_sample_col ? measurementAssociationConfig.measurement_sample_col.toString().trim() : measurementAssociationSampleCol
+    def measurementAssociationMetadataJoinRaw = measurementAssociationConfig.metadata_join_cols ?: ''
+    List<String> measurementAssociationMetadataJoinCols = []
+    if( measurementAssociationMetadataJoinRaw instanceof List ) {
+        measurementAssociationMetadataJoinCols = measurementAssociationMetadataJoinRaw.collect { it.toString().trim() }.findAll { it }
+    } else if( measurementAssociationMetadataJoinRaw ) {
+        measurementAssociationMetadataJoinCols = measurementAssociationMetadataJoinRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+    }
+    def measurementAssociationMeasurementJoinRaw = measurementAssociationConfig.measurement_join_cols ?: ''
+    List<String> measurementAssociationMeasurementJoinCols = []
+    if( measurementAssociationMeasurementJoinRaw instanceof List ) {
+        measurementAssociationMeasurementJoinCols = measurementAssociationMeasurementJoinRaw.collect { it.toString().trim() }.findAll { it }
+    } else if( measurementAssociationMeasurementJoinRaw ) {
+        measurementAssociationMeasurementJoinCols = measurementAssociationMeasurementJoinRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+    }
+    def measurementAssociationColsRaw = measurementAssociationConfig.measurement_cols ?: []
+    List<String> measurementAssociationCols = []
+    if( measurementAssociationColsRaw instanceof List ) {
+        measurementAssociationCols = measurementAssociationColsRaw.collect { it.toString().trim() }.findAll { it }
+    } else if( measurementAssociationColsRaw ) {
+        measurementAssociationCols = measurementAssociationColsRaw.toString().split(/\r?\n|\|/).collect { it.trim() }.findAll { it }
+    }
+    def measurementAssociationExcludeRaw = measurementAssociationConfig.exclude_cols ?: []
+    List<String> measurementAssociationExcludeCols = []
+    if( measurementAssociationExcludeRaw instanceof List ) {
+        measurementAssociationExcludeCols = measurementAssociationExcludeRaw.collect { it.toString().trim() }.findAll { it }
+    } else if( measurementAssociationExcludeRaw ) {
+        measurementAssociationExcludeCols = measurementAssociationExcludeRaw.toString().split(/\r?\n|\|/).collect { it.trim() }.findAll { it }
+    }
+    def measurementAssociationGroupCol = measurementAssociationConfig.group_col ? measurementAssociationConfig.group_col.toString().trim() : metadataPlotsTypeCol
+    def measurementAssociationGroupPalette = measurementAssociationConfig.group_palette ? measurementAssociationConfig.group_palette.toString().trim() : ''
+    def measurementAssociationMaxAsvs = measurementAssociationConfig.max_asvs ? (measurementAssociationConfig.max_asvs as int) : 300
+    def measurementAssociationMinTotal = measurementAssociationConfig.min_total != null ? (measurementAssociationConfig.min_total as double) : 0.0d
+    def measurementAssociationMinPrevalence = measurementAssociationConfig.min_prevalence != null ? (measurementAssociationConfig.min_prevalence as double) : 0.0d
+    def measurementAssociationTopCorrelations = measurementAssociationConfig.top_correlations ? (measurementAssociationConfig.top_correlations as int) : 100
+    def measurementAssociationDirection = measurementAssociationConfig.correlation_direction ? measurementAssociationConfig.correlation_direction.toString().trim().toLowerCase() : 'both'
+    if( !(measurementAssociationDirection in ['positive','negative','both']) ) {
+        exit 1, "measurement_association.correlation_direction must be one of: positive, negative, both"
+    }
+    def measurementAssociationMethodsRaw = measurementAssociationConfig.ordination_methods ?: 'cca,rda,dbrda'
+    def measurementAssociationMethods = measurementAssociationMethodsRaw instanceof List ?
+        measurementAssociationMethodsRaw.collect { it.toString().trim().toLowerCase() }.findAll { it }.join(',') :
+        measurementAssociationMethodsRaw.toString().trim().toLowerCase()
+    def measurementAssociationPermutations = measurementAssociationConfig.permutations ? (measurementAssociationConfig.permutations as int) : 999
+    def measurementAssociationTopVectors = measurementAssociationConfig.top_vectors ? (measurementAssociationConfig.top_vectors as int) : 12
+    def measurementAssociationFormatsRaw = measurementAssociationConfig.formats ?: 'pdf,png,svg'
+    def measurementAssociationFormats = measurementAssociationFormatsRaw instanceof List ?
+        measurementAssociationFormatsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        measurementAssociationFormatsRaw.toString().trim()
+
+    def groupingDiagnosticsConfig = config.grouping_diagnostics ?: [:]
+    boolean groupingDiagnosticsRequested = groupingDiagnosticsConfig.containsKey('enabled') ? (groupingDiagnosticsConfig.enabled as boolean) : false
+    if( groupingDiagnosticsRequested && !metadataPlotsEnabled ) {
+        exit 1, "grouping_diagnostics.enabled requires metadata_plots.enabled to be true"
+    }
+    boolean groupingDiagnosticsEnabled = groupingDiagnosticsRequested
+    def groupingDiagnosticsOutputDir = groupingDiagnosticsConfig.output_dir ?: 'grouping_diagnostics'
+    def groupingDiagnosticsOutputDirAbs = resolveOutputRelative(groupingDiagnosticsOutputDir.toString(), outputDir)
+    def groupingDiagnosticsSampleCol = groupingDiagnosticsConfig.sample_col ? groupingDiagnosticsConfig.sample_col.toString().trim() : metadataPlotsSampleCol
+    def groupingDiagnosticsGroupColsRaw = groupingDiagnosticsConfig.group_cols ?: [metadataPlotsTypeCol]
+    List<String> groupingDiagnosticsGroupCols = []
+    if( groupingDiagnosticsGroupColsRaw instanceof List ) {
+        groupingDiagnosticsGroupCols = groupingDiagnosticsGroupColsRaw.collect { it.toString().trim() }.findAll { it }
+    } else if( groupingDiagnosticsGroupColsRaw ) {
+        groupingDiagnosticsGroupCols = groupingDiagnosticsGroupColsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+    }
+    if( groupingDiagnosticsRequested && groupingDiagnosticsGroupCols.isEmpty() ) {
+        exit 1, "grouping_diagnostics.group_cols must contain at least one metadata column when enabled"
+    }
+    def groupingDiagnosticsBaselineGroup = groupingDiagnosticsConfig.baseline_group ? groupingDiagnosticsConfig.baseline_group.toString().trim() : ''
+    def groupingDiagnosticsPrimaryGroup = groupingDiagnosticsConfig.primary_group ? groupingDiagnosticsConfig.primary_group.toString().trim() : ''
+    def groupingDiagnosticsPaletteMap = extractNamedStringMap(groupingDiagnosticsConfig as Map, groupingDiagnosticsGroupCols, 'group_palettes', 'palette')
+    def groupingDiagnosticsOrderMap = extractNamedListMap(groupingDiagnosticsConfig as Map, groupingDiagnosticsGroupCols, 'group_orders', 'order')
+    groupingDiagnosticsGroupCols.each { col ->
+        if( !groupingDiagnosticsPaletteMap.containsKey(col) && sharedPaletteConfig[col] ) {
+            groupingDiagnosticsPaletteMap[col] = sharedPaletteConfig[col]
+        }
+    }
+    if( metadataPlotsTypeCol && metadataPlotsGroupOrder && groupingDiagnosticsGroupCols.contains(metadataPlotsTypeCol) && !groupingDiagnosticsOrderMap.containsKey(metadataPlotsTypeCol) ) {
+        groupingDiagnosticsOrderMap[metadataPlotsTypeCol] = metadataPlotsGroupOrder
+    }
+    def groupingDiagnosticsPaletteJson = groovy.json.JsonOutput.toJson(groupingDiagnosticsPaletteMap)
+    def groupingDiagnosticsOrderJson = groovy.json.JsonOutput.toJson(groupingDiagnosticsOrderMap)
+    def groupingDiagnosticsMetricsRaw = groupingDiagnosticsConfig.distance_metrics ?: 'bray'
+    def groupingDiagnosticsMetrics = groupingDiagnosticsMetricsRaw instanceof List ?
+        groupingDiagnosticsMetricsRaw.collect { it.toString().trim().toLowerCase() }.findAll { it }.join(',') :
+        groupingDiagnosticsMetricsRaw.toString().trim().toLowerCase()
+    def groupingDiagnosticsTransform = groupingDiagnosticsConfig.transform ? groupingDiagnosticsConfig.transform.toString().trim().toLowerCase() : 'relative'
+    def groupingDiagnosticsPermutations = groupingDiagnosticsConfig.permutations ? (groupingDiagnosticsConfig.permutations as int) : 999
+    def groupingDiagnosticsRandomState = groupingDiagnosticsConfig.random_state ? (groupingDiagnosticsConfig.random_state as int) : 42
+    def groupingDiagnosticsFormatsRaw = groupingDiagnosticsConfig.formats ?: 'pdf,png,svg'
+    def groupingDiagnosticsFormats = groupingDiagnosticsFormatsRaw instanceof List ?
+        groupingDiagnosticsFormatsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        groupingDiagnosticsFormatsRaw.toString().trim()
+    def groupingDiagnosticsSoftLabelConfig = groupingDiagnosticsConfig.soft_labeling instanceof Map ? groupingDiagnosticsConfig.soft_labeling : [:]
+    boolean groupingDiagnosticsSoftLabelEnabled = groupingDiagnosticsSoftLabelConfig.containsKey('enabled') ? (groupingDiagnosticsSoftLabelConfig.enabled as boolean) : false
+    def groupingDiagnosticsSoftLabelK = groupingDiagnosticsSoftLabelConfig.k ? (groupingDiagnosticsSoftLabelConfig.k as int) : 7
+    def groupingDiagnosticsPowerConfig = groupingDiagnosticsConfig.power instanceof Map ? groupingDiagnosticsConfig.power : [:]
+    boolean groupingDiagnosticsPowerEnabled = groupingDiagnosticsPowerConfig.containsKey('enabled') ? (groupingDiagnosticsPowerConfig.enabled as boolean) : false
+    def groupingDiagnosticsPowerSizesRaw = groupingDiagnosticsPowerConfig.sample_sizes ?: '3,5,10,15,20'
+    def groupingDiagnosticsPowerSizes = groupingDiagnosticsPowerSizesRaw instanceof List ?
+        groupingDiagnosticsPowerSizesRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        groupingDiagnosticsPowerSizesRaw.toString().trim()
+    def groupingDiagnosticsPowerSimulations = groupingDiagnosticsPowerConfig.simulations ? (groupingDiagnosticsPowerConfig.simulations as int) : 100
+    def groupingDiagnosticsPowerPermutations = groupingDiagnosticsPowerConfig.permutations ? (groupingDiagnosticsPowerConfig.permutations as int) : 99
+    def groupingDiagnosticsPowerAlpha = groupingDiagnosticsPowerConfig.alpha != null ? (groupingDiagnosticsPowerConfig.alpha as double) : 0.05d
+    def groupingDiagnosticsPowerMinGroups = groupingDiagnosticsPowerConfig.min_groups ? (groupingDiagnosticsPowerConfig.min_groups as int) : 2
+
     def clustermapsConfig = config.clustermaps ?: [:]
     boolean clustermapsRequested = clustermapsConfig.containsKey('enabled') ? (clustermapsConfig.enabled as boolean) : false
     if( clustermapsRequested && !metadataPlotsEnabled ) {
@@ -1630,12 +1771,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def clustermapsGroup2Col = clustermapsConfig.group2_col ?: 'status'
     def clustermapsGroup3Col = clustermapsConfig.containsKey('group3_col') ? (clustermapsConfig.group3_col ?: '') : 'kit'
     def clustermapsGroup1OrderRaw = clustermapsConfig.group1_order ?: (clustermapsConfig.type_order ?: '')
-    List<String> clustermapsGroup1Order = []
-    if( clustermapsGroup1OrderRaw instanceof List ) {
-        clustermapsGroup1Order = clustermapsGroup1OrderRaw.collect { it.toString().trim() }.findAll { it }
-    } else if( clustermapsGroup1OrderRaw ) {
-        clustermapsGroup1Order = clustermapsGroup1OrderRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-    }
+    List<String> clustermapsGroup1Order = normalizePresetList(clustermapsGroup1OrderRaw, [], config.order_presets ?: [:])
     def clustermapsExcludeGroup1 = clustermapsConfig.exclude_group1 ?: (clustermapsConfig.exclude_types ?: '')
     def clustermapsGroup1Palette = clustermapsConfig.group1_palette ?: (clustermapsConfig.type_palette ?: '')
     def clustermapsGroup2Palette = clustermapsConfig.group2_palette ?: (clustermapsConfig.status_palette ?: '')
@@ -1678,13 +1814,17 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def spieceasiPrefix = spieceasiConfig.prefix ?: 'spieceasi'
     boolean spieceasiTranspose = spieceasiConfig.containsKey('transpose') ? (spieceasiConfig.transpose as boolean) : true
     def spieceasiMinRelAbund = spieceasiConfig.min_rel_abund != null ? (spieceasiConfig.min_rel_abund as double) : 0d
-    def spieceasiMinPrevalence = spieceasiConfig.min_prevalence != null ? (spieceasiConfig.min_prevalence as double) : 0d
+    def spieceasiMinPrevalence = spieceasiConfig.min_prevalence != null ? (spieceasiConfig.min_prevalence as double) : 0.25d
     boolean spieceasiRemoveZeroVar = spieceasiConfig.containsKey('remove_zero_var') ? (spieceasiConfig.remove_zero_var as boolean) : true
     def spieceasiMethod = spieceasiConfig.method ?: 'glasso'
-    def spieceasiLambdaMinRatio = spieceasiConfig.lambda_min_ratio != null ? (spieceasiConfig.lambda_min_ratio as double) : 1e-2d
+    def spieceasiLambdaMinRatio = spieceasiConfig.lambda_min_ratio != null ? (spieceasiConfig.lambda_min_ratio as double) : 0.1d
     def spieceasiNlambda = spieceasiConfig.nlambda ? (spieceasiConfig.nlambda as int) : 20
     def spieceasiRepNum = spieceasiConfig.rep_num ? (spieceasiConfig.rep_num as int) : 50
     def spieceasiThresh = spieceasiConfig.thresh != null ? (spieceasiConfig.thresh as double) : 0.1d
+    def spieceasiPulsarCriterion = spieceasiConfig.pulsar_criterion ? spieceasiConfig.pulsar_criterion.toString().trim().toLowerCase() : 'bstars'
+    if( !['stars', 'bstars'].contains(spieceasiPulsarCriterion) ) {
+        exit 1, "spieceasi.pulsar_criterion must be one of: stars, bstars"
+    }
     def spieceasiNcores = spieceasiConfig.ncores ? (spieceasiConfig.ncores as int) : pipelineThreads
     def spieceasiSeed = spieceasiConfig.seed ? (spieceasiConfig.seed as int) : 10010
     def spieceasiEdgeThreshold = spieceasiConfig.edge_threshold != null ? (spieceasiConfig.edge_threshold as double) : 0.1d
@@ -1851,9 +1991,9 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def networkFocusGroup1Label = indicspeciesGroup1 ? (networkFocusLabelMap[indicspeciesGroup1] ?: '') : ''
     def networkFocusGroup2Label = indicspeciesGroup2 ? (networkFocusLabelMap[indicspeciesGroup2] ?: '') : ''
     def networkIsaOverlayGroupsCsv = networkIsaOverlayGroups.join(',')
-    def networkGroupPaletteJson = JsonOutput.toJson(networkGroupPaletteMap)
-    def networkGroupOrderJson = JsonOutput.toJson(networkGroupOrderMap)
-    def networkFocusLabelJson = JsonOutput.toJson(networkFocusLabelMap)
+    def networkGroupPaletteJson = groovy.json.JsonOutput.toJson(networkGroupPaletteMap)
+    def networkGroupOrderJson = groovy.json.JsonOutput.toJson(networkGroupOrderMap)
+    def networkFocusLabelJson = groovy.json.JsonOutput.toJson(networkFocusLabelMap)
     boolean networkModulesEnabled = networkEnabled && (spieceasiConfig.containsKey('modules_enabled') ? (spieceasiConfig.modules_enabled as boolean) : false)
     def networkModuleMethodsRaw = spieceasiConfig.module_methods ?: 'leiden,louvain'
     List<String> networkModuleMethods = []
@@ -1912,6 +2052,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
 
     def asvMagLinkConfig = config.asv_mag_link ?: [:]
     boolean asvMagLinkEnabled = asvMagLinkConfig.containsKey('enabled') ? (asvMagLinkConfig.enabled as boolean) : false
+    def asvMagLinkMasterTsv = asvMagLinkConfig.master_tsv ? resolveOptionalPath(asvMagLinkConfig.master_tsv, configRoot) : null
     def asvMagLinkBarrnapDir = asvMagLinkConfig.barrnap_dir ? resolveOptionalPath(asvMagLinkConfig.barrnap_dir, configRoot) : null
     def asvMagLinkGenomeDir = asvMagLinkConfig.genome_fasta_dir ? resolveOptionalPath(asvMagLinkConfig.genome_fasta_dir, configRoot) : null
     def asvMagLinkGenomeQcDir = asvMagLinkConfig.genome_qc_dir ? resolveOptionalPath(asvMagLinkConfig.genome_qc_dir, configRoot) : null
@@ -1939,8 +2080,57 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def asvMagLinkMinQcov = asvMagLinkConfig.min_qcov != null ? (asvMagLinkConfig.min_qcov as double) : 90.0d
     def asvMagLinkTopN = asvMagLinkConfig.top_n ? (asvMagLinkConfig.top_n as int) : 5
     def asvMagLinkPlotTopN = asvMagLinkConfig.plot_top_n ? (asvMagLinkConfig.plot_top_n as int) : 20
-    if( asvMagLinkEnabled && !asvMagLinkBarrnapDir && !asvMagLinkGenomeQcDir && !asvMagLinkGenomeQcDirs ) {
-        exit 1, "asv_mag_link.enabled requires asv_mag_link.genome_qc_dir, asv_mag_link.genome_qc_dirs, or asv_mag_link.barrnap_dir"
+    if( asvMagLinkEnabled && asvMagLinkMasterTsv && (asvMagLinkBarrnapDir || asvMagLinkGenomeDir || asvMagLinkGenomeQcDir || asvMagLinkGenomeQcDirs) ) {
+        exit 1, "asv_mag_link.master_tsv cannot be combined with genome_qc_dir, genome_qc_dirs, barrnap_dir, or genome_fasta_dir"
+    }
+    if( asvMagLinkEnabled && !asvMagLinkMasterTsv && !asvMagLinkBarrnapDir && !asvMagLinkGenomeQcDir && !asvMagLinkGenomeQcDirs ) {
+        exit 1, "asv_mag_link.enabled requires asv_mag_link.master_tsv, genome_qc_dir, genome_qc_dirs, or barrnap_dir"
+    }
+
+    def asvMagNetworkConfig = config.asv_mag_network ?: [:]
+    boolean asvMagNetworkRequested = asvMagNetworkConfig.containsKey('enabled') ? (asvMagNetworkConfig.enabled as boolean) : false
+    if( asvMagNetworkRequested && !networkEnabled ) {
+        exit 1, "asv_mag_network.enabled requires network.enabled"
+    }
+    if( asvMagNetworkRequested && !asvMagLinkEnabled ) {
+        exit 1, "asv_mag_network.enabled requires asv_mag_link.enabled"
+    }
+    boolean asvMagNetworkEnabled = asvMagNetworkRequested
+    def asvMagNetworkOutputDir = asvMagNetworkConfig.output_dir ?: 'asv_mag_network'
+    def asvMagNetworkOutputDirAbs = resolveOutputRelative(asvMagNetworkOutputDir.toString(), outputDir)
+    def asvMagNetworkPrefix = asvMagNetworkConfig.prefix ?: 'asv_mag_network'
+    def asvMagNetworkGraphVariant = asvMagNetworkConfig.graph_variant ? asvMagNetworkConfig.graph_variant.toString().trim().toLowerCase() : (spieceasiAllPosOnly ? 'all' : 'thresholded')
+    if( !['all', 'thresholded'].contains(asvMagNetworkGraphVariant) ) {
+        exit 1, "asv_mag_network.graph_variant must be one of: all, thresholded"
+    }
+    def asvMagNetworkMinPident = asvMagNetworkConfig.min_pident != null ? (asvMagNetworkConfig.min_pident as double) : 99.5d
+    def asvMagNetworkMinQcov = asvMagNetworkConfig.min_qcov != null ? (asvMagNetworkConfig.min_qcov as double) : 100.0d
+    def asvMagNetworkAsvTaxonomySource = asvMagNetworkConfig.asv_taxonomy_source ? asvMagNetworkConfig.asv_taxonomy_source.toString().trim() : 'ncbi'
+    def asvMagNetworkMagTaxonomySource = asvMagNetworkConfig.mag_taxonomy_source ? asvMagNetworkConfig.mag_taxonomy_source.toString().trim() : 'gtdb'
+    def asvMagNetworkMagAbundance = asvMagNetworkConfig.mag_abundance ? resolveOptionalPath(asvMagNetworkConfig.mag_abundance, configRoot) : null
+    def asvMagNetworkMagIdMode = asvMagNetworkConfig.mag_id_mode ? asvMagNetworkConfig.mag_id_mode.toString().trim().toLowerCase() : 'exact'
+    if( !['exact', 'suffix_after_double_underscore'].contains(asvMagNetworkMagIdMode) ) {
+        exit 1, "asv_mag_network.mag_id_mode must be one of: exact, suffix_after_double_underscore"
+    }
+    def asvMagNetworkMagAbundanceFormat = asvMagNetworkConfig.mag_abundance_format ? asvMagNetworkConfig.mag_abundance_format.toString().trim().toLowerCase() : 'auto'
+    if( !['auto', 'long', 'wide'].contains(asvMagNetworkMagAbundanceFormat) ) {
+        exit 1, "asv_mag_network.mag_abundance_format must be one of: auto, long, wide"
+    }
+    def asvMagNetworkMagAbundanceGenomeCol = asvMagNetworkConfig.mag_abundance_genome_col ? asvMagNetworkConfig.mag_abundance_genome_col.toString().trim() : 'genome_id'
+    def asvMagNetworkMagAbundanceSampleCol = asvMagNetworkConfig.mag_abundance_sample_col ? asvMagNetworkConfig.mag_abundance_sample_col.toString().trim() : 'sample_id'
+    def asvMagNetworkMagAbundanceValueCol = asvMagNetworkConfig.mag_abundance_value_col ? asvMagNetworkConfig.mag_abundance_value_col.toString().trim() : 'read_count'
+    def asvMagNetworkMinSharedSamples = asvMagNetworkConfig.min_shared_samples ? (asvMagNetworkConfig.min_shared_samples as int) : 5
+    def asvMagNetworkAbundanceTransform = asvMagNetworkConfig.abundance_transform ? asvMagNetworkConfig.abundance_transform.toString().trim().toLowerCase() : 'log1p'
+    if( !['none', 'log1p'].contains(asvMagNetworkAbundanceTransform) ) {
+        exit 1, "asv_mag_network.abundance_transform must be one of: none, log1p"
+    }
+    def asvMagNetworkFunctionalModuleMinFraction = asvMagNetworkConfig.functional_module_min_fraction != null ? (asvMagNetworkConfig.functional_module_min_fraction as double) : 0.5d
+    def asvMagNetworkFunctionalRaw = asvMagNetworkConfig.functional_annotations ?: []
+    List asvMagNetworkFunctionalAnnotations = []
+    if( asvMagNetworkFunctionalRaw instanceof List ) {
+        asvMagNetworkFunctionalAnnotations = asvMagNetworkFunctionalRaw.collect { resolveOptionalPath(it, configRoot) }.findAll { it }
+    } else if( asvMagNetworkFunctionalRaw ) {
+        asvMagNetworkFunctionalAnnotations = asvMagNetworkFunctionalRaw.toString().split(/[,|]/).collect { resolveOptionalPath(it.trim(), configRoot) }.findAll { it }
     }
 
     def powerAnalysisConfig = config.power_analysis ?: [:]
@@ -2092,6 +2282,48 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationDirection: vocCorrelationDirection,
         vocCorrelationCasePalette: vocCorrelationCasePalette,
         vocCorrelationIsaPalette: vocCorrelationIsaPalette,
+        measurementAssociationEnabled: measurementAssociationEnabled,
+        measurementAssociationOutputDirAbs: measurementAssociationOutputDirAbs,
+        measurementAssociationTablePath: measurementAssociationTablePath,
+        measurementAssociationSampleCol: measurementAssociationSampleCol,
+        measurementAssociationAsvIdCol: measurementAssociationAsvIdCol,
+        measurementAssociationMeasurementSampleCol: measurementAssociationMeasurementSampleCol,
+        measurementAssociationMetadataJoinCols: measurementAssociationMetadataJoinCols,
+        measurementAssociationMeasurementJoinCols: measurementAssociationMeasurementJoinCols,
+        measurementAssociationCols: measurementAssociationCols,
+        measurementAssociationExcludeCols: measurementAssociationExcludeCols,
+        measurementAssociationGroupCol: measurementAssociationGroupCol,
+        measurementAssociationGroupPalette: measurementAssociationGroupPalette,
+        measurementAssociationMaxAsvs: measurementAssociationMaxAsvs,
+        measurementAssociationMinTotal: measurementAssociationMinTotal,
+        measurementAssociationMinPrevalence: measurementAssociationMinPrevalence,
+        measurementAssociationTopCorrelations: measurementAssociationTopCorrelations,
+        measurementAssociationDirection: measurementAssociationDirection,
+        measurementAssociationMethods: measurementAssociationMethods,
+        measurementAssociationPermutations: measurementAssociationPermutations,
+        measurementAssociationTopVectors: measurementAssociationTopVectors,
+        measurementAssociationFormats: measurementAssociationFormats,
+        groupingDiagnosticsEnabled: groupingDiagnosticsEnabled,
+        groupingDiagnosticsOutputDirAbs: groupingDiagnosticsOutputDirAbs,
+        groupingDiagnosticsSampleCol: groupingDiagnosticsSampleCol,
+        groupingDiagnosticsGroupCols: groupingDiagnosticsGroupCols,
+        groupingDiagnosticsBaselineGroup: groupingDiagnosticsBaselineGroup,
+        groupingDiagnosticsPrimaryGroup: groupingDiagnosticsPrimaryGroup,
+        groupingDiagnosticsPaletteJson: groupingDiagnosticsPaletteJson,
+        groupingDiagnosticsOrderJson: groupingDiagnosticsOrderJson,
+        groupingDiagnosticsMetrics: groupingDiagnosticsMetrics,
+        groupingDiagnosticsTransform: groupingDiagnosticsTransform,
+        groupingDiagnosticsPermutations: groupingDiagnosticsPermutations,
+        groupingDiagnosticsRandomState: groupingDiagnosticsRandomState,
+        groupingDiagnosticsFormats: groupingDiagnosticsFormats,
+        groupingDiagnosticsSoftLabelEnabled: groupingDiagnosticsSoftLabelEnabled,
+        groupingDiagnosticsSoftLabelK: groupingDiagnosticsSoftLabelK,
+        groupingDiagnosticsPowerEnabled: groupingDiagnosticsPowerEnabled,
+        groupingDiagnosticsPowerSizes: groupingDiagnosticsPowerSizes,
+        groupingDiagnosticsPowerSimulations: groupingDiagnosticsPowerSimulations,
+        groupingDiagnosticsPowerPermutations: groupingDiagnosticsPowerPermutations,
+        groupingDiagnosticsPowerAlpha: groupingDiagnosticsPowerAlpha,
+        groupingDiagnosticsPowerMinGroups: groupingDiagnosticsPowerMinGroups,
         clustermapsOutputDirAbs: clustermapsOutputDirAbs,
         clustermapsMitoOutputDirAbs: clustermapsMitoOutputDirAbs,
         clustermapsMitoInputPath: clustermapsMitoInputPath,
@@ -2129,6 +2361,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         spieceasiNlambda: spieceasiNlambda,
         spieceasiRepNum: spieceasiRepNum,
         spieceasiThresh: spieceasiThresh,
+        spieceasiPulsarCriterion: spieceasiPulsarCriterion,
         spieceasiNcores: spieceasiNcores,
         spieceasiSeed: spieceasiSeed,
         spieceasiEdgeThreshold: spieceasiEdgeThreshold,
@@ -2174,6 +2407,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         masterSummaryWhitelistCsv: masterSummaryWhitelistCsv,
         masterSummaryMaxDirectCols: masterSummaryMaxDirectCols,
         asvMagLinkBarrnapDir: asvMagLinkBarrnapDir,
+        asvMagLinkMasterTsv: asvMagLinkMasterTsv,
         asvMagLinkGenomeDir: asvMagLinkGenomeDir,
         asvMagLinkGenomeQcDir: asvMagLinkGenomeQcDir,
         asvMagLinkOutputDirAbs: asvMagLinkOutputDirAbs,
@@ -2182,6 +2416,23 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         asvMagLinkMinQcov: asvMagLinkMinQcov,
         asvMagLinkTopN: asvMagLinkTopN,
         asvMagLinkPlotTopN: asvMagLinkPlotTopN,
+        asvMagNetworkOutputDirAbs: asvMagNetworkOutputDirAbs,
+        asvMagNetworkPrefix: asvMagNetworkPrefix,
+        asvMagNetworkGraphVariant: asvMagNetworkGraphVariant,
+        asvMagNetworkMinPident: asvMagNetworkMinPident,
+        asvMagNetworkMinQcov: asvMagNetworkMinQcov,
+        asvMagNetworkAsvTaxonomySource: asvMagNetworkAsvTaxonomySource,
+        asvMagNetworkMagTaxonomySource: asvMagNetworkMagTaxonomySource,
+        asvMagNetworkMagAbundance: asvMagNetworkMagAbundance,
+        asvMagNetworkMagIdMode: asvMagNetworkMagIdMode,
+        asvMagNetworkMagAbundanceFormat: asvMagNetworkMagAbundanceFormat,
+        asvMagNetworkMagAbundanceGenomeCol: asvMagNetworkMagAbundanceGenomeCol,
+        asvMagNetworkMagAbundanceSampleCol: asvMagNetworkMagAbundanceSampleCol,
+        asvMagNetworkMagAbundanceValueCol: asvMagNetworkMagAbundanceValueCol,
+        asvMagNetworkMinSharedSamples: asvMagNetworkMinSharedSamples,
+        asvMagNetworkAbundanceTransform: asvMagNetworkAbundanceTransform,
+        asvMagNetworkFunctionalModuleMinFraction: asvMagNetworkFunctionalModuleMinFraction,
+        asvMagNetworkFunctionalAnnotations: asvMagNetworkFunctionalAnnotations,
         powerAnalysisOutputDirAbs: powerAnalysisOutputDirAbs,
         powerAnalysisSampleCol: powerAnalysisSampleCol,
         powerAnalysisPatientCol: powerAnalysisPatientCol,
@@ -2259,6 +2510,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         networkModuleResolutions: networkModuleResolutions,
         masterSummaryEnabled: masterSummaryEnabled,
         asvMagLinkEnabled: asvMagLinkEnabled,
+        asvMagNetworkEnabled: asvMagNetworkEnabled,
         asvMagLinkGenomeQcDirs: asvMagLinkGenomeQcDirs,
         asvMagLinkIdTokenIndexes: asvMagLinkIdTokenIndexes,
         powerAnalysisEnabled: powerAnalysisEnabled,
@@ -2353,9 +2605,12 @@ workflow {
     def spieceasi_stage = null
     def graphAllForModules = null
     def graphAllForNetwork = null
+    def graphAllForAsvMagNetwork = null
     def graphThrForModules = null
     def graphThrForNetwork = null
+    def graphThrForAsvMagNetwork = null
     def nodeFeaturesForNetwork = null
+    def nodeFeaturesForAsvMagNetwork = null
     def modulesSubForNetwork = null
     def modulesAllForNetwork = null
     if( spieceasiEnabled ) {
@@ -2365,15 +2620,21 @@ workflow {
         )
         graphAllForModules = spieceasi_stage.graph_all.map { it }
         graphAllForNetwork = spieceasi_stage.graph_all.map { it }
+        graphAllForAsvMagNetwork = spieceasi_stage.graph_all.map { it }
         graphThrForModules = spieceasiAllPosOnly ? spieceasi_stage.graph_all.map { it } : spieceasi_stage.graph_thr.map { it }
         graphThrForNetwork = spieceasiAllPosOnly ? spieceasi_stage.graph_all.map { it } : spieceasi_stage.graph_thr.map { it }
+        graphThrForAsvMagNetwork = spieceasiAllPosOnly ? spieceasi_stage.graph_all.map { it } : spieceasi_stage.graph_thr.map { it }
         nodeFeaturesForNetwork = spieceasi_stage.node_features
+        nodeFeaturesForAsvMagNetwork = spieceasi_stage.node_features.map { it }
     } else if( networkEnabled ) {
         graphAllForModules = Channel.value(file(networkGraphAllPath))
         graphAllForNetwork = Channel.value(file(networkGraphAllPath))
+        graphAllForAsvMagNetwork = Channel.value(file(networkGraphAllPath))
         graphThrForModules = Channel.value(file(spieceasiAllPosOnly ? networkGraphAllPath : networkGraphThrPath))
         graphThrForNetwork = Channel.value(file(spieceasiAllPosOnly ? networkGraphAllPath : networkGraphThrPath))
+        graphThrForAsvMagNetwork = Channel.value(file(spieceasiAllPosOnly ? networkGraphAllPath : networkGraphThrPath))
         nodeFeaturesForNetwork = Channel.value(file(networkNodeFeaturesPath))
+        nodeFeaturesForAsvMagNetwork = Channel.value(file(networkNodeFeaturesPath))
     }
     if( networkEnabled ) {
         if( networkModulesEnabled ) {
@@ -2405,6 +2666,18 @@ workflow {
             indicspeciesTablesForOverlay,
             modulesSubForNetwork,
             modulesAllForNetwork
+        )
+    }
+    def asv_mag_network_stage = null
+    if( asvMagNetworkEnabled ) {
+        def asvMagReadyForAsvMagNetwork = asv_mag_link_stage != null ? asv_mag_link_stage.done : Channel.value(file(emptyModulesPath))
+        def graphForAsvMagNetwork = asvMagNetworkGraphVariant == 'all' ? graphAllForAsvMagNetwork : graphThrForAsvMagNetwork
+        asv_mag_network_stage = RUN_ASV_MAG_NETWORK(
+            graphForAsvMagNetwork,
+            nodeFeaturesForAsvMagNetwork,
+            taxonomy_stage.taxonomy_table,
+            metadata_analysis_stage.asv_final_spieceasi,
+            asvMagReadyForAsvMagNetwork
         )
     }
     def module_mag_anchors_stage = null
@@ -2474,12 +2747,15 @@ workflow RUN_METADATA_ANALYSES {
     metaMicroForIndicspeciesPlots = metadata_stage.metadata_micro.map { it }
     metaMicroForClustermaps = metadata_stage.metadata_micro.map { it }
     metaMicroForNetwork = metadata_stage.metadata_micro.map { it }
+    metaMicroForMeasurementAssociation = metadata_stage.metadata_micro.map { it }
+    metaMicroForGroupingDiagnostics = metadata_stage.metadata_micro.map { it }
     asvMetaForBatch = metadata_stage.asv_meta_micro.map { it }
     asvMetaSeedForCorrection = metadata_stage.asv_meta_micro.map { it }
     asvMetaForBubbleplotter = metadata_stage.asv_meta_micro.map { it }
     asvMetaForUmap = metadata_stage.asv_meta_micro.map { it }
     asvMetaForClustermaps = metadata_stage.asv_meta_micro.map { it }
     asvMetaForVocCorrelation = metadata_stage.asv_meta_micro.map { it }
+    asvMetaForMeasurementAssociation = metadata_stage.asv_meta_micro.map { it }
     asvMetaForPowerAnalysis = metadata_stage.asv_meta_micro.map { it }
     asvMetaForTaxonomyPatientAware = metadata_stage.asv_meta_micro.map { it }
     asvMetaForLungStatus = metadata_stage.asv_meta_micro.map { it }
@@ -2492,6 +2768,8 @@ workflow RUN_METADATA_ANALYSES {
     asvFinalForSpieceasi = metadata_stage.asv_final_micro.map { it }
     asvFinalForNetwork = metadata_stage.asv_final_micro.map { it }
     asvFinalForVocCorrelation = metadata_stage.asv_final_micro.map { it }
+    asvFinalForMeasurementAssociation = metadata_stage.asv_final_micro.map { it }
+    asvFinalForGroupingDiagnostics = metadata_stage.asv_final_micro.map { it }
     asvFinalForPowerAnalysis = metadata_stage.asv_final_micro.map { it }
     asvFinalForTaxonomyPatientAware = metadata_stage.asv_final_micro.map { it }
     asvFinalForLungStatus = metadata_stage.asv_final_micro.map { it }
@@ -2509,27 +2787,30 @@ workflow RUN_METADATA_ANALYSES {
             asvMetaForBatch,
             asvFinalForBatch
         )
-        asvClrForOutlier = batch_stage.asv_clr_after
-        asvFinalForCollectors = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForDiversity = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForIndicspecies = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForSpieceasi = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForNetwork = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForVocCorrelation = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForPowerAnalysis = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForTaxonomyPatientAware = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForLungStatus = batch_stage.asv_corrected_counts_int.map { it }
-        asvFinalForMasterSummary = batch_stage.asv_corrected_counts_int.map { it }
+        asvClrForOutlier = batch_stage.asv_clr_selected
+        asvFinalForCollectors = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForDiversity = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForIndicspecies = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForSpieceasi = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForNetwork = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForVocCorrelation = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForMeasurementAssociation = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForGroupingDiagnostics = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForPowerAnalysis = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForTaxonomyPatientAware = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForLungStatus = batch_stage.asv_selected_counts_int.map { it }
+        asvFinalForMasterSummary = batch_stage.asv_selected_counts_int.map { it }
         umapResultsForTrajectory = batch_stage.umap_results
-        if( bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
+        if( bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
             corrected_asv_meta_stage = ASV_META_FROM_CORRECTED(
                 asvMetaSeedForCorrection,
-                batch_stage.asv_corrected_counts_int
+                batch_stage.asv_selected_counts_int
             )
             asvMetaForBubbleplotter = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForUmap = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForClustermaps = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForVocCorrelation = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForMeasurementAssociation = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForPowerAnalysis = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForTaxonomyPatientAware = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForLungStatus = corrected_asv_meta_stage.asv_meta_corrected.map { it }
@@ -2590,6 +2871,21 @@ workflow RUN_METADATA_ANALYSES {
             asvMetaForVocCorrelation,
             asvFinalForVocCorrelation,
             indicspeciesTablesForVocCorrelation
+        )
+    }
+
+    if( measurementAssociationEnabled ) {
+        MEASUREMENT_ASSOCIATION(
+            asvMetaForMeasurementAssociation,
+            metaMicroForMeasurementAssociation,
+            asvFinalForMeasurementAssociation
+        )
+    }
+
+    if( groupingDiagnosticsEnabled ) {
+        GROUPING_DIAGNOSTICS(
+            metaMicroForGroupingDiagnostics,
+            asvFinalForGroupingDiagnostics
         )
     }
 
@@ -2655,6 +2951,27 @@ workflow RUN_GRAPH_NETWORK {
         isa_tables,
         modules_sub,
         modules_all
+    )
+
+    emit:
+    done = stage.done
+}
+
+workflow RUN_ASV_MAG_NETWORK {
+    take:
+    graph
+    node_features
+    taxonomy_table
+    asv_counts
+    dep_asv_mag
+
+    main:
+    stage = ASV_MAG_NETWORK(
+        graph,
+        node_features,
+        taxonomy_table,
+        asv_counts,
+        dep_asv_mag
     )
 
     emit:
@@ -3180,10 +3497,10 @@ process MITO_DECONTAM {
 
     output:
     path("${mitoPrefix}.master.tsv"), emit: nontarget_table
-    path("${mitoPrefix}.summary_*.tsv"), optional: true
-    path("${mitoPrefix}_*.svg"), optional: true
-    path("${mitoPrefix}_*.pdf"), optional: true
-    path("${mitoPrefix}_*.png"), optional: true
+    path("${mitoPrefix}.summary_*.tsv"), optional: true, emit: summary_tables
+    path("${mitoPrefix}_*.svg"), optional: true, emit: svg_plots
+    path("${mitoPrefix}_*.pdf"), optional: true, emit: pdf_plots
+    path("${mitoPrefix}_*.png"), optional: true, emit: png_plots
 
     script:
     def noPlotsFlag = mitoNoPlots ? ' --no-plots' : ''
@@ -3418,8 +3735,8 @@ cmd=(
   --sub-dir "${metadataPlotsSubDir}"
   --metadata "${metadataPlotsMetadataPath}"
   --taxonomy "${asvTaxTable}"
-  --asv-micro "${asvTargetMicroFile}"
-  --asv-mito "${asvTargetMitoFile}"
+  --asv-micro "${asv_micro}"
+  --asv-mito "${asv_mito}"
   --sample-id-col "${metadataPlotsSampleCol}"
   --group1-col "${metadataPlotsTypeCol}"
   --color-col "${metadataPlotsColorCol}"
@@ -3507,6 +3824,7 @@ process PLOT_UPSET {
     def taxonomyArg = plotUpsetTaxonomyPath ? """  --taxonomy-path "${plotUpsetTaxonomyPath}" \\\n""" : ''
     def groupOrderArg = plotUpsetGroupOrder && !plotUpsetGroupOrder.isEmpty() ? """  --group-order "${plotUpsetGroupOrder.join(',')}" \\\n""" : ''
     def subsetGroupsArg = plotUpsetSubsetGroups && !plotUpsetSubsetGroups.isEmpty() ? """  --subset-groups "${plotUpsetSubsetGroups.join(',')}" \\\n""" : ''
+    def groupPaletteArg = plotUpsetGroupPalette ? """  --group-palette "${plotUpsetGroupPalette}" \\\n""" : ''
     def skipVennArg = plotUpsetSkipVenn ? "  --skip-venn \\\n" : ''
     def rawOnlyArg = plotUpsetRawOnly ? "  --raw-only \\\n" : ''
     def finalOnlyArg = plotUpsetFinalOnly ? "  --final-only \\\n" : ''
@@ -3529,7 +3847,7 @@ python "${plotUpsetScriptPath}" \\
 ${taxonomyArg}  --sample-id-col "${plotUpsetSampleIdCol}" \\
   --group-col "${plotUpsetGroupCol}" \\
   --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${subsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}  --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}  --formats "${plotUpsetFormats}" \\
   --font-size ${plotUpsetFontSize}
 
 if [[ "${plotUpsetDomain}" == "both" ]]; then
@@ -3540,7 +3858,7 @@ if [[ "${plotUpsetDomain}" == "both" ]]; then
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
     --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMicroMetadataPath}" \\
     --asv-raw-path "${rawMicroAsvTargetPath}" \\
@@ -3554,7 +3872,7 @@ ${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotU
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
     --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMitoMetadataPath}" \\
     --asv-raw-path "${rawMitoAsvTargetPath}" \\
@@ -3568,7 +3886,7 @@ else
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+${groupPaletteArg}${groupOrderArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
     --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMetadataPathSingle}" \\
     --asv-raw-path "${rawAsvTargetPathSingle}" \\
@@ -3676,9 +3994,13 @@ process ASV_BATCH_CORRECTION {
     path(asv_counts)
 
     output:
+    path("asv_clr_selected.tsv"), emit: asv_clr_selected
     path("asv_clr_after_correction.tsv"), emit: asv_clr_after
     path("asv_corrected_abundance.features_rows.tsv"), emit: asv_corrected_counts
     path("asv_corrected_pseudocount.features_rows.tsv"), emit: asv_corrected_counts_int
+    path("asv_selected_abundance.features_rows.tsv"), emit: asv_selected_counts
+    path("asv_selected_pseudocount.features_rows.tsv"), emit: asv_selected_counts_int
+    path("batch_correction_decision.tsv"), emit: correction_decision
     path("batch_correction_countspace_preservation.png"), emit: countspace_plot
     path("batch_correction_countspace_preservation_metrics.tsv"), emit: countspace_metrics
     path("batch_correction_umap_comparison.png"), emit: umap_plot
@@ -3697,6 +4019,10 @@ process ASV_BATCH_CORRECTION {
     def asvClrAfterFile = "${batchCorrectionOutputDirAbs}/asv_clr_after_correction.tsv"
     def asvCorrectedFeaturesFile = "${batchCorrectionOutputDirAbs}/asv_corrected_abundance.features_rows.tsv"
     def asvCorrectedPseudoFeaturesFile = "${batchCorrectionOutputDirAbs}/asv_corrected_pseudocount.features_rows.tsv"
+    def asvSelectedClrFile = "${batchCorrectionOutputDirAbs}/asv_clr_selected.tsv"
+    def asvSelectedFeaturesFile = "${batchCorrectionOutputDirAbs}/asv_selected_abundance.features_rows.tsv"
+    def asvSelectedPseudoFeaturesFile = "${batchCorrectionOutputDirAbs}/asv_selected_pseudocount.features_rows.tsv"
+    def batchCorrectionDecisionFile = "${batchCorrectionOutputDirAbs}/batch_correction_decision.tsv"
     def countspacePlotFile = "${batchCorrectionOutputDirAbs}/batch_correction_countspace_preservation.png"
     def countspaceMetricsFile = "${batchCorrectionOutputDirAbs}/batch_correction_countspace_preservation_metrics.tsv"
     def umapComparisonPngFile = "${batchCorrectionOutputDirAbs}/batch_correction_umap_comparison.png"
@@ -3718,6 +4044,12 @@ python "${batchCorrectionScriptPath}" \\
   --output-dir "${batchCorrectionOutputDir}" \\
   --asv-orientation "${batchCorrectionOrientation}" \\
   --conqur-mode "${batchConqurMode}" \\
+  --correction-policy "${batchCorrectionPolicy}" \\
+  --auto-min-sample-rho ${batchAutoMinSampleRho} \\
+  --auto-min-bray-rho ${batchAutoMinBrayRho} \\
+  --auto-max-batch-eta-ratio ${batchAutoMaxBatchEtaRatio} \\
+  --auto-min-batch-eta-drop ${batchAutoMinBatchEtaDrop} \\
+  --auto-min-bio-eta-ratio ${batchAutoMinBioEtaRatio} \\
   --conqur-num-core ${batchConqurNumCore} \\
 ${conqurBatchRefArg}${conqurLogisticLassoFlag}  --conqur-quantile-type "${batchConqurQuantileType}" \\
 ${conqurSimpleMatchFlag}  --conqur-lambda-quantile "${batchConqurLambdaQuantile}" \\
@@ -3748,6 +4080,26 @@ if [[ ! -f "${asvCorrectedPseudoFeaturesFile}" ]]; then
   exit 1
 fi
 ln -sf "${asvCorrectedPseudoFeaturesFile}" asv_corrected_pseudocount.features_rows.tsv
+if [[ ! -f "${asvSelectedClrFile}" ]]; then
+  echo "Missing batch correction selected output: ${asvSelectedClrFile}" >&2
+  exit 1
+fi
+ln -sf "${asvSelectedClrFile}" asv_clr_selected.tsv
+if [[ ! -f "${asvSelectedFeaturesFile}" ]]; then
+  echo "Missing batch correction selected output: ${asvSelectedFeaturesFile}" >&2
+  exit 1
+fi
+ln -sf "${asvSelectedFeaturesFile}" asv_selected_abundance.features_rows.tsv
+if [[ ! -f "${asvSelectedPseudoFeaturesFile}" ]]; then
+  echo "Missing batch correction selected output: ${asvSelectedPseudoFeaturesFile}" >&2
+  exit 1
+fi
+ln -sf "${asvSelectedPseudoFeaturesFile}" asv_selected_pseudocount.features_rows.tsv
+if [[ ! -f "${batchCorrectionDecisionFile}" ]]; then
+  echo "Missing batch correction decision output: ${batchCorrectionDecisionFile}" >&2
+  exit 1
+fi
+ln -sf "${batchCorrectionDecisionFile}" batch_correction_decision.tsv
 if [[ ! -f "${countspacePlotFile}" ]]; then
   echo "Missing batch correction output: ${countspacePlotFile}" >&2
   exit 1
@@ -3907,6 +4259,7 @@ process COLLECTORS_CURVE {
 
     script:
     def collectorsGroupOrderArg = collectorsGroupOrder && !collectorsGroupOrder.isEmpty() ? """  --group-order "${collectorsGroupOrder.join(',')}" \\\n""" : ''
+    def collectorsGroupColorsArg = collectorsGroupColors ? """  --group-colors "${collectorsGroupColors}" \\\n""" : ''
     """
 set -euo pipefail
 
@@ -3916,7 +4269,7 @@ python "${collectorsCurveScriptPath}" \\
   --sample-col "${collectorsSampleCol}" \\
   --group-col "${collectorsGroupCol}" \\
   --color-col "${collectorsColorCol}" \\
-${collectorsGroupOrderArg}  --permutations ${collectorsPermutations} \\
+${collectorsGroupColorsArg}${collectorsGroupOrderArg}  --permutations ${collectorsPermutations} \\
   --seed ${collectorsSeed} \\
   --out_prefix "${collectorsOutPrefixAbs}" \\
   --title "${collectorsTitle}" \\
@@ -4404,6 +4757,106 @@ touch voc_correlation.done
 """
 }
 
+process MEASUREMENT_ASSOCIATION {
+    cpus pipelineThreads
+    conda "${measurementAssociationCondaEnvPath}"
+
+    when:
+    measurementAssociationEnabled
+
+    input:
+    path(asv_meta_table)
+    path(metadata_table)
+    path(asv_counts)
+
+    output:
+    path("measurement_association.done"), emit: done
+
+    script:
+    def measurementTableArg = measurementAssociationTablePath ? """  --measurement-table "${measurementAssociationTablePath}" \\\n""" : ''
+    def measurementColsArg = measurementAssociationCols ? """  --measurement-cols "${measurementAssociationCols.join('|')}" \\\n""" : ''
+    def excludeColsArg = measurementAssociationExcludeCols ? """  --exclude-cols "${measurementAssociationExcludeCols.join('|')}" \\\n""" : ''
+    def metadataJoinArg = measurementAssociationMetadataJoinCols ? measurementAssociationMetadataJoinCols.join(',') : ''
+    def measurementJoinArg = measurementAssociationMeasurementJoinCols ? measurementAssociationMeasurementJoinCols.join(',') : ''
+"""
+set -euo pipefail
+mkdir -p "${measurementAssociationOutputDirAbs}"
+echo "measurement_association.py md5: ${measurementAssociationScriptHash}"
+echo "run_measurement_association.R md5: ${measurementAssociationRScriptHash}"
+
+python "${measurementAssociationScriptPath}" \\
+  --asv-meta "${asv_meta_table}" \\
+  --metadata "${metadata_table}" \\
+  --asv-counts "${asv_counts}" \\
+${measurementTableArg}  --outdir "${measurementAssociationOutputDirAbs}" \\
+  --r-script "${measurementAssociationRScriptPath}" \\
+  --sample-col "${measurementAssociationSampleCol}" \\
+  --asv-id-col "${measurementAssociationAsvIdCol}" \\
+  --measurement-sample-col "${measurementAssociationMeasurementSampleCol}" \\
+  --metadata-join-cols "${metadataJoinArg}" \\
+  --measurement-join-cols "${measurementJoinArg}" \\
+${measurementColsArg}${excludeColsArg}  --group-col "${measurementAssociationGroupCol}" \\
+  --group-palette "${measurementAssociationGroupPalette}" \\
+  --max-asvs ${measurementAssociationMaxAsvs} \\
+  --min-total ${measurementAssociationMinTotal} \\
+  --min-prevalence ${measurementAssociationMinPrevalence} \\
+  --top-correlations ${measurementAssociationTopCorrelations} \\
+  --correlation-direction "${measurementAssociationDirection}" \\
+  --ordination-methods "${measurementAssociationMethods}" \\
+  --permutations ${measurementAssociationPermutations} \\
+  --top-vectors ${measurementAssociationTopVectors} \\
+  --formats "${measurementAssociationFormats}"
+
+touch measurement_association.done
+"""
+}
+
+process GROUPING_DIAGNOSTICS {
+    cpus pipelineThreads
+    conda "${groupingDiagnosticsCondaEnvPath}"
+
+    when:
+    groupingDiagnosticsEnabled
+
+    input:
+    path(metadata_table)
+    path(asv_counts)
+
+    output:
+    path("grouping_diagnostics.done"), emit: done
+
+    script:
+    def groupColsArg = groupingDiagnosticsGroupCols.join(',')
+    def softLabelArg = groupingDiagnosticsSoftLabelEnabled ? """  --soft-label-missing \\\n  --soft-label-k ${groupingDiagnosticsSoftLabelK} \\\n""" : ''
+    def powerArg = groupingDiagnosticsPowerEnabled ? """  --power-enabled \\\n  --power-sample-sizes "${groupingDiagnosticsPowerSizes}" \\\n  --power-simulations ${groupingDiagnosticsPowerSimulations} \\\n  --power-permutations ${groupingDiagnosticsPowerPermutations} \\\n  --power-alpha ${groupingDiagnosticsPowerAlpha} \\\n""" : ''
+"""
+set -euo pipefail
+mkdir -p "${groupingDiagnosticsOutputDirAbs}"
+export MPLCONFIGDIR="\$PWD/.mplconfig"
+mkdir -p "\${MPLCONFIGDIR}"
+echo "grouping_diagnostics.py md5: ${groupingDiagnosticsScriptHash}"
+
+python "${groupingDiagnosticsScriptPath}" \\
+  --metadata "${metadata_table}" \\
+  --asv-counts "${asv_counts}" \\
+  --outdir "${groupingDiagnosticsOutputDirAbs}" \\
+  --sample-col "${groupingDiagnosticsSampleCol}" \\
+  --group-cols "${groupColsArg}" \\
+  --baseline-group "${groupingDiagnosticsBaselineGroup}" \\
+  --primary-group "${groupingDiagnosticsPrimaryGroup}" \\
+  --group-palettes-json '${groupingDiagnosticsPaletteJson}' \\
+  --group-orders-json '${groupingDiagnosticsOrderJson}' \\
+  --metrics "${groupingDiagnosticsMetrics}" \\
+  --transform "${groupingDiagnosticsTransform}" \\
+  --permutations ${groupingDiagnosticsPermutations} \\
+  --random-state ${groupingDiagnosticsRandomState} \\
+  --formats "${groupingDiagnosticsFormats}" \\
+${softLabelArg}${powerArg}  --power-min-groups ${groupingDiagnosticsPowerMinGroups}
+
+touch grouping_diagnostics.done
+"""
+}
+
 process POWER_ANALYSIS_PIPELINE {
     cpus pipelineThreads
     conda "${powerAnalysisCondaEnvPath}"
@@ -4861,6 +5314,7 @@ ${forceKeepAsvsArg}  --remove-zero-var ${removeZeroVarFlag} \\
   --nlambda ${spieceasiNlambda} \\
   --rep-num ${spieceasiRepNum} \\
   --thresh ${spieceasiThresh} \\
+  --pulsar-criterion "${spieceasiPulsarCriterion}" \\
   --ncores ${spieceasiNcores} \\
   --seed ${spieceasiSeed} \\
   --edge-threshold ${spieceasiEdgeThreshold} \\
@@ -5020,6 +5474,57 @@ touch network.done
 """
 }
 
+process ASV_MAG_NETWORK {
+    cpus 1
+    conda "${asvMagNetworkCondaEnvPath}"
+
+    when:
+    asvMagNetworkEnabled
+
+    input:
+    path(graph, stageAs: 'asv_mag_network_graph.graphml')
+    path(node_features)
+    path(taxonomy_table)
+    path(asv_counts)
+    path(dep_asv_mag, stageAs: 'dep_asv_mag.done')
+
+    output:
+    path("asv_mag_network.done"), emit: done
+
+    script:
+    def magAbundanceArg = asvMagNetworkMagAbundance ? """  --mag-abundance "${asvMagNetworkMagAbundance}" \\\n""" : ''
+    def functionalArgs = asvMagNetworkFunctionalAnnotations ? asvMagNetworkFunctionalAnnotations.collect { """  --functional-annotation "${it}" \\\n""" }.join('') : ''
+    """
+set -euo pipefail
+mkdir -p "${asvMagNetworkOutputDirAbs}"
+
+echo "asv_mag_network.py md5: ${asvMagNetworkScriptHash}"
+python "${asvMagNetworkScriptPath}" \\
+  --graph "${graph}" \\
+  --node-features "${node_features}" \\
+  --asv-mag-pairing "${asvMagLinkOutputDirAbs}/tables/asv2mag_pairing.tsv" \\
+  --taxonomy "${taxonomy_table}" \\
+  --asv-counts "${asv_counts}" \\
+  --genome-summary "${asvMagLinkOutputDirAbs}/tables/asv2mag_genome_summary.tsv" \\
+  --reference-catalog "${asvMagLinkOutputDirAbs}/references/barrnap_16s_reference_catalog.tsv" \\
+  --outdir "${asvMagNetworkOutputDirAbs}" \\
+  --prefix "${asvMagNetworkPrefix}" \\
+  --asv-taxonomy-source "${asvMagNetworkAsvTaxonomySource}" \\
+  --mag-taxonomy-source "${asvMagNetworkMagTaxonomySource}" \\
+  --mag-id-mode "${asvMagNetworkMagIdMode}" \\
+  --mag-abundance-format "${asvMagNetworkMagAbundanceFormat}" \\
+  --mag-abundance-genome-col "${asvMagNetworkMagAbundanceGenomeCol}" \\
+  --mag-abundance-sample-col "${asvMagNetworkMagAbundanceSampleCol}" \\
+  --mag-abundance-value-col "${asvMagNetworkMagAbundanceValueCol}" \\
+  --min-shared-samples ${asvMagNetworkMinSharedSamples} \\
+  --abundance-transform "${asvMagNetworkAbundanceTransform}" \\
+  --functional-module-min-fraction ${asvMagNetworkFunctionalModuleMinFraction} \\
+  --min-pident ${asvMagNetworkMinPident} \\
+${magAbundanceArg}${functionalArgs}  --min-qcov ${asvMagNetworkMinQcov}
+touch asv_mag_network.done
+"""
+}
+
 process MODULE_MAG_ANCHORS {
     cpus 1
     conda "${networkCondaEnvPath}"
@@ -5150,6 +5655,7 @@ process ASV_MAG_LINK {
     path("asv_mag_link.done"), emit: done
 
     script:
+    def masterTsvArg = asvMagLinkMasterTsv ? """  --master-tsv "${asvMagLinkMasterTsv}" \\\n""" : ''
     def genomeDirArg = asvMagLinkGenomeDir ? """  --genome-fasta-dir "${asvMagLinkGenomeDir}" \\\n""" : ''
     def genomeQcDirArg = asvMagLinkGenomeQcDir ? """  --genome-qc-dir "${asvMagLinkGenomeQcDir}" \\\n""" : ''
     def genomeQcDirsArg = asvMagLinkGenomeQcDirs ? asvMagLinkGenomeQcDirs.collect { """  --genome-qc-dir "${it}" \\\n""" }.join('') : ''
@@ -5161,7 +5667,7 @@ mkdir -p "${asvMagLinkOutputDirAbs}"
 
 python "${asvMagLinkScriptPath}" \\
   --asv-fasta "${filtered_fasta}" \\
-${barrnapDirArg}${genomeDirArg}${genomeQcDirArg}${genomeQcDirsArg}${idTokenIndexesArg}  --outdir "${asvMagLinkOutputDirAbs}" \\
+${masterTsvArg}${barrnapDirArg}${genomeDirArg}${genomeQcDirArg}${genomeQcDirsArg}${idTokenIndexesArg}  --outdir "${asvMagLinkOutputDirAbs}" \\
   --threads ${asvMagLinkThreads} \\
   --min-pident ${asvMagLinkMinPident} \\
   --min-qcov ${asvMagLinkMinQcov} \\
@@ -5179,14 +5685,14 @@ def downloadReference(String downloadUrl, File destination) {
     destination.parentFile?.mkdirs()
     def tmpFile = File.createTempFile("sina_ref", ".download", destination.parentFile ?: new File('.'))
     tmpFile.withOutputStream { out ->
-        new URL(downloadUrl).withInputStream { ins ->
+        new java.net.URL(downloadUrl).withInputStream { ins ->
             out << ins
         }
     }
     if( downloadUrl?.toLowerCase()?.endsWith('.gz') ) {
         destination.withOutputStream { out ->
             tmpFile.withInputStream { tmpIn ->
-                new GZIPInputStream(tmpIn).withCloseable { gz ->
+                new java.util.zip.GZIPInputStream(tmpIn).withCloseable { gz ->
                     out << gz
                 }
             }
@@ -5302,7 +5808,10 @@ def prepareMetadataAssets(String metadataPath, String sampleCol, String groupCol
     def outputRows = [outputHeader.join('\t')]
     rows.drop(1).each { line ->
         def fields = line.split(/\t/, -1).toList()
-        while( fields.size() < header.size() ) fields << ''
+        def missingFields = header.size() - fields.size()
+        if( missingFields > 0 ) {
+            fields.addAll((1..missingFields).collect { '' })
+        }
         def group = fields[groupIdx].trim()
         if( colorIdx >= 0 ) fields[colorIdx] = palette[group] ?: fields[colorIdx]
         else fields << (palette[group] ?: '')
@@ -5335,23 +5844,43 @@ def normalizeList(value, fallback){
     return value.toString().split(/\|/).collect { it.trim() }.findAll { it }
 }
 
-def compilePatterns(value, fallback){
-    def list = value ?: fallback
-    return list.collect { Pattern.compile(it.toString()) }
+def normalizePresetList(value, fallback=[], presets=[:]){
+    if( !value ) return fallback
+    if( value instanceof List ) {
+        return value.collect { it.toString().trim() }.findAll { it }
+    }
+
+    def text = value.toString().trim()
+    if( !text ) return fallback
+
+    def presetValue = presets[text]
+    if( presetValue == null && text.endsWith('_order') ) {
+        presetValue = presets[text.replaceFirst(/_order$/, '')]
+    }
+    if( presetValue != null && presetValue != value ) {
+        return normalizePresetList(presetValue, fallback, presets)
+    }
+
+    return text.split(/[,|]/).collect { it.trim() }.findAll { it }
 }
 
-def matchesExtension(String name, List<Pattern> patterns){
+def compilePatterns(value, fallback){
+    def list = value ?: fallback
+    return list.collect { java.util.regex.Pattern.compile(it.toString()) }
+}
+
+def matchesExtension(String name, List<java.util.regex.Pattern> patterns){
     patterns.any { it.matcher(name).find() }
 }
 
 def isR1Like(String base, List<String> tokens){
     tokens.any { tok ->
-        def rx = /(^|[_\.\-])${Pattern.quote(tok)}([_\.\-]|$)/
-        base ==~ /.*${rx}.*/
+        def rx = java.util.regex.Pattern.compile("(^|[_\\.\\-])${java.util.regex.Pattern.quote(tok)}([_\\.\\-]|\$)")
+        rx.matcher(base).find()
     }
 }
 
-def sampleFromName(String baseName, String stripRegex, List<Pattern> extPatterns){
+def sampleFromName(String baseName, String stripRegex, List<java.util.regex.Pattern> extPatterns){
     def base = baseName
     extPatterns.each { base = base.replaceAll(it, '') }
     base = base.replaceAll(stripRegex, '')
@@ -5361,33 +5890,40 @@ def sampleFromName(String baseName, String stripRegex, List<Pattern> extPatterns
 
 def findR2File(File r1File, List<String> r1Tokens, List<String> r2Tokens){
     def original = r1File.name
-    for( int i=0; i<r1Tokens.size(); i++ ){
+    File matched = null
+    (0..<r1Tokens.size()).each { i ->
+        if( matched != null ) {
+            return
+        }
         def r1 = r1Tokens[i]
         def r2 = r2Tokens[i]
         def replacements = [
-            [/_${Pattern.quote(r1)}_/, "_${r2}_"],
-            [/\.${Pattern.quote(r1)}\./, ".${r2}."],
-            [/-${Pattern.quote(r1)}-/, "-${r2}-"],
-            [/-${Pattern.quote(r1)}\./, "-${r2}."],
-            [/_${Pattern.quote(r1)}\./, "_${r2}."],
-            [/_${Pattern.quote(r1)}$/, "_${r2}"],
-            [/${Pattern.quote(r1)}_001/, "${r2}_001"]
+            ["_${java.util.regex.Pattern.quote(r1)}_", "_${r2}_"],
+            ["\\.${java.util.regex.Pattern.quote(r1)}\\.", ".${r2}."],
+            ["-${java.util.regex.Pattern.quote(r1)}-", "-${r2}-"],
+            ["-${java.util.regex.Pattern.quote(r1)}\\.", "-${r2}."],
+            ["_${java.util.regex.Pattern.quote(r1)}\\.", "_${r2}."],
+            ["_${java.util.regex.Pattern.quote(r1)}\$", "_${r2}"],
+            ["${java.util.regex.Pattern.quote(r1)}_001", "${r2}_001"]
         ]
-        for( rep in replacements ){
+        replacements.each { rep ->
+            if( matched != null ) {
+                return
+            }
             def candidateName = original.replaceFirst(rep[0], rep[1])
             if( candidateName != original ){
                 def candidate = new File(r1File.parentFile, candidateName)
                 if( candidate.exists() ) {
-                    return candidate
+                    matched = candidate
                 }
             }
         }
     }
-    return null
+    return matched
 }
 
 def collectSampleRecords(String inputDirPath, List<String> r1Tokens, List<String> r2Tokens,
-                         List<Pattern> extPatterns, String stripRegex, boolean allowSingleEnd){
+                         List<java.util.regex.Pattern> extPatterns, String stripRegex, boolean allowSingleEnd){
     File dir = new File(inputDirPath)
     if( !dir.exists() ){
         throw new IllegalArgumentException("Input directory does not exist: ${inputDirPath}")
