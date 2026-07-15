@@ -47,10 +47,10 @@ if [[ " ${mamba_args[*]} " == *" env create "* && "$has_override_channels" -eq 0
   echo "[controller] Using only channels declared by the ASPIRE environment file." >&2
 fi
 if [[ " ${mamba_args[*]} " == *" env create "* && "$has_channel_priority" -eq 0 ]]; then
-  flexible_env_pattern="${ASPIRE_MAMBA_FLEXIBLE_ENV_PATTERN:-(^|/)(qiime2\.yml|taxonomy/env\.yml)$}"
+  flexible_env_pattern="${ASPIRE_MAMBA_FLEXIBLE_ENV_PATTERN:-(^|/)(qiime2\.yml|taxonomy/env\.yml|spieceasi/env\.yml)$}"
   if [[ -n "$environment_file" && "$environment_file" =~ $flexible_env_pattern ]]; then
     mamba_args+=(--channel-priority flexible)
-    echo "[controller] Using flexible channel priority for the QIIME2 environment." >&2
+    echo "[controller] Using flexible channel priority for this mixed-channel environment." >&2
   else
     mamba_args+=(--strict-channel-priority)
     echo "[controller] Enforcing strict channel priority for reproducible environment solving." >&2
