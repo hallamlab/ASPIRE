@@ -36,6 +36,7 @@ class MambaShimTest(unittest.TestCase):
 
     def test_qiime2_environment_uses_flexible_priority(self) -> None:
         output = self.run_shim("/project/processes/shared_envs/qiime2.yml")
+        self.assertIn("--override-channels\n", output)
         self.assertIn("--channel-priority\nflexible\n", output)
         self.assertNotIn("--strict-channel-priority", output)
 
@@ -45,6 +46,7 @@ class MambaShimTest(unittest.TestCase):
 
     def test_other_environments_use_strict_priority(self) -> None:
         output = self.run_shim("/project/processes/diversity_analysis/env.yml")
+        self.assertIn("--override-channels\n", output)
         self.assertIn("--strict-channel-priority\n", output)
         self.assertNotIn("--channel-priority\nflexible", output)
 
