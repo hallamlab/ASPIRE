@@ -1,6 +1,7 @@
 name: asv_controller
 channels:
   - conda-forge
+  - bioconda
 dependencies:
   - jq
   - nextflow
