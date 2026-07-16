@@ -54,6 +54,12 @@ PROCESS_ORDER=(
   MASTER_SUMMARY
 )
 
+declare -A PROCESS_ALIASES=(
+  [GROUP_POWER_ANALYSIS]=POWER_ANALYSIS_PIPELINE
+  [TAXONOMY_GROUP_ASSOCIATION]=TAXONOMY_PATIENT_AWARE
+  [PAIRED_GROUP_CONTRAST]=LUNG_STATUS_ANALYSIS
+)
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -181,6 +187,12 @@ done
 
 if [[ "$LIST_STAGES" -eq 1 ]]; then
   printf '%s\n' "${PROCESS_ORDER[@]}"
+  if [[ ${#PROCESS_ALIASES[@]} -gt 0 ]]; then
+    echo "# aliases"
+    for alias_name in "${!PROCESS_ALIASES[@]}"; do
+      printf '%s -> %s\n' "$alias_name" "${PROCESS_ALIASES[$alias_name]}"
+    done | sort
+  fi
   exit 0
 fi
 
@@ -445,9 +457,10 @@ fi
 
 if [[ -n "$RERUN_FROM" ]]; then
   RERUN_FROM_UPPER="$(printf '%s' "$RERUN_FROM" | tr '[:lower:]' '[:upper:]')"
+  RERUN_FROM_CANONICAL="${PROCESS_ALIASES[$RERUN_FROM_UPPER]:-$RERUN_FROM_UPPER}"
   start_idx=-1
   for i in "${!PROCESS_ORDER[@]}"; do
-    if [[ "${PROCESS_ORDER[$i]}" == "$RERUN_FROM_UPPER" ]]; then
+    if [[ "${PROCESS_ORDER[$i]}" == "$RERUN_FROM_CANONICAL" ]]; then
       start_idx=$i
       break
     fi
@@ -465,7 +478,7 @@ if [[ -n "$RERUN_FROM" ]]; then
   done
 
   if [[ -z "$BASELINE_RUN" ]]; then
-    echo "[controller] --rerun-from ${RERUN_FROM_UPPER}: no previous Nextflow run history found; proceeding without cache cleanup"
+    echo "[controller] --rerun-from ${RERUN_FROM_UPPER} (${RERUN_FROM_CANONICAL}): no previous Nextflow run history found; proceeding without cache cleanup"
   else
     set +e
     task_rows="$(nextflow log "$BASELINE_RUN" -f 'process,workdir,status' 2>&1)"
@@ -493,7 +506,7 @@ if [[ -n "$RERUN_FROM" ]]; then
     )
 
     if [[ ${#candidate_workdirs[@]} -eq 0 ]]; then
-      echo "[controller] --rerun-from ${RERUN_FROM_UPPER}: no prior work directories found to invalidate"
+      echo "[controller] --rerun-from ${RERUN_FROM_UPPER} (${RERUN_FROM_CANONICAL}): no prior work directories found to invalidate"
     else
       work_root_real="$(realpath "$WORK_DIR")"
       removed_count=0
@@ -506,7 +519,7 @@ if [[ -n "$RERUN_FROM" ]]; then
           echo "[controller] Skipping unsafe work directory outside work root: ${workdir_real}" >&2
         fi
       done
-      echo "[controller] Forcing rerun from ${RERUN_FROM_UPPER} by invalidating ${removed_count} prior task work directories"
+      echo "[controller] Forcing rerun from ${RERUN_FROM_UPPER} (${RERUN_FROM_CANONICAL}) by invalidating ${removed_count} prior task work directories"
       echo "[controller] Cache remains enabled; successful rerun tasks will be reusable on future -resume runs"
     fi
   fi
@@ -522,7 +535,7 @@ if [[ -n "$RERUN_FROM" ]]; then
     done
     echo "}"
   } > "$RERUN_CONFIG_FILE"
-  echo "[controller] Generated temporary Nextflow config to disable cache from ${RERUN_FROM_UPPER} onward: ${RERUN_CONFIG_FILE}"
+  echo "[controller] Generated temporary Nextflow config to disable cache from ${RERUN_FROM_UPPER} (${RERUN_FROM_CANONICAL}) onward: ${RERUN_CONFIG_FILE}"
 fi
 
 NEXTFLOW_RERUN_ARGS=()
