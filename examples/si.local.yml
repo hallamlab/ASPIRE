@@ -519,7 +519,7 @@ grouping_diagnostics:
     min_groups: 2
 
 power_analysis:
-  enabled: true
+  enabled: false
   output_dir: power_analysis
   sample_col: sampleID
   patient_col: Cruise
@@ -538,7 +538,7 @@ power_analysis:
   contralateral_sample_types: []
 
 taxonomy_patient_aware:
-  enabled: true
+  enabled: false
   output_dir: taxonomy_patient_aware
   sample_col: sampleID
   patient_col: Cruise
@@ -560,7 +560,7 @@ taxonomy_patient_aware:
   top_n: 12
 
 lung_status_analysis:
-  enabled: true
+  enabled: false
   output_dir: lung_status_analysis
   sample_col: sampleID
   type_col: o2_subcompartment_final
