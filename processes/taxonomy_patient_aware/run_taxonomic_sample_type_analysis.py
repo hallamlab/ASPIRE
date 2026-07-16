@@ -32,6 +32,14 @@ def canonicalize_sample_type(x: str) -> str:
     return str(x)
 
 
+def parse_csv_values(raw: str) -> list[str]:
+    return [x.strip() for x in str(raw).split(",") if x.strip()]
+
+
+def observed_values(df: pd.DataFrame, col: str) -> list[str]:
+    return sorted([str(x) for x in df[col].dropna().astype(str).unique()])
+
+
 def filter_contralateral_cancer(df: pd.DataFrame, case_col: str, type_col: str, contralateral_sample_types: list[str], contralateral_col: str,
                                 cancer_site_col: str, lung_side_col: str,
                                 contralateral_value: str) -> pd.DataFrame:
@@ -221,10 +229,10 @@ def run_omnibus_friedman(patient_by_type: dict[str, pd.DataFrame], taxa: list[st
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Taxonomic abundance analysis across sample types on observed data")
+    p = argparse.ArgumentParser(description="Taxonomic abundance analysis across paired/repeated metadata groups on observed data")
     p.add_argument("--data-long", required=True)
     p.add_argument("--tax-levels", default="Phylum,Family")
-    p.add_argument("--sample-types", default="BAL,Oral Rinse,Lung Brush")
+    p.add_argument("--sample-types", default="BAL,Oral Rinse,Lung Brush", help="Comma-separated group labels in --type-col; use empty/all to use all observed values")
     p.add_argument("--sample-col", default="sample")
     p.add_argument("--patient-col", default="Participant_ID")
     p.add_argument("--case-col", default="Case")
@@ -260,8 +268,12 @@ def main() -> None:
             lung_side_col=args.lung_side_col,
             contralateral_value=args.contralateral_value,
         )
-    tax_levels = [x.strip() for x in args.tax_levels.split(",") if x.strip()]
-    sample_types = [canonicalize_sample_type(x.strip()) for x in args.sample_types.split(",") if x.strip()]
+    tax_levels = parse_csv_values(args.tax_levels)
+    sample_types_raw = parse_csv_values(args.sample_types)
+    if not sample_types_raw or [x.lower() for x in sample_types_raw] == ["all"]:
+        sample_types = observed_values(long_df, args.type_col)
+    else:
+        sample_types = [canonicalize_sample_type(x) for x in sample_types_raw]
     pairs = list(combinations(sample_types, 2))
 
     pair_results = []
@@ -293,19 +305,37 @@ def main() -> None:
 
     if pair_results:
         pair_out = pd.concat(pair_results, ignore_index=True)
-        pair_out.to_csv(outdir / "taxonomic_sample_type_observed_pairwise.tsv", sep="\t", index=False)
-        pair_out[pair_out["significant_fdr_0.05"]].to_csv(
-            outdir / "taxonomic_sample_type_observed_pairwise_significant.tsv", sep="\t", index=False
+    else:
+        pair_out = pd.DataFrame(
+            columns=[
+                "tax_level", "contrast", "group1", "group2", "taxon",
+                "n_paired_patients", "median_delta_g1_minus_g2",
+                "wilcoxon_w", "p_value", "q_value", "significant_fdr_0.05",
+            ]
         )
-        print(f"Saved: {outdir / 'taxonomic_sample_type_observed_pairwise.tsv'}")
+        print("No pairwise group results produced; writing empty result tables.")
+    pair_out.to_csv(outdir / "taxonomic_sample_type_observed_pairwise.tsv", sep="\t", index=False)
+    pair_out[pair_out.get("significant_fdr_0.05", pd.Series(dtype=bool)).fillna(False)].to_csv(
+        outdir / "taxonomic_sample_type_observed_pairwise_significant.tsv", sep="\t", index=False
+    )
+    print(f"Saved: {outdir / 'taxonomic_sample_type_observed_pairwise.tsv'}")
 
     if omni_results:
         omni_out = pd.concat(omni_results, ignore_index=True)
-        omni_out.to_csv(outdir / "taxonomic_sample_type_observed_omnibus.tsv", sep="\t", index=False)
-        omni_out[omni_out["significant_fdr_0.05"]].to_csv(
-            outdir / "taxonomic_sample_type_observed_omnibus_significant.tsv", sep="\t", index=False
+    else:
+        omni_out = pd.DataFrame(
+            columns=[
+                "tax_level", "test", "sample_types", "taxon",
+                "n_complete_patients", "friedman_chi2", "p_value",
+                "q_value", "significant_fdr_0.05",
+            ]
         )
-        print(f"Saved: {outdir / 'taxonomic_sample_type_observed_omnibus.tsv'}")
+        print("No omnibus group results produced; writing empty result tables.")
+    omni_out.to_csv(outdir / "taxonomic_sample_type_observed_omnibus.tsv", sep="\t", index=False)
+    omni_out[omni_out.get("significant_fdr_0.05", pd.Series(dtype=bool)).fillna(False)].to_csv(
+        outdir / "taxonomic_sample_type_observed_omnibus_significant.tsv", sep="\t", index=False
+    )
+    print(f"Saved: {outdir / 'taxonomic_sample_type_observed_omnibus.tsv'}")
 
 
 if __name__ == "__main__":

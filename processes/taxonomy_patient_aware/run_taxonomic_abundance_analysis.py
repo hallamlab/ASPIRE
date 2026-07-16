@@ -108,6 +108,7 @@ def run_one_group(
     count_col: str,
     min_prevalence: float,
     transform: str,
+    case_groups: list[str],
 ) -> pd.DataFrame:
     st = long_df[long_df[type_col] == sample_type].copy()
     if st.empty:
@@ -138,13 +139,19 @@ def run_one_group(
         return pd.DataFrame()
 
     patient_rel = patient_rel[keep_taxa]
-    patient_case = (
-        meta[[patient_col, case_col]]
-        .drop_duplicates()
-        .assign(case_status=lambda d: np.where(d[case_col].isin(["Control", "Non-Cancer"]), "Control", "Cancer"))
-        .groupby(patient_col, as_index=False)["case_status"].first()
-        .set_index(patient_col)
-    )
+    if len(case_groups) == 2:
+        group_a, group_b = case_groups
+        case_meta = meta[[patient_col, case_col]].drop_duplicates()
+        case_meta = case_meta[case_meta[case_col].astype(str).isin(case_groups)].copy()
+        case_meta["case_status"] = case_meta[case_col].astype(str)
+    else:
+        group_a, group_b = "Cancer", "Control"
+        case_meta = (
+            meta[[patient_col, case_col]]
+            .drop_duplicates()
+            .assign(case_status=lambda d: np.where(d[case_col].isin(["Control", "Non-Cancer"]), "Control", "Cancer"))
+        )
+    patient_case = case_meta.groupby(patient_col, as_index=False)["case_status"].first().set_index(patient_col)
 
     common_patients = patient_rel.index.intersection(patient_case.index)
     patient_rel = patient_rel.loc[common_patients]
@@ -156,13 +163,13 @@ def run_one_group(
         features = patient_rel.copy()
 
     labels = patient_case["case_status"]
-    n_cancer = int((labels == "Cancer").sum())
-    n_control = int((labels == "Control").sum())
+    n_group_a = int((labels == group_a).sum())
+    n_group_b = int((labels == group_b).sum())
 
     rows = []
     for taxon in features.columns:
-        x = features.loc[labels == "Cancer", taxon].values
-        y = features.loc[labels == "Control", taxon].values
+        x = features.loc[labels == group_a, taxon].values
+        y = features.loc[labels == group_b, taxon].values
 
         if len(x) >= 2 and len(y) >= 2:
             stat, p = mannwhitneyu(x, y, alternative="two-sided")
@@ -174,11 +181,17 @@ def run_one_group(
                 "tax_level": tax_level,
                 "sample_type": sample_type,
                 "taxon": taxon,
+                "group_a": group_a,
+                "group_b": group_b,
                 "n_patients_total": len(common_patients),
-                "n_cancer": n_cancer,
-                "n_control": n_control,
-                "median_cancer": float(np.median(x)) if len(x) else np.nan,
-                "median_control": float(np.median(y)) if len(y) else np.nan,
+                "n_group_a": n_group_a,
+                "n_group_b": n_group_b,
+                "n_cancer": n_group_a if group_a == "Cancer" else np.nan,
+                "n_control": n_group_b if group_b == "Control" else np.nan,
+                "median_group_a": float(np.median(x)) if len(x) else np.nan,
+                "median_group_b": float(np.median(y)) if len(y) else np.nan,
+                "median_cancer": float(np.median(x)) if group_a == "Cancer" and len(x) else np.nan,
+                "median_control": float(np.median(y)) if group_b == "Control" and len(y) else np.nan,
                 "delta_median": float(np.median(x) - np.median(y)) if len(x) and len(y) else np.nan,
                 "cohens_d": cohens_d(x, y),
                 "mw_u": float(stat) if not np.isnan(stat) else np.nan,
@@ -195,14 +208,23 @@ def run_one_group(
     return out.sort_values("q_value", na_position="last")
 
 
+def parse_csv_values(raw: str) -> list[str]:
+    return [x.strip() for x in str(raw).split(",") if x.strip()]
+
+
+def observed_values(df: pd.DataFrame, col: str) -> list[str]:
+    return sorted([str(x) for x in df[col].dropna().astype(str).unique()])
+
+
 def main() -> None:
-    p = argparse.ArgumentParser(description="Taxonomic abundance analysis (Cancer vs Control) on observed data")
+    p = argparse.ArgumentParser(description="Taxonomic abundance analysis between two metadata groups on observed data")
     p.add_argument("--data-long", required=True)
     p.add_argument("--tax-levels", default="Phylum,Family")
-    p.add_argument("--sample-types", default="BAL,Lung Brush,Oral Rinse")
+    p.add_argument("--sample-types", default="BAL,Lung Brush,Oral Rinse", help="Comma-separated strata in --type-col; use empty/all to use all observed values")
     p.add_argument("--sample-col", default="sample")
     p.add_argument("--patient-col", default="Participant_ID")
     p.add_argument("--case-col", default="Case")
+    p.add_argument("--case-groups", default="", help="Optional comma-separated pair of labels to compare in --case-col. Defaults to Cancer vs Control/Non-Cancer.")
     p.add_argument("--type-col", default="type_group")
     p.add_argument("--count-col", default="count")
     p.add_argument("--min-prevalence", type=float, default=0.10)
@@ -223,7 +245,11 @@ def main() -> None:
 
     long_df = pd.read_csv(args.data_long, sep="\t", low_memory=False)
     long_df[args.type_col] = long_df[args.type_col].map(canonicalize_sample_type)
-    sample_types = [canonicalize_sample_type(x.strip()) for x in args.sample_types.split(",") if x.strip()]
+    sample_types_raw = parse_csv_values(args.sample_types)
+    if not sample_types_raw or [x.lower() for x in sample_types_raw] == ["all"]:
+        sample_types = observed_values(long_df, args.type_col)
+    else:
+        sample_types = [canonicalize_sample_type(x) for x in sample_types_raw]
     if args.exclude_contralateral_in_cancer:
         long_df = filter_contralateral_cancer(
             long_df,
@@ -236,7 +262,10 @@ def main() -> None:
             contralateral_value=args.contralateral_value,
         )
 
-    tax_levels = [x.strip() for x in args.tax_levels.split(",") if x.strip()]
+    tax_levels = parse_csv_values(args.tax_levels)
+    case_groups = parse_csv_values(args.case_groups)
+    if case_groups and len(case_groups) != 2:
+        raise SystemExit("--case-groups must contain exactly two comma-separated labels when provided.")
 
     all_results = []
     for tax_level in tax_levels:
@@ -252,14 +281,24 @@ def main() -> None:
                 count_col=args.count_col,
                 min_prevalence=args.min_prevalence,
                 transform=args.transform,
+                case_groups=case_groups,
             )
             if not res.empty:
                 all_results.append(res)
 
     if not all_results:
-        raise SystemExit("No results produced; check filters/column names.")
-
-    results = pd.concat(all_results, ignore_index=True)
+        results = pd.DataFrame(
+            columns=[
+                "tax_level", "sample_type", "taxon", "group_a", "group_b",
+                "n_patients_total", "n_group_a", "n_group_b", "n_cancer",
+                "n_control", "median_group_a", "median_group_b", "median_cancer", "median_control",
+                "delta_median", "cohens_d", "mw_u", "p_value", "q_value",
+                "significant_fdr_0.05",
+            ]
+        )
+        print("No abundance contrast results produced; writing empty result tables.")
+    else:
+        results = pd.concat(all_results, ignore_index=True)
     results.to_csv(outdir / "taxonomic_abundance_observed.tsv", sep="\t", index=False)
     results[results["significant_fdr_0.05"]].to_csv(
         outdir / "taxonomic_abundance_observed_significant.tsv", sep="\t", index=False

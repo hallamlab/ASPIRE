@@ -537,6 +537,30 @@ power_analysis:
   keep_contralateral_in_cancer: false
   contralateral_sample_types: []
 
+taxonomy_group_association:
+  enabled: true
+  output_dir: taxonomy_group_association
+  sample_col: sampleID
+  subject_col: Cruise
+  comparison_col: Season
+  group_col: o2_subcompartment_final
+  count_col: count
+  tax_levels: Phylum,Family
+  sample_types: []
+  run_comparison: false
+  comparison_groups: []
+  min_prevalence: 0.10
+  exclude_contralateral_in_cancer: false
+  contralateral_col:
+  cancer_site_col:
+  lung_side_col:
+  contralateral_value:
+  contralateral_sample_types: []
+  skip_omnibus: false
+  transform: none
+  alpha: 0.05
+  top_n: 12
+
 taxonomy_patient_aware:
   enabled: false
   output_dir: taxonomy_patient_aware
@@ -558,6 +582,26 @@ taxonomy_patient_aware:
   transform: none
   alpha: 0.05
   top_n: 12
+
+paired_group_contrast:
+  enabled: false
+  output_dir: paired_group_contrast
+  sample_col: sampleID
+  type_col: o2_subcompartment_final
+  sample_types: []
+  case_col: Season
+  subject_col: Cruise
+  cancer_site_col:
+  lung_code_col:
+  tumor_side_col:
+  contralateral_col:
+  healthy_col:
+  lung_status_col:
+  status_a_value:
+  status_b_value:
+  reference_status_value:
+  permutations: 9999
+  seed: 1
 
 lung_status_analysis:
   enabled: false
@@ -812,7 +856,9 @@ environments:
   grouping_diagnostics: ../processes/grouping_diagnostics/env.yml
   clustermaps: ../processes/clustermaps/env.yml
   taxonomy_patient_aware: ../processes/taxonomy_patient_aware/env.yml
+  taxonomy_group_association: ../processes/taxonomy_patient_aware/env.yml
   lung_status_analysis: ../processes/lung_status_analysis/env.yml
+  paired_group_contrast: ../processes/lung_status_analysis/env.yml
   spieceasi: ../processes/spieceasi/env.yml
   network_modules: ../processes/network_modules/env.yml
   network: ../processes/graph_network/env.yml
@@ -820,6 +866,7 @@ environments:
   asv_mag_link: ../processes/asv_mag_link/env.yml
   asv_mag_network: ../processes/asv_mag_network/env.yml
   power_analysis: ../processes/power_analysis_pipeline/env.yml
+  group_power_analysis: ../processes/power_analysis_pipeline/env.yml
   plot_upset: ../processes/plot_upset/env.yml
   bubbleplotter: ../processes/bubbleplotter/env.yml
   umap_clustering: ../processes/umap_clustering/env.yml

@@ -358,7 +358,7 @@ if( !asvMagNetworkEnvFile.exists() ) {
 }
 log.info "Using ASV-MAG network Conda/Mamba env definition: ${asvMagNetworkCondaEnvPath}"
 
-def powerAnalysisEnvConfigPath = config.environments?.power_analysis
+def powerAnalysisEnvConfigPath = config.environments?.group_power_analysis ?: config.environments?.power_analysis
 def resolvedPowerAnalysisEnvPath = powerAnalysisEnvConfigPath ? resolveOptionalPath(powerAnalysisEnvConfigPath, configRoot) : null
 def powerAnalysisCondaEnvPath = resolvedPowerAnalysisEnvPath ?: new File("${projectDir}/processes/power_analysis_pipeline/env.yml").canonicalPath
 def powerAnalysisEnvFile = file(powerAnalysisCondaEnvPath)
@@ -367,7 +367,7 @@ if( !powerAnalysisEnvFile.exists() ) {
 }
 log.info "Using power analysis Conda/Mamba env definition: ${powerAnalysisCondaEnvPath}"
 
-def taxonomyPatientAwareEnvConfigPath = config.environments?.taxonomy_patient_aware
+def taxonomyPatientAwareEnvConfigPath = config.environments?.taxonomy_group_association ?: config.environments?.taxonomy_patient_aware
 def resolvedTaxonomyPatientAwareEnvPath = taxonomyPatientAwareEnvConfigPath ? resolveOptionalPath(taxonomyPatientAwareEnvConfigPath, configRoot) : null
 def taxonomyPatientAwareCondaEnvPath = resolvedTaxonomyPatientAwareEnvPath ?: new File("${projectDir}/processes/taxonomy_patient_aware/env.yml").canonicalPath
 def taxonomyPatientAwareEnvFile = file(taxonomyPatientAwareCondaEnvPath)
@@ -376,7 +376,7 @@ if( !taxonomyPatientAwareEnvFile.exists() ) {
 }
 log.info "Using taxonomy patient-aware Conda/Mamba env definition: ${taxonomyPatientAwareCondaEnvPath}"
 
-def lungStatusAnalysisEnvConfigPath = config.environments?.lung_status_analysis
+def lungStatusAnalysisEnvConfigPath = config.environments?.paired_group_contrast ?: config.environments?.lung_status_analysis
 def resolvedLungStatusAnalysisEnvPath = lungStatusAnalysisEnvConfigPath ? resolveOptionalPath(lungStatusAnalysisEnvConfigPath, configRoot) : null
 def lungStatusAnalysisCondaEnvPath = resolvedLungStatusAnalysisEnvPath ?: new File("${projectDir}/processes/lung_status_analysis/env.yml").canonicalPath
 def lungStatusAnalysisEnvFile = file(lungStatusAnalysisCondaEnvPath)
@@ -2139,7 +2139,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         asvMagNetworkFunctionalAnnotations = asvMagNetworkFunctionalRaw.toString().split(/[,|]/).collect { resolveOptionalPath(it.trim(), configRoot) }.findAll { it }
     }
 
-    def powerAnalysisConfig = config.power_analysis ?: [:]
+    def powerAnalysisConfig = config.group_power_analysis ?: (config.power_analysis ?: [:])
     boolean powerAnalysisRequested = powerAnalysisConfig.containsKey('enabled') ? (powerAnalysisConfig.enabled as boolean) : false
     if( powerAnalysisRequested && !metadataPlotsEnabled ) {
         exit 1, "power_analysis.enabled requires metadata_plots.enabled to be true"
@@ -2176,27 +2176,34 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         powerAnalysisContralateralTypesRaw.toString().trim()
     def powerAnalysisIndicspeciesDir = powerAnalysisConfig.indicspecies_dir ? resolveOptionalPath(powerAnalysisConfig.indicspecies_dir, configRoot) : indicspeciesOutputDirAbs
 
-    def taxonomyPatientAwareConfig = config.taxonomy_patient_aware ?: [:]
+    def taxonomyPatientAwareConfig = config.taxonomy_group_association ?: (config.taxonomy_patient_aware ?: [:])
     boolean taxonomyPatientAwareRequested = taxonomyPatientAwareConfig.containsKey('enabled') ? (taxonomyPatientAwareConfig.enabled as boolean) : false
     if( taxonomyPatientAwareRequested && !metadataPlotsEnabled ) {
         exit 1, "taxonomy_patient_aware.enabled requires metadata_plots.enabled to be true"
     }
     boolean taxonomyPatientAwareEnabled = taxonomyPatientAwareRequested
-    def taxonomyPatientAwareOutputDir = taxonomyPatientAwareConfig.output_dir ?: 'taxonomy_patient_aware'
+    def taxonomyPatientAwareOutputDir = taxonomyPatientAwareConfig.output_dir ?: (config.taxonomy_group_association ? 'taxonomy_group_association' : 'taxonomy_patient_aware')
     def taxonomyPatientAwareOutputDirAbs = resolveOutputRelative(taxonomyPatientAwareOutputDir.toString(), outputDir)
     def taxonomyPatientAwareSampleCol = taxonomyPatientAwareConfig.sample_col ?: metadataPlotsSampleCol
-    def taxonomyPatientAwarePatientCol = taxonomyPatientAwareConfig.patient_col ? taxonomyPatientAwareConfig.patient_col.toString().trim() : 'Participant_ID'
-    def taxonomyPatientAwareCaseCol = taxonomyPatientAwareConfig.case_col ? taxonomyPatientAwareConfig.case_col.toString().trim() : 'Case'
-    def taxonomyPatientAwareTypeCol = taxonomyPatientAwareConfig.type_col ?: metadataPlotsTypeCol
+    def taxonomyPatientAwarePatientCol = taxonomyPatientAwareConfig.subject_col ? taxonomyPatientAwareConfig.subject_col.toString().trim() : (taxonomyPatientAwareConfig.patient_col ? taxonomyPatientAwareConfig.patient_col.toString().trim() : 'Participant_ID')
+    def taxonomyPatientAwareCaseCol = taxonomyPatientAwareConfig.comparison_col ? taxonomyPatientAwareConfig.comparison_col.toString().trim() : (taxonomyPatientAwareConfig.case_col ? taxonomyPatientAwareConfig.case_col.toString().trim() : 'Case')
+    def taxonomyPatientAwareTypeCol = taxonomyPatientAwareConfig.group_col ?: (taxonomyPatientAwareConfig.type_col ?: metadataPlotsTypeCol)
     def taxonomyPatientAwareCountCol = taxonomyPatientAwareConfig.count_col ? taxonomyPatientAwareConfig.count_col.toString().trim() : 'count'
     def taxonomyPatientAwareTaxLevelsRaw = taxonomyPatientAwareConfig.tax_levels ?: 'Phylum,Family'
     def taxonomyPatientAwareTaxLevels = taxonomyPatientAwareTaxLevelsRaw instanceof List ?
         taxonomyPatientAwareTaxLevelsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
         taxonomyPatientAwareTaxLevelsRaw.toString().trim()
-    def taxonomyPatientAwareSampleTypesRaw = taxonomyPatientAwareConfig.sample_types ?: 'Oral Rinse,BAL,Lung Brush'
+    def taxonomyPatientAwareSampleTypesRaw = taxonomyPatientAwareConfig.containsKey('sample_types') ? taxonomyPatientAwareConfig.sample_types : 'Oral Rinse,BAL,Lung Brush'
     def taxonomyPatientAwareSampleTypes = taxonomyPatientAwareSampleTypesRaw instanceof List ?
         taxonomyPatientAwareSampleTypesRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
         taxonomyPatientAwareSampleTypesRaw.toString().trim()
+    def taxonomyPatientAwareComparisonGroupsRaw = taxonomyPatientAwareConfig.comparison_groups ?: ''
+    def taxonomyPatientAwareComparisonGroups = taxonomyPatientAwareComparisonGroupsRaw instanceof List ?
+        taxonomyPatientAwareComparisonGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        taxonomyPatientAwareComparisonGroupsRaw.toString().trim()
+    boolean taxonomyPatientAwareRunComparison = taxonomyPatientAwareConfig.containsKey('run_comparison') ?
+        (taxonomyPatientAwareConfig.run_comparison as boolean) :
+        (!config.taxonomy_group_association || taxonomyPatientAwareComparisonGroups.toString().trim().length() > 0)
     def taxonomyPatientAwareMinPrevalence = taxonomyPatientAwareConfig.min_prevalence != null ? (taxonomyPatientAwareConfig.min_prevalence as double) : 0.10d
     boolean taxonomyPatientAwareExcludeContralateral = taxonomyPatientAwareConfig.containsKey('exclude_contralateral_in_cancer') ? (taxonomyPatientAwareConfig.exclude_contralateral_in_cancer as boolean) : true
     def taxonomyPatientAwareContralateralCol = taxonomyPatientAwareConfig.contralateral_col ? taxonomyPatientAwareConfig.contralateral_col.toString().trim() : 'lung_status'
@@ -2217,22 +2224,22 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def taxonomyPatientAwareTypePalette = taxonomyPatientAwareConfig.type_palette ?: (indicspeciesGroupPaletteMap[taxonomyPatientAwareTypeCol] ?: '')
     def taxonomyPatientAwareCasePalette = taxonomyPatientAwareConfig.case_palette ?: (indicspeciesGroupPaletteMap[taxonomyPatientAwareCaseCol] ?: '')
 
-    def lungStatusAnalysisConfig = config.lung_status_analysis ?: [:]
+    def lungStatusAnalysisConfig = config.paired_group_contrast ?: (config.lung_status_analysis ?: [:])
     boolean lungStatusAnalysisRequested = lungStatusAnalysisConfig.containsKey('enabled') ? (lungStatusAnalysisConfig.enabled as boolean) : false
     if( lungStatusAnalysisRequested && !metadataPlotsEnabled ) {
         exit 1, "lung_status_analysis.enabled requires metadata_plots.enabled to be true"
     }
     boolean lungStatusAnalysisEnabled = lungStatusAnalysisRequested
-    def lungStatusAnalysisOutputDir = lungStatusAnalysisConfig.output_dir ?: 'lung_status_analysis'
+    def lungStatusAnalysisOutputDir = lungStatusAnalysisConfig.output_dir ?: (config.paired_group_contrast ? 'paired_group_contrast' : 'lung_status_analysis')
     def lungStatusAnalysisOutputDirAbs = resolveOutputRelative(lungStatusAnalysisOutputDir.toString(), outputDir)
     def lungStatusAnalysisSampleCol = lungStatusAnalysisConfig.sample_col ?: metadataPlotsSampleCol
     def lungStatusAnalysisTypeCol = lungStatusAnalysisConfig.type_col ?: metadataPlotsTypeCol
-    def lungStatusAnalysisSampleTypesRaw = lungStatusAnalysisConfig.sample_types ?: 'Lung Brush,BAL'
+    def lungStatusAnalysisSampleTypesRaw = lungStatusAnalysisConfig.containsKey('sample_types') ? lungStatusAnalysisConfig.sample_types : 'Lung Brush,BAL'
     def lungStatusAnalysisSampleTypes = lungStatusAnalysisSampleTypesRaw instanceof List ?
         lungStatusAnalysisSampleTypesRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
         lungStatusAnalysisSampleTypesRaw.toString().trim()
     def lungStatusAnalysisCaseCol = lungStatusAnalysisConfig.case_col ? lungStatusAnalysisConfig.case_col.toString().trim() : 'Case'
-    def lungStatusAnalysisPatientCol = lungStatusAnalysisConfig.patient_col ? lungStatusAnalysisConfig.patient_col.toString().trim() : 'Participant_ID'
+    def lungStatusAnalysisPatientCol = lungStatusAnalysisConfig.subject_col ? lungStatusAnalysisConfig.subject_col.toString().trim() : (lungStatusAnalysisConfig.patient_col ? lungStatusAnalysisConfig.patient_col.toString().trim() : 'Participant_ID')
     def lungStatusAnalysisCancerSiteCol = lungStatusAnalysisConfig.cancer_site_col ? lungStatusAnalysisConfig.cancer_site_col.toString().trim() : 'Cancer_Site'
     def lungStatusAnalysisLungCodeCol = lungStatusAnalysisConfig.lung_code_col ? lungStatusAnalysisConfig.lung_code_col.toString().trim() : 'lung_code'
     def lungStatusAnalysisTumorSideCol = lungStatusAnalysisConfig.tumor_side_col ? lungStatusAnalysisConfig.tumor_side_col.toString().trim() : 'TumorSide'
@@ -2461,6 +2468,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         taxonomyPatientAwareCountCol: taxonomyPatientAwareCountCol,
         taxonomyPatientAwareTaxLevels: taxonomyPatientAwareTaxLevels,
         taxonomyPatientAwareSampleTypes: taxonomyPatientAwareSampleTypes,
+        taxonomyPatientAwareComparisonGroups: taxonomyPatientAwareComparisonGroups,
+        taxonomyPatientAwareRunComparison: taxonomyPatientAwareRunComparison,
         taxonomyPatientAwareMinPrevalence: taxonomyPatientAwareMinPrevalence,
         taxonomyPatientAwareContralateralCol: taxonomyPatientAwareContralateralCol,
         taxonomyPatientAwareCancerSiteCol: taxonomyPatientAwareCancerSiteCol,
@@ -4960,6 +4969,7 @@ process TAXONOMY_PATIENT_AWARE {
     script:
     def excludeContralateralFlag = taxonomyPatientAwareExcludeContralateral ? '1' : '0'
     def skipOmnibusFlag = taxonomyPatientAwareSkipOmnibus ? '1' : '0'
+    def runComparisonFlag = taxonomyPatientAwareRunComparison ? '1' : '0'
     """
 set -euo pipefail
 mkdir -p "${taxonomyPatientAwareOutputDirAbs}"
@@ -4999,24 +5009,30 @@ SAMPLETYPE_OUTDIR="${taxonomyPatientAwareOutputDirAbs}/sample_type"
 FIGURES_OUTDIR="${taxonomyPatientAwareOutputDirAbs}/figures"
 mkdir -p "\${CANCER_OUTDIR}" "\${SAMPLETYPE_OUTDIR}" "\${FIGURES_OUTDIR}"
 
-python "${taxonomicAbundanceObservedScriptPath}" \\
-  --data-long "\${SUMMARY_INPUT_DIR}/ASV_master_long.tsv" \\
-  --tax-levels "${taxonomyPatientAwareTaxLevels}" \\
-  --sample-types "${taxonomyPatientAwareSampleTypes}" \\
-  --sample-col "${taxonomyPatientAwareSampleCol}" \\
-  --patient-col "${taxonomyPatientAwarePatientCol}" \\
-  --case-col "${taxonomyPatientAwareCaseCol}" \\
-  --type-col "${taxonomyPatientAwareTypeCol}" \\
-  --count-col "${taxonomyPatientAwareCountCol}" \\
-  --min-prevalence ${taxonomyPatientAwareMinPrevalence} \\
-  --contralateral-col "${taxonomyPatientAwareContralateralCol}" \\
-  --cancer-site-col "${taxonomyPatientAwareCancerSiteCol}" \\
-  --lung-side-col "${taxonomyPatientAwareLungSideCol}" \\
-  --contralateral-value "${taxonomyPatientAwareContralateralValue}" \\
-  --contralateral-sample-types "${taxonomyPatientAwareContralateralTypes}" \\
-  --transform "${taxonomyPatientAwareTransform}" \\
-  --outdir "\${CANCER_OUTDIR}" \\
-  "\${TAXONOMY_CONTRALATERAL_ARGS[@]}"
+if [[ "${runComparisonFlag}" == "1" ]]; then
+  python "${taxonomicAbundanceObservedScriptPath}" \\
+    --data-long "\${SUMMARY_INPUT_DIR}/ASV_master_long.tsv" \\
+    --tax-levels "${taxonomyPatientAwareTaxLevels}" \\
+    --sample-types "${taxonomyPatientAwareSampleTypes}" \\
+    --case-groups "${taxonomyPatientAwareComparisonGroups}" \\
+    --sample-col "${taxonomyPatientAwareSampleCol}" \\
+    --patient-col "${taxonomyPatientAwarePatientCol}" \\
+    --case-col "${taxonomyPatientAwareCaseCol}" \\
+    --type-col "${taxonomyPatientAwareTypeCol}" \\
+    --count-col "${taxonomyPatientAwareCountCol}" \\
+    --min-prevalence ${taxonomyPatientAwareMinPrevalence} \\
+    --contralateral-col "${taxonomyPatientAwareContralateralCol}" \\
+    --cancer-site-col "${taxonomyPatientAwareCancerSiteCol}" \\
+    --lung-side-col "${taxonomyPatientAwareLungSideCol}" \\
+    --contralateral-value "${taxonomyPatientAwareContralateralValue}" \\
+    --contralateral-sample-types "${taxonomyPatientAwareContralateralTypes}" \\
+    --transform "${taxonomyPatientAwareTransform}" \\
+    --outdir "\${CANCER_OUTDIR}" \\
+    "\${TAXONOMY_CONTRALATERAL_ARGS[@]}"
+else
+  printf 'tax_level\\tsample_type\\ttaxon\\tgroup_a\\tgroup_b\\tn_patients_total\\tn_group_a\\tn_group_b\\tn_cancer\\tn_control\\tmedian_group_a\\tmedian_group_b\\tmedian_cancer\\tmedian_control\\tdelta_median\\tcohens_d\\tmw_u\\tp_value\\tq_value\\tsignificant_fdr_0.05\\n' > "\${CANCER_OUTDIR}/taxonomic_abundance_observed.tsv"
+  cp "\${CANCER_OUTDIR}/taxonomic_abundance_observed.tsv" "\${CANCER_OUTDIR}/taxonomic_abundance_observed_significant.tsv"
+fi
 
 python "${taxonomicSampleTypeObservedScriptPath}" \\
   --data-long "\${SUMMARY_INPUT_DIR}/ASV_master_long.tsv" \\
