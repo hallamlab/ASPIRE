@@ -59,7 +59,7 @@ if( providedConfigPath ) {
     log.info "Loaded default config from ${configFile}"
 }
 
-def resolvePath(String pathValue) {
+def resolvePath = { String pathValue ->
     if( !pathValue ) {
         return null
     }
