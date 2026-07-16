@@ -508,6 +508,7 @@ if( !sankeyScriptFile.exists() ) {
     exit 1, "sankey_builder.py not found in project directory"
 }
 def sankeyScriptPath = sankeyScriptFile.canonicalPath
+def sankeyScriptHash = fileMd5(sankeyScriptFile)
 def plotMetadataScriptFile = new File("${projectDir}/processes/plot_metadata/plot_metadata.py")
 if( !plotMetadataScriptFile.exists() ) {
     exit 1, "plot_metadata.py not found in project directory"
@@ -3602,8 +3603,9 @@ process SANKEY {
     def rawOutputPrefix = "${sankeyOutputPrefix}_raw"
     def labeledFlag = sankeyMakeLabeled ? "  --make-labeled \\\n" : ''
     def unlabeledFlag = sankeyMakeUnlabeled ? "  --make-unlabeled \\\n" : ''
-    """
+"""
 set -euo pipefail
+echo "sankey_builder.py md5: ${sankeyScriptHash}"
 
 python3 "${sankeyScriptPath}" \\
   --data-dir "${outputDir}" \\
