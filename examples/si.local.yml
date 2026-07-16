@@ -1,15 +1,15 @@
 # Local SI run configuration for ASPIRE.
 #
-# Edit the anchors in this first block for a new machine. YAML anchors work as
-# shared scalar values, but YAML does not concatenate strings, so full derived
-# paths need their own anchors.
+# Edit the values in this first block for a new machine. These entries document
+# the site-specific paths, but the literal paths are repeated below because
+# Nextflow's YAML parser does not reliably resolve aliases in all execution modes.
 x_si_paths:
   input_dir: &si_input_dir /cephfs/rjm_work/si_asv/V4_ncbi_input
   output_dir: &si_output_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output
   runtime_dir: &si_runtime_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire
   manifest: &si_manifest /cephfs/rjm_work/si_asv/ref_db/sample_manifest.tsv
   metadata: &si_metadata /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
-  taxonomy_tsv: &si_taxonomy_tsv /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
+  taxonomy_tsv: &si_taxonomy_tsv /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire/publication_staging/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
   mito_fasta: &si_mito_fasta /cephfs/rjm_work/si_asv/ref_db/mito_ncbi.fasta
   contaminant_fasta: &si_contaminant_fasta /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants.fasta
   mito_db: &si_mito_db /cephfs/rjm_work/si_asv/ref_db/mito_ncbi
@@ -18,15 +18,15 @@ x_si_paths:
   basin_assignments: &si_basin_assignments /cephfs/rjm_work/basin_output/biochem_pipeline/env_o2_split_by_gmm/tables/merged_o2_split_by_gmm.csv
   basin_stratification: &si_basin_stratification /cephfs/rjm_work/basin_output/biochem_pipeline/env_stratification_index/stratification_timeseries.tsv
   basin_measurements: &si_basin_measurements /cephfs/rjm_work/basin_output/biochem_pipeline/biochem_processing/02_oxygen_best_available.tsv
-  indicspecies_dir: &si_indicspecies_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/indicspecies/
+  indicspecies_dir: &si_indicspecies_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire/publication_staging/indicspecies/
   mag_selected_set: &si_mag_selected_set /media/nfs/Ryan/SABer/SI_data/SI_METAGs/SABer_260109/genome_qc_results/elemental_cycles/nitrogen/sag_xpg_species_phylogenies/M00529_Denitrification_nitrate_nitrogen_filtered_cohort_bacterial_mq_16s_gt0.5/selected_set
   mag_functional_modules: &si_mag_functional_modules /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
 
 paths:
-  input_dir: *si_input_dir
-  output_dir: *si_output_dir
-  manifest: *si_manifest
-  runtime_dir: *si_runtime_dir
+  input_dir: /cephfs/rjm_work/si_asv/V4_ncbi_input
+  output_dir: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output
+  manifest: /cephfs/rjm_work/si_asv/ref_db/sample_manifest.tsv
+  runtime_dir: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire
   keep_runtime_dir: true
 
 resources:
@@ -147,14 +147,14 @@ mito:
   dpi: 300
   no_plots: false
   blast_threads: 16
-  mito_db: *si_mito_db
-  biof_db: *si_contaminant_db
-  mito_fasta: *si_mito_fasta
-  contaminant_fasta: *si_contaminant_fasta
+  mito_db: /cephfs/rjm_work/si_asv/ref_db/mito_ncbi
+  biof_db: /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants
+  mito_fasta: /cephfs/rjm_work/si_asv/ref_db/mito_ncbi.fasta
+  contaminant_fasta: /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants.fasta
 
 filter_counts:
   enabled: true
-  metadata: *si_metadata
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
   output: ASV_target.tsv
   group_col: Depth
   min_group_size: 3
@@ -176,7 +176,7 @@ general_stats:
 
 sankey:
   enabled: true
-  metadata: *si_metadata
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
   sub_dir: .
   sample_col: sampleid
   group1_col: Depth
@@ -193,7 +193,7 @@ sankey:
 
 metadata_plots:
   enabled: true
-  metadata: *si_metadata
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
   sub_dir: .
   sample_col: sampleid
   type_col: Depth
@@ -201,12 +201,12 @@ metadata_plots:
   palette_file:
   subtraction_group_col:
   subtraction_groups: []
-  biochem_assignments: *si_basin_assignments
+  biochem_assignments: /cephfs/rjm_work/basin_output/biochem_pipeline/env_o2_split_by_gmm/tables/merged_o2_split_by_gmm.csv
   biochem_sample_col: cruise_year_month_depth
   biochem_meta_join_cols: Cruise,Depth
   biochem_join_cols: Cruise,Depth_anchored
   biochem_include_cols: []
-  stratification_timeseries: *si_basin_stratification
+  stratification_timeseries: /cephfs/rjm_work/basin_output/biochem_pipeline/env_stratification_index/stratification_timeseries.tsv
   strat_meta_join_col: Cruise
   strat_join_col: Cruise
   strat_include_cols: []
@@ -421,7 +421,7 @@ indicspecies:
   aligned_min_stat: 0.0
   aligned_top_n: 25
   venn:
-  taxonomy: *si_taxonomy_tsv
+  taxonomy: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire/publication_staging/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
 
 voc_correlation:
   enabled: false
@@ -443,7 +443,7 @@ voc_correlation:
 measurement_association:
   enabled: true
   output_dir: measurement_association
-  measurement_table: *si_basin_measurements
+  measurement_table: /cephfs/rjm_work/basin_output/biochem_pipeline/biochem_processing/02_oxygen_best_available.tsv
   sample_col: sampleid
   asv_id_col: ASV_ID
   measurement_sample_col: sampleid
@@ -587,7 +587,7 @@ clustermaps:
   output_dir: clustermaps
   mito_output_dir: mito/clustermaps
   mito_input:
-  isa_file: *si_indicspecies_dir
+  isa_file: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire/publication_staging/indicspecies/
   run_mito: true
   sample_col: sampleid
   sample_code_col: sample_code
@@ -691,7 +691,7 @@ spieceasi:
     - phylum_abund_all
     - phylum_isa_all
     - phylum_isa_all_labeled
-  metadata: *si_metadata
+  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
   color_col: Color
   focus_group1_label:
   group1_order: *anomaly_type_order
@@ -734,7 +734,7 @@ spieceasi:
 asv_mag_link:
   enabled: true
   master_tsv:
-  genome_qc_dir: *si_mag_selected_set
+  genome_qc_dir: /media/nfs/Ryan/SABer/SI_data/SI_METAGs/SABer_260109/genome_qc_results/elemental_cycles/nitrogen/sag_xpg_species_phylogenies/M00529_Denitrification_nitrate_nitrogen_filtered_cohort_bacterial_mq_16s_gt0.5/selected_set
   genome_qc_dirs:
   id_token_indexes:
   barrnap_dir:
@@ -765,7 +765,7 @@ asv_mag_network:
   abundance_transform: log1p
   functional_module_min_fraction: 0.5
   functional_annotations:
-    - *si_mag_functional_modules
+    - /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
 
 master_summary:
   enabled: true
