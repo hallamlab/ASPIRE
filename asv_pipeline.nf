@@ -2912,20 +2912,20 @@ workflow RUN_METADATA_ANALYSES {
         )
     }
     if( powerAnalysisEnabled ) {
-        POWER_ANALYSIS_PIPELINE(
+        GROUP_POWER_ANALYSIS(
             asvMetaForPowerAnalysis,
             asvFinalForPowerAnalysis,
             indicspeciesReadyForPowerAnalysis
         )
     }
     if( taxonomyPatientAwareEnabled ) {
-        TAXONOMY_PATIENT_AWARE(
+        TAXONOMY_GROUP_ASSOCIATION(
             asvMetaForTaxonomyPatientAware,
             asvFinalForTaxonomyPatientAware
         )
     }
     if( lungStatusAnalysisEnabled ) {
-        LUNG_STATUS_ANALYSIS(
+        PAIRED_GROUP_CONTRAST(
             asvMetaForLungStatus,
             asvFinalForLungStatus
         )
@@ -4869,7 +4869,7 @@ touch grouping_diagnostics.done
 """
 }
 
-process POWER_ANALYSIS_PIPELINE {
+process GROUP_POWER_ANALYSIS {
     cpus pipelineThreads
     conda "${powerAnalysisCondaEnvPath}"
 
@@ -4952,7 +4952,7 @@ touch power_analysis.done
 """
 }
 
-process TAXONOMY_PATIENT_AWARE {
+process TAXONOMY_GROUP_ASSOCIATION {
     cpus pipelineThreads
     conda "${taxonomyPatientAwareCondaEnvPath}"
 
@@ -5073,7 +5073,7 @@ touch taxonomy_patient_aware.done
 """
 }
 
-process LUNG_STATUS_ANALYSIS {
+process PAIRED_GROUP_CONTRAST {
     cpus pipelineThreads
     conda "${lungStatusAnalysisCondaEnvPath}"
 

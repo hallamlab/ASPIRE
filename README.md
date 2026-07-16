@@ -164,6 +164,9 @@ List valid stage names for targeted reruns:
 ./run_asv_pipeline.sh --list-stages
 ```
 
+Legacy stage names from earlier ASPIRE releases are accepted as rerun aliases
+for compatibility, but `--list-stages` reports the canonical current names.
+
 Force a rerun from one stage onward using the retained default runtime cache:
 
 ```bash
@@ -269,9 +272,9 @@ The wrapper's current stage order is:
 29. `INDICSPECIES_ALIGNED_PLOTS`
 30. `VOC_CORRELATION`
 31. `CLUSTERMAPS`
-32. `POWER_ANALYSIS_PIPELINE`
-33. `TAXONOMY_PATIENT_AWARE`
-34. `LUNG_STATUS_ANALYSIS`
+32. `GROUP_POWER_ANALYSIS`
+33. `TAXONOMY_GROUP_ASSOCIATION`
+34. `PAIRED_GROUP_CONTRAST`
 35. `SPIECEASI`
 36. `NETWORK_MODULES`
 37. `ASV_MAG_LINK`
@@ -318,17 +321,17 @@ Stages that do not list a custom ASPIRE script are executed directly by Nextflow
 | `MEASUREMENT_ASSOCIATION` | `processes/measurement_association/measurement_association.py` | Associates ASV abundances with configured sample measurements using Spearman correlations, clustermaps, and constrained ordination biplots. |
 | `MEASUREMENT_ASSOCIATION` ordination sub-branch | `processes/measurement_association/run_measurement_association.R` | Runs CCA, RDA, and dbRDA models with the R `vegan` package. |
 | `CLUSTERMAPS` | `processes/clustermaps/plot_clustermaps.py` | Generates ASV and metadata clustermaps from configured count and metadata inputs. |
-| `POWER_ANALYSIS_PIPELINE` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by the power-analysis branch. |
-| `POWER_ANALYSIS_PIPELINE` | `processes/power_analysis_pipeline/run_power_analysis_pipeline.sh` | Launches the power-analysis subworkflow. |
-| `POWER_ANALYSIS_PIPELINE` subworkflow | scripts under `processes/power_analysis_pipeline/` | Runs simulation-based power analyses for diversity, taxonomic abundance, indicator species, and related plotting. |
-| `TAXONOMY_PATIENT_AWARE` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by taxonomy patient-aware analyses. |
-| `TAXONOMY_PATIENT_AWARE` | `processes/taxonomy_patient_aware/run_taxonomic_abundance_analysis.py` | Runs patient-level taxonomic abundance comparisons between disease/control groups. |
-| `TAXONOMY_PATIENT_AWARE` | `processes/taxonomy_patient_aware/run_taxonomic_sample_type_analysis.py` | Runs paired or sample-type taxonomic abundance comparisons. |
-| `TAXONOMY_PATIENT_AWARE` | `processes/taxonomy_patient_aware/plot_taxonomic_observed_analysis.py` | Plots observed taxonomic abundance analysis outputs. |
-| `LUNG_STATUS_ANALYSIS` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by lung-status analyses. |
-| `LUNG_STATUS_ANALYSIS` | `processes/lung_status_analysis/prepare_lung_status_data.py` | Derives lung-status labels and prepares per-sample/per-patient tables. |
-| `LUNG_STATUS_ANALYSIS` | `processes/lung_status_analysis/run_lung_status_analysis.R` | Runs lung-status statistical analyses. |
-| `LUNG_STATUS_ANALYSIS` | `processes/lung_status_analysis/plot_lung_status_analysis.py` | Plots lung-status analysis outputs. |
+| `GROUP_POWER_ANALYSIS` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by the group power-analysis branch. |
+| `GROUP_POWER_ANALYSIS` | `processes/power_analysis_pipeline/run_power_analysis_pipeline.sh` | Launches the power-analysis subworkflow. |
+| `GROUP_POWER_ANALYSIS` subworkflow | scripts under `processes/power_analysis_pipeline/` | Runs simulation-based power analyses for diversity, taxonomic abundance, indicator species, and related plotting. |
+| `TAXONOMY_GROUP_ASSOCIATION` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by taxonomy group-association analyses. |
+| `TAXONOMY_GROUP_ASSOCIATION` | `processes/taxonomy_patient_aware/run_taxonomic_abundance_analysis.py` | Runs taxonomic abundance comparisons between configured metadata groups. |
+| `TAXONOMY_GROUP_ASSOCIATION` | `processes/taxonomy_patient_aware/run_taxonomic_sample_type_analysis.py` | Runs paired or sample-type taxonomic abundance comparisons. |
+| `TAXONOMY_GROUP_ASSOCIATION` | `processes/taxonomy_patient_aware/plot_taxonomic_observed_analysis.py` | Plots observed taxonomic abundance analysis outputs. |
+| `PAIRED_GROUP_CONTRAST` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by paired group-contrast analyses. |
+| `PAIRED_GROUP_CONTRAST` | `processes/lung_status_analysis/prepare_lung_status_data.py` | Derives or accepts paired group labels and prepares per-sample/per-subject tables. |
+| `PAIRED_GROUP_CONTRAST` | `processes/lung_status_analysis/run_lung_status_analysis.R` | Runs paired group-contrast statistical analyses. |
+| `PAIRED_GROUP_CONTRAST` | `processes/lung_status_analysis/plot_lung_status_analysis.py` | Plots paired group-contrast analysis outputs. |
 | `SPIECEASI` | `processes/spieceasi/run_spieceasi.R` | Runs SPIEC-EASI graphical lasso network inference and exports graph/network tables. |
 | `NETWORK_MODULES` | `processes/network_modules/network_modules.R` | Detects network modules using configured Leiden/Louvain methods. |
 | `GRAPH_NETWORK` | `processes/graph_network/graph_network.py` | Generates network visualizations and ASV/node annotations. |
