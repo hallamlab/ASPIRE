@@ -1,7 +1,33 @@
+# Local SI run configuration for ASPIRE.
+#
+# Edit the anchors in this first block for a new machine. YAML anchors work as
+# shared scalar values, but YAML does not concatenate strings, so full derived
+# paths need their own anchors.
+x_si_paths:
+  input_dir: &si_input_dir /cephfs/rjm_work/si_asv/V4_ncbi_input
+  output_dir: &si_output_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output
+  runtime_dir: &si_runtime_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/.aspire
+  manifest: &si_manifest /cephfs/rjm_work/si_asv/ref_db/sample_manifest.tsv
+  metadata: &si_metadata /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  taxonomy_tsv: &si_taxonomy_tsv /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
+  mito_fasta: &si_mito_fasta /cephfs/rjm_work/si_asv/ref_db/mito_ncbi.fasta
+  contaminant_fasta: &si_contaminant_fasta /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants.fasta
+  mito_db: &si_mito_db /cephfs/rjm_work/si_asv/ref_db/mito_ncbi
+  contaminant_db: &si_contaminant_db /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants
+  basin_output: &si_basin_output /cephfs/rjm_work/basin_output/biochem_pipeline
+  basin_assignments: &si_basin_assignments /cephfs/rjm_work/basin_output/biochem_pipeline/env_o2_split_by_gmm/tables/merged_o2_split_by_gmm.csv
+  basin_stratification: &si_basin_stratification /cephfs/rjm_work/basin_output/biochem_pipeline/env_stratification_index/stratification_timeseries.tsv
+  basin_measurements: &si_basin_measurements /cephfs/rjm_work/basin_output/biochem_pipeline/biochem_processing/02_oxygen_best_available.tsv
+  indicspecies_dir: &si_indicspecies_dir /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/indicspecies/
+  mag_selected_set: &si_mag_selected_set /media/nfs/Ryan/SABer/SI_data/SI_METAGs/SABer_260109/genome_qc_results/elemental_cycles/nitrogen/sag_xpg_species_phylogenies/M00529_Denitrification_nitrate_nitrogen_filtered_cohort_bacterial_mq_16s_gt0.5/selected_set
+  mag_functional_modules: &si_mag_functional_modules /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
+
 paths:
-  input_dir: /cephfs/rjm_work/si_asv/V4_ncbi_input
-  output_dir: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output
-  manifest: /cephfs/rjm_work/si_asv/ref_db/sample_manifest.tsv
+  input_dir: *si_input_dir
+  output_dir: *si_output_dir
+  manifest: *si_manifest
+  runtime_dir: *si_runtime_dir
+  keep_runtime_dir: true
 
 resources:
   threads: 12
@@ -98,6 +124,7 @@ taxonomy:
 
 mito:
   enabled: true
+  run_mitomaster: true
   chunk_dir:
   chunk_size: 10
   mitomaster_workers: 8
@@ -120,18 +147,21 @@ mito:
   dpi: 300
   no_plots: false
   blast_threads: 16
-  mito_db: /cephfs/rjm_work/si_asv/ref_db/mito_ncbi
-  biof_db: /cephfs/rjm_work/si_asv/ref_db/ssu_pipeline_contaminants
+  mito_db: *si_mito_db
+  biof_db: *si_contaminant_db
+  mito_fasta: *si_mito_fasta
+  contaminant_fasta: *si_contaminant_fasta
 
 filter_counts:
   enabled: true
-  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  metadata: *si_metadata
   output: ASV_target.tsv
   group_col: Depth
   min_group_size: 3
   abundance_threshold: 0.005
   sample_id_col: sampleid
   min_consensus: 0.0
+  exclude_taxa: []
   taxon_col: Taxon
   consensus_col: Consensus
   biofactorial_col: BioFactorial
@@ -146,13 +176,16 @@ general_stats:
 
 sankey:
   enabled: true
-  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  metadata: *si_metadata
   sub_dir: .
   sample_col: sampleid
   group1_col: Depth
   color_col: Color
+  palette_file:
   keep_types:
+  vertical_order: *depth_order
   group_order: *depth_order
+  arrangement: snap
   output_prefix: metadata/data_loss_sankey
   title: Data Loss Flow
   make_labeled: true
@@ -160,17 +193,20 @@ sankey:
 
 metadata_plots:
   enabled: true
-  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  metadata: *si_metadata
   sub_dir: .
   sample_col: sampleid
   type_col: Depth
   color_col: Color
-  biochem_assignments: /cephfs/rjm_work/basin_output/biochem_pipeline/env_o2_split_by_gmm/tables/merged_o2_split_by_gmm.csv
+  palette_file:
+  subtraction_group_col:
+  subtraction_groups: []
+  biochem_assignments: *si_basin_assignments
   biochem_sample_col: cruise_year_month_depth
   biochem_meta_join_cols: Cruise,Depth
   biochem_join_cols: Cruise,Depth_anchored
   biochem_include_cols: []
-  stratification_timeseries: /cephfs/rjm_work/basin_output/biochem_pipeline/env_stratification_index/stratification_timeseries.tsv
+  stratification_timeseries: *si_basin_stratification
   strat_meta_join_col: Cruise
   strat_join_col: Cruise
   strat_include_cols: []
@@ -343,6 +379,9 @@ indicspecies:
   sample_col: sampleid
   color_col: Color
   block_col: Cruise
+  stratified:
+    enabled: false
+    analyses: []
   group_cols:
     - anomaly_type
     - global_event_type
@@ -362,8 +401,16 @@ indicspecies:
     o2_compartment: *o2_compartment_order
     gmm_component: *gmm_component_order
   focus_labels: {}
+  group1_order: *anomaly_type_order
+  group2_order: *global_event_type_order
+  group1_palette: *anomaly_type_palette
+  group2_palette: *global_event_type_palette
   perms: 999
+  seed: 42
+  q_threshold: 0.05
   min_n: 2
+  focus_group1_label:
+  label_focused_asvs: false
   plot_enabled: true
   plot_pairs_mode: all
   plot_output_dir: indicspecies/plots
@@ -374,15 +421,29 @@ indicspecies:
   aligned_min_stat: 0.0
   aligned_top_n: 25
   venn:
-  taxonomy: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv
+  taxonomy: *si_taxonomy_tsv
 
 voc_correlation:
   enabled: false
+  metadata_sample_col: sampleid
+  type_col: o2_subcompartment_final
+  patient_col: Cruise
+  case_col: Season
+  sample_types: []
+  voc_table:
+  output_dir: voc_correlation
+  voc_sample_col: sample
+  sample_id_mode: exact
+  use_legacy_voc_subset: false
+  correlation_direction: both
+  voc_columns: []
+  case_palette: *season_palette
+  isa_palette: *o2_subcompartment_palette
 
 measurement_association:
   enabled: true
   output_dir: measurement_association
-  measurement_table: /cephfs/rjm_work/basin_output/biochem_pipeline/biochem_processing/02_oxygen_best_available.tsv
+  measurement_table: *si_basin_measurements
   sample_col: sampleid
   asv_id_col: ASV_ID
   measurement_sample_col: sampleid
@@ -462,19 +523,71 @@ grouping_diagnostics:
 
 power_analysis:
   enabled: false
+  output_dir: power_analysis
+  sample_col: sampleid
+  patient_col: Cruise
+  case_col: Season
+  type_col: o2_subcompartment_final
+  sample_sizes_cancer: 6,8,10,15,20,25,30
+  sample_sizes_stype: 10,15,20,25,30,40,50
+  n_simulations: 1000
+  n_perm: 199
+  alpha: 0.05
+  seed: 42
+  skip_estimate: false
+  skip_plot: false
+  transform: none
+  keep_contralateral_in_cancer: false
+  contralateral_sample_types: []
 
 taxonomy_patient_aware:
   enabled: false
+  output_dir: taxonomy_patient_aware
+  sample_col: sampleid
+  patient_col: Cruise
+  case_col: Season
+  type_col: o2_subcompartment_final
+  count_col: count
+  tax_levels: Phylum,Family
+  sample_types: []
+  min_prevalence: 0.10
+  exclude_contralateral_in_cancer: false
+  contralateral_col:
+  cancer_site_col:
+  lung_side_col:
+  contralateral_value:
+  contralateral_sample_types: []
+  skip_omnibus: false
+  transform: none
+  alpha: 0.05
+  top_n: 12
 
 lung_status_analysis:
   enabled: false
+  output_dir: lung_status_analysis
+  sample_col: sampleid
+  type_col: o2_subcompartment_final
+  sample_types: []
+  case_col: Season
+  patient_col: Cruise
+  cancer_site_col:
+  lung_code_col:
+  tumor_side_col:
+  contralateral_col:
+  healthy_col:
+  lung_status_col:
+  status_a_value:
+  status_b_value:
+  reference_status_value:
+  permutations: 9999
+  seed: 1
 
 clustermaps:
   enabled: true
   output_dir: clustermaps
   mito_output_dir: mito/clustermaps
   mito_input:
-  isa_file: /cephfs/rjm_work/si_asv/ASPIRE_SI_V4_ncbi_output/indicspecies/
+  isa_file: *si_indicspecies_dir
   run_mito: true
   sample_col: sampleid
   sample_code_col: sample_code
@@ -482,12 +595,14 @@ clustermaps:
   group1_col: Depth
   group2_col: Season
   group3_col: o2_subcompartment_final
+  group4_col:
   group1_order: *depth_order
   group2_order: *season_order
   exclude_group1:
   group1_palette: *depth_palette
   group2_palette: *season_palette
   group3_palette: *o2_subcompartment_palette
+  group4_palette:
   ranks: Phylum,Class,Order,Family,Genus,Species,ASV_ID
   topN: Phylum=30,Class=30,Order=30,Family=30,Genus=30,Species=30,ASV_ID=100
   count_col: corr_count
@@ -576,8 +691,9 @@ spieceasi:
     - phylum_abund_all
     - phylum_isa_all
     - phylum_isa_all_labeled
-  metadata: /cephfs/rjm_work/si_asv/ref_db/asv_cruise_metadata.tsv
+  metadata: *si_metadata
   color_col: Color
+  focus_group1_label:
   group1_order: *anomaly_type_order
   group2_order: *global_event_type_order
   group1_palette: *anomaly_type_palette
@@ -618,7 +734,7 @@ spieceasi:
 asv_mag_link:
   enabled: true
   master_tsv:
-  genome_qc_dir: /media/nfs/Ryan/SABer/SI_data/SI_METAGs/SABer_260109/genome_qc_results/elemental_cycles/nitrogen/sag_xpg_species_phylogenies/M00529_Denitrification_nitrate_nitrogen_filtered_cohort_bacterial_mq_16s_gt0.5/selected_set
+  genome_qc_dir: *si_mag_selected_set
   genome_qc_dirs:
   id_token_indexes:
   barrnap_dir:
@@ -649,7 +765,7 @@ asv_mag_network:
   abundance_transform: log1p
   functional_module_min_fraction: 0.5
   functional_annotations:
-    - /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
+    - *si_mag_functional_modules
 
 master_summary:
   enabled: true
