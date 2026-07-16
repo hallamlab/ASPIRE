@@ -43,6 +43,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Sequence, Optional
+from xml.sax.saxutils import escape
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -240,6 +241,62 @@ def group_counts_by_group(long_counts: pd.DataFrame, metadata: pd.DataFrame,
 # =========================
 # Sankey construction
 # =========================
+def write_fallback_svg(output_svg: Path, title: str, steps: List[str], counts: List[int],
+                       lmp_in: Dict[str, int], lmp_out: Dict[str, int],
+                       palette: Dict[str, str], labeled: bool) -> None:
+    """
+    Write a compact static SVG summary when Plotly/Kaleido export is unavailable.
+    This keeps publication contracts and reports complete on servers without Chrome.
+    """
+    width, height = 1200, 760
+    margin_x = 80
+    top = 110
+    row_h = 34
+    text_color = "#222222"
+
+    def color_for(key: str, fallback: str = "#555555") -> str:
+        value = palette.get(key, fallback) or fallback
+        return value if value.startswith("#") or value.isalpha() else fallback
+
+    elements = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="white"/>',
+        f'<text x="{margin_x}" y="48" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="{text_color}">{escape(title)}</text>',
+        f'<text x="{margin_x}" y="78" font-family="Arial, sans-serif" font-size="14" fill="#666666">Static fallback export; interactive Sankey is available in the matching HTML file.</text>',
+    ]
+
+    columns = [
+        ("Input groups", lmp_in, margin_x),
+        ("Processing steps", dict(zip(steps, counts)), 440),
+        ("Output groups", lmp_out, 820),
+    ]
+    max_value = max([1] + [int(v) for _, values, _ in columns for v in values.values()])
+
+    for heading, values, x in columns:
+        elements.append(
+            f'<text x="{x}" y="{top - 28}" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="{text_color}">{escape(heading)}</text>'
+        )
+        for idx, (name, value) in enumerate(values.items()):
+            y = top + idx * row_h
+            bar_w = max(8, int(260 * (int(value) / max_value)))
+            fill = color_for(name, "#444444" if heading == "Processing steps" else "#999999")
+            label = f"{name}: {int(value):,}" if labeled else f"{int(value):,}"
+            elements.extend([
+                f'<rect x="{x}" y="{y - 18}" width="{bar_w}" height="22" rx="2" fill="{fill}" opacity="0.9"/>',
+                f'<text x="{x}" y="{y + 20}" font-family="Arial, sans-serif" font-size="12" fill="{text_color}">{escape(label)}</text>',
+            ])
+
+    # Simple flow guide so the fallback still reads as a left-to-right process.
+    for x1, x2 in ((350, 420), (730, 800)):
+        elements.extend([
+            f'<line x1="{x1}" y1="360" x2="{x2}" y2="360" stroke="#777777" stroke-width="3"/>',
+            f'<polygon points="{x2},360 {x2 - 12},353 {x2 - 12},367" fill="#777777"/>',
+        ])
+
+    elements.append("</svg>")
+    output_svg.write_text("\n".join(elements) + "\n", encoding="utf-8")
+
+
 def build_sankey(steps: List[str], counts: List[int],
                  lmp_in: Dict[str, int], lmp_out: Dict[str, int],
                  palette: Dict[str, str], title: str,
@@ -372,9 +429,10 @@ def build_sankey(steps: List[str], counts: List[int],
         fig.write_image(str(output_svg))
         print(f"✔ Sankey saved: {output_svg}")
     except Exception as exc:
+        write_fallback_svg(output_svg, title, steps, counts, lmp_in, lmp_out, palette, labeled)
         print(
             f"[WARN] Could not export Sankey SVG for {output_html}: {exc}. "
-            "Install/refresh the sankey environment with python-kaleido for static Plotly export.",
+            f"Wrote static fallback SVG instead: {output_svg}",
             file=sys.stderr,
         )
 

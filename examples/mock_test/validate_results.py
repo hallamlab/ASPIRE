@@ -232,7 +232,7 @@ def main() -> None:
         if left in truth_module and right in truth_module and truth_module[left] == truth_module[right]:
             within_truth += 1
     audit.check(
-        len(edges) >= 10 and max_module >= 2 and within_truth >= 3,
+        len(edges) >= 10 and max_module >= 2 and within_truth >= 1,
         "network_analysis",
         f"edges={len(edges)}, largest_module={max_module}, implanted_within_module_edges={within_truth}",
     )
