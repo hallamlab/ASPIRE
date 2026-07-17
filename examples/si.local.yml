@@ -796,9 +796,9 @@ spieceasi:
   abundance_scale_power: 1.6
 
 asv_mag_link:
-  enabled: false
+  enabled: true
   master_tsv:
-  genome_qc_dir: /media/nfs/Ryan/SABer/SI_data/SI_METAGs/SABer_260109/genome_qc_results/elemental_cycles/nitrogen/sag_xpg_species_phylogenies/M00529_Denitrification_nitrate_nitrogen_filtered_cohort_bacterial_mq_16s_gt0.5/selected_set
+  genome_qc_dir: /home/ryan/data/Metagenomes/selected_set
   genome_qc_dirs:
   id_token_indexes:
   barrnap_dir:
@@ -811,7 +811,7 @@ asv_mag_link:
   plot_top_n: 20
 
 asv_mag_network:
-  enabled: false
+  enabled: true
   output_dir: asv_mag_network
   prefix: asv_mag_network
   graph_variant: all
@@ -820,16 +820,16 @@ asv_mag_network:
   asv_taxonomy_source: ncbi
   mag_taxonomy_source: gtdb
   mag_id_mode: suffix_after_double_underscore
-  mag_abundance:
+  mag_abundance: /home/ryan/data/salmon/results/summary_tables/recruitment_numreads_long.tsv
   mag_abundance_format: long
-  mag_abundance_genome_col: genome_id
-  mag_abundance_sample_col: sample_id
+  mag_abundance_genome_col: genome
+  mag_abundance_sample_col: sample
   mag_abundance_value_col: read_count
   min_shared_samples: 5
   abundance_transform: log1p
   functional_module_min_fraction: 0.5
   functional_annotations:
-    - /home/ryan/SABer_dat/SI_data/SI_METAGs/SABer_260109/genome_qc_results/SI_kofam.module.bin_summary.tsv
+    - /home/ryan/data/Metagenomes/SI_kofam.module.bin_summary.tsv
 
 master_summary:
   enabled: true
