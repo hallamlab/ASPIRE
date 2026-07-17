@@ -237,6 +237,37 @@ Reference inputs depend on enabled branches:
 - `voc_correlation.voc_table` is required when VOC correlation is enabled.
 - `asv_mag_link.*` inputs are required only when ASV-to-MAG linkage is enabled.
 
+### Preparing a new production dataset
+
+The mock quick start demonstrates the software, but it is not a substitute for
+configuring study-specific inputs. For a new dataset:
+
+1. Build a TSV manifest with stable, unique sample IDs and readable FASTQ paths,
+   or verify that filename discovery produces those IDs.
+2. Make every metadata-aware module use the same sample-ID column and ensure
+   its values match the manifest exactly.
+3. Copy `asv_pipeline_nextflow.yml`, replace every active `/abs/path/...`, and
+   disable modules whose required metadata/reference inputs are unavailable.
+4. Set trimming, expected amplicon length, and merge parameters for the actual
+   assay; the shipped values are not universal sequencing defaults.
+5. Run core sequence processing first, inspect read retention and taxonomy,
+   then enable statistical modules in groups.
+6. Treat palettes, group orders, metadata columns, patient-pairing fields, and
+   biological thresholds as examples that must be adapted.
+7. Preserve the manifest, supplied YAML, Git revision, logs, and summary
+   checksums with the analysis record.
+
+A module with `enabled: true` is only runnable when its conditional inputs and
+metadata columns are present.
+
+## Complete Configuration Reference
+
+See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the exhaustive
+field-by-field reference to `asv_pipeline_nextflow.yml`. It records types,
+defaults, accepted values, conditional requirements, module dependencies, and
+study-specific values. Use this README for the operational walkthrough and the
+reference while constructing or reviewing a production YAML.
+
 ## Workflow Stages
 
 The wrapper's current stage order is:
