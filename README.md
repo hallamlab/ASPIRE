@@ -278,10 +278,11 @@ The wrapper's current stage order is:
 35. `SPIECEASI`
 36. `NETWORK_MODULES`
 37. `ASV_MAG_LINK`
-38. `GRAPH_NETWORK`
-39. `MODULE_MAG_ANCHORS`
-40. `SANKEY`
-41. `MASTER_SUMMARY`
+38. `ASV_MAG_NETWORK`
+39. `GRAPH_NETWORK`
+40. `MODULE_MAG_ANCHORS`
+41. `SANKEY`
+42. `MASTER_SUMMARY`
 
 Disabled optional branches are skipped based on the YAML config.
 
@@ -334,6 +335,7 @@ Stages that do not list a custom ASPIRE script are executed directly by Nextflow
 | `PAIRED_GROUP_CONTRAST` | `processes/lung_status_analysis/plot_lung_status_analysis.py` | Plots paired group-contrast analysis outputs. |
 | `SPIECEASI` | `processes/spieceasi/run_spieceasi.R` | Runs SPIEC-EASI graphical lasso network inference and exports graph/network tables. |
 | `NETWORK_MODULES` | `processes/network_modules/network_modules.R` | Detects network modules using configured Leiden/Louvain methods. |
+| `ASV_MAG_NETWORK` | `processes/asv_mag_network/asv_mag_network.py` | Integrates ASV-MAG links with optional MAG abundance and functional annotations to build heterogeneous network tables and plots. |
 | `GRAPH_NETWORK` | `processes/graph_network/graph_network.py` | Generates network visualizations and ASV/node annotations. |
 | `MODULE_MAG_ANCHORS` | `processes/module_mag_anchors/summarize_module_mag_anchors.py` | Summarizes MAG-linked ASVs within network modules. |
 | `MASTER_SUMMARY` | `processes/master_summary/build_master_asv_summary.py` | Builds final combined ASV summary tables integrating taxonomy, metadata, indicator species, network, VOC, and optional MAG information. |
