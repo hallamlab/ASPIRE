@@ -541,8 +541,8 @@ def plot_biochem_scatter(
         labelspacing=1,
         title_fontsize=13,
         fontsize=11,
-        loc='upper right',
-        bbox_to_anchor=(1.3, 1)
+        loc='upper left',
+        bbox_to_anchor=(1.02, 1.0)
     )
     
     plt.setp(legend.get_title(), fontweight='bold')

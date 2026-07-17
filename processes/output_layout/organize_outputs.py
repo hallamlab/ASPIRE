@@ -206,7 +206,13 @@ def data_accounting_summary(modules_dir: Path) -> str:
     metadata_tables = modules_dir / "metadata_plots" / "tables"
     metadata_path = find_preferred(
         metadata_tables,
-        ("metadata_updated_micro.tsv", "ASV_meta_micro.tsv", "metadata_updated.tsv"),
+        (
+            "metadata_updated_micro.augmented.tsv",
+            "metadata_updated_micro.tsv",
+            "ASV_meta_micro.augmented.tsv",
+            "ASV_meta_micro.tsv",
+            "metadata_updated.tsv",
+        ),
         "*metadata*.tsv",
     )
     metadata = read_tsv(metadata_path) if metadata_path else []
@@ -226,6 +232,22 @@ def data_accounting_summary(modules_dir: Path) -> str:
             patient_count = len({row.get(patient_col, "") for row in metadata if row.get(patient_col, "")})
             if patient_count:
                 metrics.append(("Participants", patient_count))
+
+    augmentation_path = find_preferred(
+        modules_dir / "grouping_diagnostics" / "tables",
+        ("group_label_augmentation_audit.tsv",),
+    )
+    augmentation = read_tsv(augmentation_path) if augmentation_path else []
+    if augmentation:
+        source_col = next(
+            (column for column in augmentation[0] if column.endswith("_assignment_source")),
+            None,
+        )
+        if source_col:
+            source_counts = Counter(row.get(source_col, "") for row in augmentation)
+            metrics.append(("Observed group labels", source_counts.get("observed", 0)))
+            metrics.append(("Soft-assigned group labels", source_counts.get("soft_assigned", 0)))
+            metrics.append(("Unassigned group labels", source_counts.get("unassigned", 0)))
 
     asv_path = find_preferred(
         metadata_tables,

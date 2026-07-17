@@ -183,6 +183,12 @@ metadata_plots:
     - Oral Rinse
     - BAL
     - Bronchial Brush
+  group_normalization:
+    enabled: false
+    columns: []
+    pattern:
+    replacement: outlier
+    preserve_source: true
   include_rank: []
   run_micro: true
   run_mito: true
@@ -196,6 +202,7 @@ batch_correction:
   biological_covariates: Type_Group
   biological_color_col: Type_Group
   color_palette_col: Color
+  biological_palettes: {}
   conqur_mode: standard
   conqur_num_core: 6
   conqur_batch_ref:
@@ -457,6 +464,40 @@ measurement_association:
   permutations: 999
   top_vectors: 12
   formats: pdf,png,svg
+
+grouping_diagnostics:
+  enabled: false
+  output_dir: grouping_diagnostics
+  sample_col: Sample
+  group_cols: [Type_Group]
+  baseline_group:
+  primary_group: Type_Group
+  group_palettes: {}
+  group_orders: {}
+  distance_metrics: [bray]
+  transform: relative
+  permutations: 999
+  random_state: 42
+  formats: pdf,png,svg
+  soft_labeling:
+    enabled: false
+    k: 7
+    target_cols: [Type_Group]
+    exclude_labels: [outlier]
+    min_class_samples: 3
+    distance_quantile: 0.95
+    apply_downstream: false
+    target_col: Type_Group
+    min_confidence: 0.70
+    min_neighbor_agreement: 0.60
+    min_cv_balanced_accuracy: 0.60
+  power:
+    enabled: false
+    sample_sizes: [3, 5, 10, 15, 20]
+    simulations: 100
+    permutations: 99
+    alpha: 0.05
+    min_groups: 2
 
 power_analysis:
   enabled: false
@@ -725,6 +766,8 @@ environments:
   indicspecies: processes/indicspecies/env.yml
   voc_correlation: processes/voc_correlation/env.yml
   measurement_association: processes/measurement_association/env.yml
+  grouping_diagnostics: processes/grouping_diagnostics/env.yml
+  group_label_augmentation: processes/group_label_augmentation/env.yml
   clustermaps: processes/clustermaps/env.yml
   power_analysis: processes/power_analysis_pipeline/env.yml
   taxonomy_patient_aware: processes/taxonomy_patient_aware/env.yml

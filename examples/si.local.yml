@@ -39,7 +39,7 @@ palette_presets:
   anomaly_type: &anomaly_type_palette "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
   global_event_type: &global_event_type_palette "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
   o2_compartment: &o2_compartment_palette "oxic=#FF0000,dysoxic=#008000,suboxic=#ADD8E6,anoxic=#800080"
-  o2_subcompartment_final: &o2_subcompartment_palette "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  o2_subcompartment_final: &o2_subcompartment_palette "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   gmm_component: &gmm_component_palette "0=#1f78b4,0.0=#1f78b4,1=#33a02c,1.0=#33a02c,2=#e6ab02,2.0=#e6ab02,3=#f28e2b,3.0=#f28e2b,4=#6a3d9a,4.0=#6a3d9a"
 
 order_presets:
@@ -48,7 +48,7 @@ order_presets:
   anomaly_type: &anomaly_type_order [normal, mixing_event, high_stratification]
   global_event_type: &global_event_type_order [normal, mixing_event, high_stratification]
   o2_compartment: &o2_compartment_order [oxic, dysoxic, suboxic, anoxic]
-  o2_subcompartment_final: &o2_subcompartment_order [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
+  o2_subcompartment_final: &o2_subcompartment_order [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
   gmm_component: &gmm_component_order [0.0, 1.0, 2.0, 3.0, 4.0]
 
 filename_patterns:
@@ -206,6 +206,17 @@ metadata_plots:
   biochem_meta_join_cols: Cruise,Depth
   biochem_join_cols: Cruise,Depth_anchored
   biochem_include_cols: []
+  group_normalization:
+    enabled: true
+    columns:
+      - o2_subcompartment
+      - o2_subcompartment_before_reassign
+      - o2_subcompartment_after_reassign
+      - o2_subcompartment_final
+      - o2_subcompartment_name
+    pattern: "(?i).*other.*"
+    replacement: outlier
+    preserve_source: true
   stratification_timeseries: /home/ryan/data/biochem/basin_output/biochem_pipeline/env_stratification_index/stratification_timeseries.tsv
   strat_meta_join_col: Cruise
   strat_join_col: Cruise
@@ -225,6 +236,9 @@ batch_correction:
   biological_covariates: Depth,o2_subcompartment_final
   biological_color_col: Depth,o2_subcompartment_final
   color_palette_col: Color
+  biological_palettes:
+    Depth: "10=#b4e1fa,20=#7cc3f2,40=#4ca3e3,60=#2171b5,75=#90ee90,80=#aaffc3,85=#aaffc3,90=#cfff70,97=#e6f542,100=#ffcc99,110=#ff9966,120=#ff6e54,135=#cc3300,150=#9900cc,165=#663399,185=#2c003e,200=#000000"
+    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   conqur_mode: libsize
   conqur_num_core: 12
   conqur_batch_ref:
@@ -282,8 +296,8 @@ collectors_curve:
   sample_col: sampleID
   group_col: o2_subcompartment_final
   color_col: Color
-  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
-  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
+  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   permutations: 999
   seed: 42
   out_prefix: metadata/collectors_curve
@@ -302,8 +316,8 @@ plot_upset:
   sample_id_col: sampleID
   group_col: o2_subcompartment_final
   color_col: Color
-  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
-  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
+  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   subset_groups:
   skip_venn: true
   raw_only: false
@@ -319,7 +333,7 @@ bubbleplotter:
   group1_col: o2_subcompartment_final
   group2_col: Depth
   color_col: Color
-  group1_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
+  group1_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
   group2_order: [10, 20, 40, 60, 75, 80, 85, 90, 97, 100, 110, 120, 135, 150, 165, 185, 200]
   formats: pdf,png,svg
   figsize: "32,60"
@@ -334,9 +348,9 @@ umap_clustering:
   group1_col: o2_subcompartment_final
   group2_col: Depth
   color_col: Color
-  group1_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
+  group1_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
   group2_order: [10, 20, 40, 60, 75, 80, 85, 90, 97, 100, 110, 120, 135, 150, 165, 185, 200]
-  group1_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  group1_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   group2_palette: "10=#b4e1fa,20=#7cc3f2,40=#4ca3e3,60=#2171b5,75=#90ee90,80=#aaffc3,85=#aaffc3,90=#cfff70,97=#e6f542,100=#ffcc99,110=#ff9966,120=#ff6e54,135=#cc3300,150=#9900cc,165=#663399,185=#2c003e,200=#000000"
   formats: pdf,png,svg
   normalize: clr
@@ -362,8 +376,8 @@ diversity:
   block_col: Cruise
   secondary_col: Depth
   exclude_groups: []
-  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
-  group1_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
+  group1_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   group2_palette: "10=#b4e1fa,20=#7cc3f2,40=#4ca3e3,60=#2171b5,75=#90ee90,80=#aaffc3,85=#aaffc3,90=#cfff70,97=#e6f542,100=#ffcc99,110=#ff9966,120=#ff6e54,135=#cc3300,150=#9900cc,165=#663399,185=#2c003e,200=#000000"
   run_mito: true
   umap_neighbors: 30
@@ -391,13 +405,13 @@ indicspecies:
   group_palettes:
     anomaly_type: "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
     global_event_type: "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
-    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
     o2_compartment: "oxic=#FF0000,dysoxic=#008000,suboxic=#ADD8E6,anoxic=#800080"
     gmm_component: "0=#1f78b4,0.0=#1f78b4,1=#33a02c,1.0=#33a02c,2=#e6ab02,2.0=#e6ab02,3=#f28e2b,3.0=#f28e2b,4=#6a3d9a,4.0=#6a3d9a"
   group_orders:
     anomaly_type: [normal, mixing_event, high_stratification]
     global_event_type: [normal, mixing_event, high_stratification]
-    o2_subcompartment_final: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
+    o2_subcompartment_final: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
     o2_compartment: [oxic, dysoxic, suboxic, anoxic]
     gmm_component: [0.0, 1.0, 2.0, 3.0, 4.0]
   focus_labels: {}
@@ -438,7 +452,7 @@ voc_correlation:
   correlation_direction: both
   voc_columns: []
   case_palette: "Winter=#5b7bb2,Spring=#55a868,Summer=#e3b505,Fall=#c44e52,DJF=#5b7bb2,MAM=#55a868,JJA=#e3b505,SON=#c44e52"
-  isa_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  isa_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
 
 measurement_association:
   enabled: true
@@ -466,7 +480,7 @@ measurement_association:
     - Dimethyl Sulfide
   exclude_cols: []
   group_col: o2_subcompartment_final
-  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   max_asvs: 300
   min_total: 0.0
   min_prevalence: 0.05
@@ -491,13 +505,13 @@ grouping_diagnostics:
   primary_group: o2_subcompartment_final
   group_palettes:
     Depth: "10=#b4e1fa,20=#7cc3f2,40=#4ca3e3,60=#2171b5,75=#90ee90,80=#aaffc3,85=#aaffc3,90=#cfff70,97=#e6f542,100=#ffcc99,110=#ff9966,120=#ff6e54,135=#cc3300,150=#9900cc,165=#663399,185=#2c003e,200=#000000"
-    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
     o2_compartment: "oxic=#FF0000,dysoxic=#008000,suboxic=#ADD8E6,anoxic=#800080"
     gmm_component: "0=#1f78b4,0.0=#1f78b4,1=#33a02c,1.0=#33a02c,2=#e6ab02,2.0=#e6ab02,3=#f28e2b,3.0=#f28e2b,4=#6a3d9a,4.0=#6a3d9a"
     Season: "Winter=#5b7bb2,Spring=#55a868,Summer=#e3b505,Fall=#c44e52,DJF=#5b7bb2,MAM=#55a868,JJA=#e3b505,SON=#c44e52"
   group_orders:
     Depth: [10, 20, 40, 60, 75, 80, 85, 90, 97, 100, 110, 120, 135, 150, 165, 185, 200]
-    o2_subcompartment_final: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
+    o2_subcompartment_final: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
     o2_compartment: [oxic, dysoxic, suboxic, anoxic]
     gmm_component: [0.0, 1.0, 2.0, 3.0, 4.0]
     Season: [Winter, Spring, Summer, Fall]
@@ -510,6 +524,15 @@ grouping_diagnostics:
   soft_labeling:
     enabled: true
     k: 7
+    target_cols: [o2_subcompartment_final]
+    exclude_labels: [outlier]
+    min_class_samples: 3
+    distance_quantile: 0.95
+    apply_downstream: true
+    target_col: o2_subcompartment_final
+    min_confidence: 0.70
+    min_neighbor_agreement: 0.60
+    min_cv_balanced_accuracy: 0.60
   power:
     enabled: true
     sample_sizes: [3, 5, 10, 15, 20]
@@ -642,7 +665,7 @@ clustermaps:
   exclude_group1:
   group1_palette: "10=#b4e1fa,20=#7cc3f2,40=#4ca3e3,60=#2171b5,75=#90ee90,80=#aaffc3,85=#aaffc3,90=#cfff70,97=#e6f542,100=#ffcc99,110=#ff9966,120=#ff6e54,135=#cc3300,150=#9900cc,165=#663399,185=#2c003e,200=#000000"
   group2_palette: "Winter=#5b7bb2,Spring=#55a868,Summer=#e3b505,Fall=#c44e52,DJF=#5b7bb2,MAM=#55a868,JJA=#e3b505,SON=#c44e52"
-  group3_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+  group3_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
   group4_palette:
   ranks: Phylum,Class,Order,Family,Genus,Species,ASV_ID
   topN: Phylum=30,Class=30,Order=30,Family=30,Genus=30,Species=30,ASV_ID=100
@@ -691,13 +714,13 @@ spieceasi:
   group_palettes:
     anomaly_type: "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
     global_event_type: "normal=#7f7f7f,mixing_event=#1b9e77,high_stratification=#d95f02"
-    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,oxic__other=#FFFFFF,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,dysoxic__other=#FFFFFF,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,suboxic__other=#FFFFFF,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,anoxic__other=#FFFFFF"
+    o2_subcompartment_final: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
     o2_compartment: "oxic=#FF0000,dysoxic=#008000,suboxic=#ADD8E6,anoxic=#800080"
     gmm_component: "0=#1f78b4,0.0=#1f78b4,1=#33a02c,1.0=#33a02c,2=#e6ab02,2.0=#e6ab02,3=#f28e2b,3.0=#f28e2b,4=#6a3d9a,4.0=#6a3d9a"
   group_orders:
     anomaly_type: [normal, mixing_event, high_stratification]
     global_event_type: [normal, mixing_event, high_stratification]
-    o2_subcompartment_final: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, oxic__other, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, dysoxic__other, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, suboxic__other, anoxic__gmm0, anoxic__gmm1, anoxic__other]
+    o2_subcompartment_final: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
     o2_compartment: [oxic, dysoxic, suboxic, anoxic]
     gmm_component: [0.0, 1.0, 2.0, 3.0, 4.0]
   focus_labels: {}
@@ -854,6 +877,7 @@ environments:
   voc_correlation: ../processes/voc_correlation/env.yml
   measurement_association: ../processes/measurement_association/env.yml
   grouping_diagnostics: ../processes/grouping_diagnostics/env.yml
+  group_label_augmentation: ../processes/group_label_augmentation/env.yml
   clustermaps: ../processes/clustermaps/env.yml
   taxonomy_patient_aware: ../processes/taxonomy_patient_aware/env.yml
   taxonomy_group_association: ../processes/taxonomy_patient_aware/env.yml

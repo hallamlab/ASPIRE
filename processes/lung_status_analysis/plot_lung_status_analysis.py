@@ -154,7 +154,7 @@ def plot_pcoa(
     ax.set_xlabel(f"PC1 ({pc1_var:.1f}%)")
     ax.set_ylabel(f"PC2 ({pc2_var:.1f}%)")
     ax.set_title(title)
-    ax.legend(frameon=True, loc="best")
+    ax.legend(frameon=True, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     ax.axhline(0, color="black", linewidth=0.5, linestyle="--", alpha=0.3)
     ax.axvline(0, color="black", linewidth=0.5, linestyle="--", alpha=0.3)
     sns.despine(ax=ax)

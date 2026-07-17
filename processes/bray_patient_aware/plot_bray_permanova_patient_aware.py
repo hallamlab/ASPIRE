@@ -212,7 +212,7 @@ def plot_dispersion(disp_df: pd.DataFrame, outdir: Path) -> None:
     ax.axvline(-np.log10(0.05), color="#A50026", linestyle="--", linewidth=1, label="p=0.05")
     ax.set_xlabel("-log10(p)")
     ax.set_title("PERMDISP Diagnostics")
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     ax.grid(axis="x", linestyle=":", alpha=0.3)
     sns.despine(ax=ax, left=False, bottom=False)
     save_fig(fig, outdir / "PERMDISP_diagnostics")

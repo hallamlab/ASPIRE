@@ -93,6 +93,7 @@ def plot_top_genome_status(pairing: pd.DataFrame, plots_dir: Path, top_n: int) -
     ax.set_xlabel("ASVs assigned")
     ax.set_ylabel("Genome/MAG")
     ax.set_title("Top genome/MAG pairings by assignment status")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), title="Pairing status")
     plt.tight_layout()
     save_png_and_svg(plots_dir / "asv2mag_top_genomes_stacked_status.png")
     plt.close()

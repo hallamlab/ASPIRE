@@ -24,6 +24,7 @@ Quickstart:
 """
 from __future__ import annotations
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -1035,7 +1036,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.set_xlabel('UMAP n_neighbors')
     ax.set_ylabel('Mean Silhouette Score')
     ax.set_title('Silhouette vs UMAP n_neighbors')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 2: Cluster count vs min_cluster_size
@@ -1047,7 +1048,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.set_xlabel('HDBSCAN min_cluster_size')
     ax.set_ylabel('Mean Number of Clusters')
     ax.set_title('Cluster Count vs min_cluster_size')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 3: Noise ratio heatmap (UMAP params)
@@ -1082,7 +1083,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.set_ylabel('HDBSCAN min_cluster_size')
     ax.set_title('Composite Score (★ = Best)')
     plt.colorbar(scatter, ax=ax, label='Composite Score')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 5: Cluster count distribution
@@ -1092,7 +1093,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.set_xlabel('Number of Clusters')
     ax.set_ylabel('Frequency')
     ax.set_title('Distribution of Cluster Counts')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 6: Silhouette vs cluster count
@@ -1107,7 +1108,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.set_xlabel('Number of Clusters')
     ax.set_ylabel('Silhouette Score')
     ax.set_title('Silhouette vs Cluster Count')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 7: Top 10 parameter combinations
@@ -1131,7 +1132,7 @@ def plot_optimization_results(results_df: pd.DataFrame, output_path: Path) -> No
     ax.set_title('Top 10 Parameter Combinations')
     ax.set_xticks(x)
     ax.set_xticklabels(top10['param_combo'], rotation=45, ha='right', fontsize=8)
-    ax.legend(loc='upper right')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(axis='y', alpha=0.3)
     
     save_png_and_svg(output_path)
@@ -1596,7 +1597,7 @@ def plot_feature_batch_effect_scatter(
                 label='Medium (η²=0.06)', zorder=1)
     ax1.axvline(0.14, color='gray', linestyle='-', alpha=0.6, linewidth=2, 
                 label='Large (η²=0.14)', zorder=1)
-    ax1.legend(loc='upper right', fontsize=9, framealpha=0.95, edgecolor='black')
+    ax1.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), fontsize=9, framealpha=0.95, edgecolor='black')
     
     # Colorbar for before - positioned to not overlap
     cbar_ax_before = fig.add_axes([0.08, 0.08, 0.35, 0.02])  # [left, bottom, width, height]
@@ -1670,7 +1671,7 @@ def plot_feature_batch_effect_scatter(
                 label='Medium (η²=0.06)', zorder=1)
     ax2.axvline(0.14, color='gray', linestyle='-', alpha=0.6, linewidth=2, 
                 label='Large (η²=0.14)', zorder=1)
-    ax2.legend(loc='upper right', fontsize=9, framealpha=0.95, edgecolor='black')
+    ax2.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), fontsize=9, framealpha=0.95, edgecolor='black')
     
     # Colorbar for after - positioned to not overlap
     cbar_ax_after = fig.add_axes([0.575, 0.08, 0.35, 0.02])  # Aligned with right plot
@@ -2116,7 +2117,7 @@ def diagnose_batch_correction(
     ax.set_ylabel('Between-Batch Variance')
     ax.set_title('Before Correction')
     ax.plot([0, max(within_before)], [0, max(within_before)], 'r--', alpha=0.5, label='Equal variance line')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 2: Variance decomposition after
@@ -2127,7 +2128,7 @@ def diagnose_batch_correction(
     ax.set_title('After Correction')
     if max(within_after) > 1e-10:
         ax.plot([0, max(within_after)], [0, max(within_after)], 'r--', alpha=0.5, label='Equal variance line')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(alpha=0.3)
     
     # Plot 3: Batch means distribution (sample feature)
@@ -2145,7 +2146,7 @@ def diagnose_batch_correction(
     ax.set_title(f'Batch Means: {sample_feature[:30]}...')
     ax.set_xticks(x)
     ax.set_xticklabels(sorted(batch.unique()))
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(axis='y', alpha=0.3)
     
     # Plot 4: Total variance retained per feature
@@ -2162,7 +2163,7 @@ def diagnose_batch_correction(
     ax.set_xlabel('Variance Retained (%)')
     ax.set_ylabel('Number of Features')
     ax.set_title('Distribution of Variance Retention')
-    ax.legend()
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
     ax.grid(axis='y', alpha=0.3)
     
     plt.tight_layout()
@@ -2442,7 +2443,7 @@ def plot_countspace_preservation(
     axes[1, 0].set_title("Feature Mean Abundance: raw vs corrected")
     axes[1, 0].set_xlabel("log10(mean raw count + 1)")
     axes[1, 0].set_ylabel("log10(mean corrected count + 1)")
-    axes[1, 0].legend(frameon=True)
+    axes[1, 0].legend(frameon=True, loc='upper left', bbox_to_anchor=(1.02, 1.0))
     axes[1, 0].grid(alpha=0.25)
 
     # (4) Effect sizes summary.
@@ -2461,7 +2462,7 @@ def plot_countspace_preservation(
     axes[1, 1].set_ylim(bottom=0)
     axes[1, 1].set_ylabel("Eta-squared (PC1, CLR space)")
     axes[1, 1].set_title("Batch-effect attenuation and biological retention")
-    axes[1, 1].legend(frameon=True)
+    axes[1, 1].legend(frameon=True, loc='upper left', bbox_to_anchor=(1.02, 1.0))
     axes[1, 1].grid(axis="y", alpha=0.3)
 
     fig.suptitle("Count-Space Preservation Diagnostics", fontsize=15, fontweight="bold")
@@ -2681,6 +2682,11 @@ def main():
     parser.add_argument("--color-palette-col", default="Color",
                         help="Comma-separated metadata columns containing color hex codes (e.g., 'Color1,Color2'). "
                              "If fewer than biological columns, auto-generates remaining palettes.")
+    parser.add_argument(
+        "--biological-palettes-json",
+        default="{}",
+        help="JSON object mapping biological columns to label=color palette strings or mappings.",
+    )
     
     # Misc
     parser.add_argument("--random-state", type=int, default=42,
@@ -2767,6 +2773,12 @@ def main():
     if args.biological_color_col:
         bio_color_cols = [c.strip() for c in args.biological_color_col.split(",") if c.strip()]
         palette_cols = [c.strip() for c in args.color_palette_col.split(",") if c.strip()]
+        try:
+            explicit_bio_palettes = json.loads(args.biological_palettes_json)
+        except json.JSONDecodeError:
+            explicit_bio_palettes = {}
+        if not isinstance(explicit_bio_palettes, dict):
+            explicit_bio_palettes = {}
         
         print(f"\n  Biological metadata for visualization: {bio_color_cols}")
         
@@ -2782,8 +2794,37 @@ def main():
                 print(f"    [!] Warning: Column '{bio_col}' has no non-null values, skipping")
                 continue
             
+            explicit_palette = explicit_bio_palettes.get(bio_col)
+            if explicit_palette:
+                if isinstance(explicit_palette, str):
+                    entries = [item.strip() for item in explicit_palette.split(",") if "=" in item]
+                    bio_palette = {
+                        label.strip(): _safe_color(color.strip())
+                        for label, color in (item.split("=", 1) for item in entries)
+                    }
+                elif isinstance(explicit_palette, dict):
+                    bio_palette = {
+                        str(label): _safe_color(color)
+                        for label, color in explicit_palette.items()
+                    }
+                else:
+                    bio_palette = {}
+                normalized_palette = {}
+                missing_vals = []
+                for value in bio_values_sorted:
+                    if value in bio_palette:
+                        normalized_palette[value] = bio_palette[value]
+                    elif str(value) in bio_palette:
+                        normalized_palette[value] = bio_palette[str(value)]
+                    else:
+                        missing_vals.append(value)
+                fallback_colors = sns.color_palette("husl", len(missing_vals))
+                for value, color in zip(missing_vals, fallback_colors):
+                    normalized_palette[value] = plt.matplotlib.colors.rgb2hex(color)
+                bio_palette = normalized_palette
+                print(f"    ✓ {bio_col}: using explicit biological palette")
             # Check if we have a palette column for this biological column
-            if idx < len(palette_cols) and palette_cols[idx] in metadata.columns:
+            elif idx < len(palette_cols) and palette_cols[idx] in metadata.columns:
                 # Use specified palette from metadata
                 palette_col = palette_cols[idx]
                 palette_df = metadata[[bio_col, palette_col]].dropna(subset=[bio_col]).drop_duplicates(subset=[bio_col], keep='first')

@@ -939,6 +939,26 @@ def get_parser() -> argparse.ArgumentParser:
         help="Optional biochem join columns (comma-separated), aligned to --biochem-meta-join-cols, e.g. Cruise,Depth_anchored.",
     )
     cols.add_argument(
+        "--normalize-group-cols",
+        default="",
+        help="Comma-separated metadata columns whose matching categorical values should be normalized.",
+    )
+    cols.add_argument(
+        "--normalize-group-pattern",
+        default="",
+        help="Regular expression matched against complete group labels.",
+    )
+    cols.add_argument(
+        "--normalize-group-replacement",
+        default="outlier",
+        help="Replacement label for values matching --normalize-group-pattern.",
+    )
+    cols.add_argument(
+        "--preserve-normalized-source",
+        action="store_true",
+        help="Preserve each pre-normalization column as <column>_source.",
+    )
+    cols.add_argument(
         "--stratification-meta-join-col",
         default="Cruise",
         help="Metadata join column for stratification_timeseries merge.",
@@ -1079,6 +1099,25 @@ def main():
             biochem_join_cols=[args.stratification_join_col],
             verbose=args.verbose,
         )
+
+    normalize_group_cols = parse_list_csv(args.normalize_group_cols)
+    if normalize_group_cols and args.normalize_group_pattern:
+        pattern = re.compile(args.normalize_group_pattern)
+        for column in normalize_group_cols:
+            if column not in meta.columns:
+                if args.verbose:
+                    print(f"[w] Group-normalization column not found and skipped: {column}")
+                continue
+            if args.preserve_normalized_source:
+                meta[f"{column}_source"] = meta[column]
+            values = meta[column].astype("string")
+            matched = values.str.fullmatch(pattern, na=False)
+            meta.loc[matched, column] = args.normalize_group_replacement
+            if args.verbose:
+                print(
+                    f"[i] Normalized {int(matched.sum())} values in {column} "
+                    f"to '{args.normalize_group_replacement}'."
+                )
 
     manifest_path = args.sample_manifest
     manifest_map = load_sample_manifest(manifest_path)

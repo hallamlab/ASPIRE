@@ -186,7 +186,7 @@ def plot_cancer_vs_control(results_dir: Path, outdir: Path):
 
     # Add legend to top-right subplot
     handles, labels = axes[0, -1].get_legend_handles_labels()
-    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
+    axes[0, -1].legend(handles, labels, loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True,
                      fontsize=9, title='Scenario')
 
     plt.suptitle('Power Analysis: Cancer vs Control',
@@ -250,7 +250,7 @@ def plot_cancer_vs_control(results_dir: Path, outdir: Path):
 
     # Add legend to top-right subplot
     handles, labels = axes[0, -1].get_legend_handles_labels()
-    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
+    axes[0, -1].legend(handles, labels, loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True,
                      fontsize=9, title='Scenario')
 
     plt.suptitle('Power Analysis: Cancer vs Control (Observed Effect)',
@@ -310,7 +310,7 @@ def plot_sample_type_comparison(results_dir: Path, outdir: Path):
                      fontsize=13)
     ax_perm.set_ylim(-0.05, 1.05)
     ax_perm.grid(alpha=0.3, linewidth=0.5)
-    ax_perm.legend(loc='lower right', frameon=True, fontsize=10)
+    ax_perm.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True, fontsize=10)
 
     # Shannon - single omnibus test (any difference)
     ax_shan = axes[1]
@@ -325,7 +325,7 @@ def plot_sample_type_comparison(results_dir: Path, outdir: Path):
                      fontsize=13)
     ax_shan.set_ylim(-0.05, 1.05)
     ax_shan.grid(alpha=0.3, linewidth=0.5)
-    ax_shan.legend(loc='lower right', frameon=True, fontsize=10)
+    ax_shan.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True, fontsize=10)
 
     plt.suptitle('Power Analysis: Sample Type Comparisons',
                 fontsize=14, y=0.98)
@@ -394,7 +394,7 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
 
     # Add legend
     handles, labels = axes[0, -1].get_legend_handles_labels()
-    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
+    axes[0, -1].legend(handles, labels, loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True,
                      fontsize=8, title='Scenario')
 
     plt.suptitle('Power Analysis: Taxonomic Differential Abundance (Cancer vs Control)',
@@ -444,7 +444,7 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
 
     # Add legend
     handles, labels = axes[0, -1].get_legend_handles_labels()
-    axes[0, -1].legend(handles, labels, loc='lower right', frameon=True,
+    axes[0, -1].legend(handles, labels, loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True,
                      fontsize=8, title='Scenario')
 
     plt.suptitle('Power Analysis: Taxonomic Differential Abundance (Cancer vs Control, Observed Effect)',
@@ -478,7 +478,7 @@ def plot_taxonomic_abundance(results_dir: Path, outdir: Path):
                     fontsize=13)
         ax.set_ylim(-0.05, 1.05)
         ax.grid(alpha=0.3, linewidth=0.5)
-        ax.legend(loc='lower right', frameon=True, fontsize=10)
+        ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), frameon=True, fontsize=10)
 
     plt.suptitle('Power Analysis: Taxonomic Abundance by Sample Type',
                 fontsize=14, y=0.98)

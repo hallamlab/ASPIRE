@@ -161,7 +161,17 @@ def apply_thread_defaults(value, threads: int):
     return value
 
 
-def build_config(template: Path, dataset: Path, output: Path, runtime: Path, project_dir: Path, threads: int):
+def build_config(
+    template: Path,
+    dataset: Path,
+    output: Path,
+    runtime: Path,
+    project_dir: Path,
+    threads: int | None = None,
+):
+    threads = default_thread_count() if threads is None else threads
+    if threads < 1:
+        raise ValueError("threads must be at least 1")
     config = yaml.safe_load(template.read_text())
     config = absolute_project_paths(config, project_dir)
     config = apply_thread_defaults(config, threads)

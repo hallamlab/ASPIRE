@@ -259,30 +259,33 @@ The wrapper's current stage order is:
 16. `FILTER_COUNTS`
 17. `GENERAL_STATS`
 18. `PLOT_METADATA`
-19. `PLOT_UPSET`
-20. `ASV_BATCH_CORRECTION`
-21. `ASV_META_FROM_CORRECTED`
-22. `BUBBLEPLOTTER`
-23. `UMAP_CLUSTERING`
-24. `OUTLIER_CHECKER`
-25. `COLLECTORS_CURVE`
-26. `DIVERSITY_ANALYSIS`
-27. `INDICSPECIES`
-28. `INDICSPECIES_PLOTS`
-29. `INDICSPECIES_ALIGNED_PLOTS`
-30. `VOC_CORRELATION`
-31. `CLUSTERMAPS`
-32. `GROUP_POWER_ANALYSIS`
-33. `TAXONOMY_GROUP_ASSOCIATION`
-34. `PAIRED_GROUP_CONTRAST`
-35. `SPIECEASI`
-36. `NETWORK_MODULES`
-37. `ASV_MAG_LINK`
-38. `ASV_MAG_NETWORK`
-39. `GRAPH_NETWORK`
-40. `MODULE_MAG_ANCHORS`
-41. `SANKEY`
-42. `MASTER_SUMMARY`
+19. `GROUPING_DIAGNOSTICS`
+20. `GROUP_LABEL_AUGMENTATION`
+21. `PLOT_UPSET`
+22. `ASV_BATCH_CORRECTION`
+23. `ASV_META_FROM_CORRECTED`
+24. `BUBBLEPLOTTER`
+25. `UMAP_CLUSTERING`
+26. `OUTLIER_CHECKER`
+27. `COLLECTORS_CURVE`
+28. `DIVERSITY_ANALYSIS`
+29. `INDICSPECIES`
+30. `INDICSPECIES_PLOTS`
+31. `INDICSPECIES_ALIGNED_PLOTS`
+32. `VOC_CORRELATION`
+33. `MEASUREMENT_ASSOCIATION`
+34. `CLUSTERMAPS`
+35. `GROUP_POWER_ANALYSIS`
+36. `TAXONOMY_GROUP_ASSOCIATION`
+37. `PAIRED_GROUP_CONTRAST`
+38. `SPIECEASI`
+39. `NETWORK_MODULES`
+40. `ASV_MAG_LINK`
+41. `ASV_MAG_NETWORK`
+42. `GRAPH_NETWORK`
+43. `MODULE_MAG_ANCHORS`
+44. `SANKEY`
+45. `MASTER_SUMMARY`
 
 Disabled optional branches are skipped based on the YAML config.
 
@@ -321,6 +324,8 @@ Stages that do not list a custom ASPIRE script are executed directly by Nextflow
 | `VOC_CORRELATION` | `processes/voc_correlation/plot_voc_corr.py` | Matches VOC and ASV samples, filters ASVs, computes ASV-VOC Spearman correlations, applies FDR and direction filtering, and generates VOC/correlation plots. |
 | `MEASUREMENT_ASSOCIATION` | `processes/measurement_association/measurement_association.py` | Associates ASV abundances with configured sample measurements using Spearman correlations, clustermaps, and constrained ordination biplots. |
 | `MEASUREMENT_ASSOCIATION` ordination sub-branch | `processes/measurement_association/run_measurement_association.R` | Runs CCA, RDA, and dbRDA models with the R `vegan` package. |
+| `GROUPING_DIAGNOSTICS` | `processes/grouping_diagnostics/grouping_diagnostics.py` | Compares metadata groupings against ASV community distances and validates optional non-outlier soft labels. |
+| `GROUP_LABEL_AUGMENTATION` | `processes/group_label_augmentation/group_label_augmentation.py` | Applies only cross-validated, confidence-gated soft labels while preserving observed labels and assignment provenance. |
 | `CLUSTERMAPS` | `processes/clustermaps/plot_clustermaps.py` | Generates ASV and metadata clustermaps from configured count and metadata inputs. |
 | `GROUP_POWER_ANALYSIS` input build | `processes/master_summary/build_master_asv_summary.py` | Builds long-format ASV summary inputs used by the group power-analysis branch. |
 | `GROUP_POWER_ANALYSIS` | `processes/power_analysis_pipeline/run_power_analysis_pipeline.sh` | Launches the power-analysis subworkflow. |

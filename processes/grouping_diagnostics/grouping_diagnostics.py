@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import balanced_accuracy_score, silhouette_score
 
 
 def parse_csv(value: str | None) -> list[str]:
@@ -198,12 +198,17 @@ def soft_label_missing(
     metadata: pd.DataFrame,
     group_col: str,
     k: int,
+    excluded_labels: set[str] | None = None,
+    min_class_samples: int = 1,
 ) -> pd.DataFrame:
     if group_col not in metadata.columns:
         return pd.DataFrame()
     labels = metadata[group_col].where(metadata[group_col].notna(), "").astype(str)
     missing_mask = labels.isin(["", "nan", "None", "NA", "NaN"])
-    labeled_mask = ~missing_mask
+    excluded = {str(label).strip() for label in (excluded_labels or set())}
+    class_counts = labels[~missing_mask & ~labels.isin(excluded)].value_counts()
+    eligible_labels = set(class_counts[class_counts >= max(1, min_class_samples)].index)
+    labeled_mask = ~missing_mask & labels.isin(eligible_labels)
     if missing_mask.sum() == 0 or labeled_mask.sum() == 0:
         return pd.DataFrame()
 
@@ -242,10 +247,93 @@ def soft_label_missing(
                 "nearest_distance": float(neighbor_dist[0]),
                 "neighbor_count": int(len(neighbor_idx)),
                 "assigned_neighbor_count": int(counts.get(assigned, 0)),
+                "neighbor_agreement": float(counts.get(assigned, 0) / len(neighbor_idx)),
                 "method": f"inverse_distance_{k}nn",
             }
         )
     return pd.DataFrame(rows)
+
+
+def validate_soft_labels(
+    distance: np.ndarray,
+    metadata: pd.DataFrame,
+    group_col: str,
+    k: int,
+    excluded_labels: set[str] | None = None,
+    min_class_samples: int = 1,
+    distance_quantile: float = 0.95,
+) -> tuple[pd.DataFrame, dict]:
+    if group_col not in metadata.columns:
+        return pd.DataFrame(), {"group_col": group_col, "status": "missing_column"}
+
+    excluded = {str(label).strip() for label in (excluded_labels or set())}
+    labels = metadata[group_col].where(metadata[group_col].notna(), "").astype(str)
+    labels = labels.replace({"nan": "", "None": "", "NA": "", "NaN": ""})
+    class_counts = labels[~labels.isin(excluded | {""})].value_counts()
+    eligible_labels = set(class_counts[class_counts >= max(2, min_class_samples)].index)
+    eligible_idx = np.where(labels.isin(eligible_labels).to_numpy())[0]
+    rows: list[dict] = []
+
+    for pos in eligible_idx:
+        candidates = eligible_idx[eligible_idx != pos]
+        if len(candidates) == 0:
+            continue
+        d = distance[pos, candidates]
+        finite = np.isfinite(d)
+        candidates = candidates[finite]
+        d = d[finite]
+        if len(candidates) == 0:
+            continue
+        order = np.argsort(d)[: max(1, min(k, len(d)))]
+        neighbor_idx = candidates[order]
+        neighbor_dist = d[order]
+        weights = 1.0 / (neighbor_dist + 1e-9)
+        votes: dict[str, float] = {}
+        counts: dict[str, int] = {}
+        for idx, weight in zip(neighbor_idx, weights):
+            label = labels.iloc[idx]
+            votes[label] = votes.get(label, 0.0) + float(weight)
+            counts[label] = counts.get(label, 0) + 1
+        ranked = sorted(votes.items(), key=lambda item: item[1], reverse=True)
+        predicted = ranked[0][0]
+        total = sum(votes.values())
+        rows.append(
+            {
+                "sample": metadata.index[pos],
+                "group_col": group_col,
+                "observed_label": labels.iloc[pos],
+                "predicted_label": predicted,
+                "correct": bool(predicted == labels.iloc[pos]),
+                "confidence": float(ranked[0][1] / total),
+                "nearest_distance": float(neighbor_dist[0]),
+                "neighbor_count": int(len(neighbor_idx)),
+                "assigned_neighbor_count": int(counts.get(predicted, 0)),
+                "neighbor_agreement": float(counts.get(predicted, 0) / len(neighbor_idx)),
+            }
+        )
+
+    validation = pd.DataFrame(rows)
+    if validation.empty:
+        return validation, {
+            "group_col": group_col,
+            "status": "skipped_insufficient_training_data",
+            "n_validation_samples": 0,
+            "n_eligible_classes": len(eligible_labels),
+        }
+
+    threshold = float(validation["nearest_distance"].quantile(distance_quantile))
+    return validation, {
+        "group_col": group_col,
+        "status": "ok",
+        "n_validation_samples": len(validation),
+        "n_eligible_classes": len(eligible_labels),
+        "accuracy": float(validation["correct"].mean()),
+        "balanced_accuracy": float(
+            balanced_accuracy_score(validation["observed_label"], validation["predicted_label"])
+        ),
+        "nearest_distance_threshold": threshold,
+        "distance_quantile": distance_quantile,
+    }
 
 
 def run_grouping_power(
@@ -366,7 +454,7 @@ def plot_metric_summary(metrics: pd.DataFrame, outdir: Path, formats: list[str])
         if score == "within_between_ratio":
             ax.axvline(1.0, color="0.35", linestyle="--", linewidth=1)
         if ax.legend_:
-            ax.legend(title="Distance", loc="best", frameon=False)
+            ax.legend(title="Distance", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
     save_fig(fig, outdir / "plots" / "grouping_metric_summary", formats)
 
 
@@ -380,12 +468,12 @@ def plot_power(power: pd.DataFrame, outdir: Path, formats: list[str]) -> None:
     axes[0].set_xlabel("Samples per group")
     axes[0].set_ylabel("Estimated power")
     axes[0].axhline(0.8, color="0.4", linestyle="--", linewidth=1)
-    axes[0].legend(title="Grouping", frameon=False)
+    axes[0].legend(title="Grouping", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
 
     sns.lineplot(data=ok, x="n_per_group", y="median_r2", hue="group_col", marker="o", ax=axes[1])
     axes[1].set_xlabel("Samples per group")
     axes[1].set_ylabel("Median PERMANOVA R2")
-    axes[1].legend(title="Grouping", frameon=False)
+    axes[1].legend(title="Grouping", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
     save_fig(fig, outdir / "plots" / "grouping_power", formats)
 
 
@@ -440,7 +528,14 @@ def plot_ordination(
         ax.set_ylabel(f"PCo2 ({variance[1] * 100:.1f}%)")
         ax.axhline(0, color="0.85", linewidth=0.8)
         ax.axvline(0, color="0.85", linewidth=0.8)
-        ax.legend(title=group_col, frameon=False, fontsize=8, title_fontsize=9, loc="best")
+        ax.legend(
+            title=group_col,
+            frameon=False,
+            fontsize=8,
+            title_fontsize=9,
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+        )
     for ax in axes.flat[len(group_cols):]:
         ax.axis("off")
     save_fig(fig, outdir / "plots" / f"grouping_ordination_{safe_name(metric)}", formats)
@@ -464,6 +559,10 @@ def main() -> None:
     parser.add_argument("--formats", default="pdf,png,svg")
     parser.add_argument("--soft-label-missing", action="store_true")
     parser.add_argument("--soft-label-k", type=int, default=7)
+    parser.add_argument("--soft-label-group-cols", default="")
+    parser.add_argument("--soft-label-exclude-labels", default="outlier")
+    parser.add_argument("--soft-label-min-class-samples", type=int, default=3)
+    parser.add_argument("--soft-label-distance-quantile", type=float, default=0.95)
     parser.add_argument("--power-enabled", action="store_true")
     parser.add_argument("--power-sample-sizes", default="3,5,10,15,20")
     parser.add_argument("--power-simulations", type=int, default=100)
@@ -552,14 +651,57 @@ def main() -> None:
             plot_ordination(ordination, variance, valid_for_plot, palettes, orders, metric, outdir, formats)
 
         if metric == metrics[0] and args.soft_label_missing:
+            soft_group_cols = parse_csv(args.soft_label_group_cols) or group_cols
+            excluded_soft_labels = set(parse_csv(args.soft_label_exclude_labels))
             soft_rows = [
-                soft_label_missing(distance, metadata, group_col, args.soft_label_k)
-                for group_col in group_cols
+                soft_label_missing(
+                    distance,
+                    metadata,
+                    group_col,
+                    args.soft_label_k,
+                    excluded_soft_labels,
+                    args.soft_label_min_class_samples,
+                )
+                for group_col in soft_group_cols
             ]
             soft_nonempty = [df for df in soft_rows if not df.empty]
             soft = pd.concat(soft_nonempty, ignore_index=True) if soft_nonempty else pd.DataFrame()
-            if not soft.empty:
-                soft.to_csv(outdir / "tables" / "grouping_soft_label_assignments.tsv", sep="\t", index=False)
+            assignment_columns = [
+                "sample", "group_col", "assigned_label", "confidence", "runner_up_label",
+                "nearest_distance", "neighbor_count", "assigned_neighbor_count",
+                "neighbor_agreement", "method",
+            ]
+            soft.reindex(columns=assignment_columns).to_csv(
+                outdir / "tables" / "grouping_soft_label_assignments.tsv", sep="\t", index=False
+            )
+
+            validation_rows: list[pd.DataFrame] = []
+            validation_summaries: list[dict] = []
+            for group_col in soft_group_cols:
+                validation, validation_summary = validate_soft_labels(
+                    distance,
+                    metadata,
+                    group_col,
+                    args.soft_label_k,
+                    excluded_soft_labels,
+                    args.soft_label_min_class_samples,
+                    args.soft_label_distance_quantile,
+                )
+                if not validation.empty:
+                    validation_rows.append(validation)
+                validation_summaries.append(validation_summary)
+            validation_columns = [
+                "sample", "group_col", "observed_label", "predicted_label", "correct",
+                "confidence", "nearest_distance", "neighbor_count", "assigned_neighbor_count",
+                "neighbor_agreement",
+            ]
+            validation_all = pd.concat(validation_rows, ignore_index=True) if validation_rows else pd.DataFrame()
+            validation_all.reindex(columns=validation_columns).to_csv(
+                outdir / "tables" / "grouping_soft_label_validation.tsv", sep="\t", index=False
+            )
+            pd.DataFrame(validation_summaries).to_csv(
+                outdir / "tables" / "grouping_soft_label_validation_summary.tsv", sep="\t", index=False
+            )
 
         if metric == metrics[0] and args.power_enabled:
             power_sizes = [int(item) for item in parse_csv(args.power_sample_sizes) if item.isdigit()]

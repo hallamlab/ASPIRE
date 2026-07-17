@@ -442,6 +442,16 @@ if( !groupingDiagnosticsEnvFile.exists() ) {
 }
 log.info "Using grouping diagnostics Conda/Mamba env definition: ${groupingDiagnosticsCondaEnvPath}"
 
+def groupLabelAugmentationEnvConfigPath = config.environments?.group_label_augmentation
+def resolvedGroupLabelAugmentationEnvPath = groupLabelAugmentationEnvConfigPath ? resolveOptionalPath(groupLabelAugmentationEnvConfigPath, configRoot) : null
+def defaultGroupLabelAugmentationEnvPath = new File("${projectDir}/processes/group_label_augmentation/env.yml").canonicalPath
+def groupLabelAugmentationCondaEnvPath = resolvedGroupLabelAugmentationEnvPath ?: defaultGroupLabelAugmentationEnvPath
+def groupLabelAugmentationEnvFile = file(groupLabelAugmentationCondaEnvPath)
+if( !groupLabelAugmentationEnvFile.exists() ) {
+    exit 1, "Group-label augmentation conda environment YAML not found: ${groupLabelAugmentationCondaEnvPath}"
+}
+log.info "Using group-label augmentation Conda/Mamba env definition: ${groupLabelAugmentationCondaEnvPath}"
+
 def configuredManifestPath = config.paths?.manifest ? resolveOptionalPath(config.paths.manifest, configRoot) : null
 def sampleRecords
 if( configuredManifestPath ) {
@@ -691,6 +701,12 @@ if( !groupingDiagnosticsScriptFile.exists() ) {
 }
 def groupingDiagnosticsScriptPath = groupingDiagnosticsScriptFile.canonicalPath
 def groupingDiagnosticsScriptHash = fileMd5(groupingDiagnosticsScriptFile)
+def groupLabelAugmentationScriptFile = new File("${projectDir}/processes/group_label_augmentation/group_label_augmentation.py")
+if( !groupLabelAugmentationScriptFile.exists() ) {
+    exit 1, "group_label_augmentation.py not found in project directory"
+}
+def groupLabelAugmentationScriptPath = groupLabelAugmentationScriptFile.canonicalPath
+def groupLabelAugmentationScriptHash = fileMd5(groupLabelAugmentationScriptFile)
 def emptyModulesScriptFile = new File("${projectDir}/processes/master_summary/empty_modules.tsv")
 if( !emptyModulesScriptFile.exists() ) {
     exit 1, "empty_modules.tsv not found in project directory"
@@ -987,6 +1003,18 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def metadataPlotsStratificationTimeseriesPath = metadataPlotsConfig.stratification_timeseries ? resolveOptionalPath(metadataPlotsConfig.stratification_timeseries, configRoot) : null
     def metadataPlotsStratMetaJoinCol = metadataPlotsConfig.strat_meta_join_col ?: 'Cruise'
     def metadataPlotsStratJoinCol = metadataPlotsConfig.strat_join_col ?: 'Cruise'
+    def metadataGroupNormalizationConfig = metadataPlotsConfig.group_normalization instanceof Map ? metadataPlotsConfig.group_normalization : [:]
+    boolean metadataGroupNormalizationEnabled = metadataGroupNormalizationConfig.containsKey('enabled') ? (metadataGroupNormalizationConfig.enabled as boolean) : false
+    def metadataGroupNormalizationColsRaw = metadataGroupNormalizationConfig.columns ?: []
+    List<String> metadataGroupNormalizationCols = metadataGroupNormalizationColsRaw instanceof List ?
+        metadataGroupNormalizationColsRaw.collect { it.toString().trim() }.findAll { it } :
+        metadataGroupNormalizationColsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+    def metadataGroupNormalizationPattern = metadataGroupNormalizationConfig.pattern ? metadataGroupNormalizationConfig.pattern.toString() : ''
+    def metadataGroupNormalizationReplacement = metadataGroupNormalizationConfig.replacement ? metadataGroupNormalizationConfig.replacement.toString().trim() : 'outlier'
+    boolean metadataGroupNormalizationPreserveSource = metadataGroupNormalizationConfig.containsKey('preserve_source') ? (metadataGroupNormalizationConfig.preserve_source as boolean) : true
+    if( metadataGroupNormalizationEnabled && (metadataGroupNormalizationCols.isEmpty() || !metadataGroupNormalizationPattern) ) {
+        exit 1, "metadata_plots.group_normalization requires columns and pattern when enabled"
+    }
     def metadataBiochemIncludeRaw = metadataPlotsConfig.biochem_include_cols
     List<String> metadataPlotsBiochemIncludeCols = []
     if( metadataBiochemIncludeRaw instanceof List ) {
@@ -1061,6 +1089,8 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     def batchBiologicalCovariates = batchCorrectionConfig.biological_covariates ? batchCorrectionConfig.biological_covariates.toString().trim() : ''
     def batchBiologicalColorCols = batchCorrectionConfig.biological_color_col ?: 'Depth'
     def batchColorPaletteCols = batchCorrectionConfig.color_palette_col ?: 'Color'
+    def batchBiologicalPalettes = batchCorrectionConfig.biological_palettes instanceof Map ? batchCorrectionConfig.biological_palettes : [:]
+    def batchBiologicalPalettesJson = groovy.json.JsonOutput.toJson(batchBiologicalPalettes)
     def batchUmapNeighbors = batchCorrectionConfig.umap_neighbors ? (batchCorrectionConfig.umap_neighbors as int) : 15
     def batchUmapMinDist = batchCorrectionConfig.umap_min_dist != null ? (batchCorrectionConfig.umap_min_dist as double) : 0.1d
     def batchHdbscanMinClusterSize = batchCorrectionConfig.hdbscan_min_cluster_size ? (batchCorrectionConfig.hdbscan_min_cluster_size as int) : 5
@@ -1325,6 +1355,7 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         batchBiologicalCovariates: batchBiologicalCovariates,
         batchBiologicalColorCols: batchBiologicalColorCols,
         batchColorPaletteCols: batchColorPaletteCols,
+        batchBiologicalPalettesJson: batchBiologicalPalettesJson,
         batchUmapNeighbors: batchUmapNeighbors,
         batchUmapMinDist: batchUmapMinDist,
         batchHdbscanMinClusterSize: batchHdbscanMinClusterSize,
@@ -1441,6 +1472,11 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         metadataPlotsStratIncludeCols: metadataPlotsStratIncludeCols,
         metadataPlotsBiochemMetaJoinCols: metadataPlotsBiochemMetaJoinCols,
         metadataPlotsBiochemJoinCols: metadataPlotsBiochemJoinCols,
+        metadataGroupNormalizationEnabled: metadataGroupNormalizationEnabled,
+        metadataGroupNormalizationCols: metadataGroupNormalizationCols,
+        metadataGroupNormalizationPattern: metadataGroupNormalizationPattern,
+        metadataGroupNormalizationReplacement: metadataGroupNormalizationReplacement,
+        metadataGroupNormalizationPreserveSource: metadataGroupNormalizationPreserveSource,
         metadataKeepTypes: metadataKeepTypes,
         metadataPlotsSubtractionGroups: metadataPlotsSubtractionGroups,
         metadataPlotsGroupOrder: metadataPlotsGroupOrder,
@@ -1746,6 +1782,24 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def groupingDiagnosticsSoftLabelConfig = groupingDiagnosticsConfig.soft_labeling instanceof Map ? groupingDiagnosticsConfig.soft_labeling : [:]
     boolean groupingDiagnosticsSoftLabelEnabled = groupingDiagnosticsSoftLabelConfig.containsKey('enabled') ? (groupingDiagnosticsSoftLabelConfig.enabled as boolean) : false
     def groupingDiagnosticsSoftLabelK = groupingDiagnosticsSoftLabelConfig.k ? (groupingDiagnosticsSoftLabelConfig.k as int) : 7
+    def groupingDiagnosticsSoftLabelTargetColsRaw = groupingDiagnosticsSoftLabelConfig.target_cols ?: (groupingDiagnosticsPrimaryGroup ? [groupingDiagnosticsPrimaryGroup] : [])
+    List<String> groupingDiagnosticsSoftLabelTargetCols = groupingDiagnosticsSoftLabelTargetColsRaw instanceof List ?
+        groupingDiagnosticsSoftLabelTargetColsRaw.collect { it.toString().trim() }.findAll { it } :
+        groupingDiagnosticsSoftLabelTargetColsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+    def groupingDiagnosticsSoftLabelExcludeRaw = groupingDiagnosticsSoftLabelConfig.exclude_labels ?: ['outlier']
+    List<String> groupingDiagnosticsSoftLabelExcludeLabels = groupingDiagnosticsSoftLabelExcludeRaw instanceof List ?
+        groupingDiagnosticsSoftLabelExcludeRaw.collect { it.toString().trim() }.findAll { it } :
+        groupingDiagnosticsSoftLabelExcludeRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+    def groupingDiagnosticsSoftLabelMinClassSamples = groupingDiagnosticsSoftLabelConfig.min_class_samples ? (groupingDiagnosticsSoftLabelConfig.min_class_samples as int) : 3
+    def groupingDiagnosticsSoftLabelDistanceQuantile = groupingDiagnosticsSoftLabelConfig.distance_quantile != null ? (groupingDiagnosticsSoftLabelConfig.distance_quantile as double) : 0.95d
+    boolean groupingDiagnosticsApplySoftLabels = groupingDiagnosticsSoftLabelConfig.containsKey('apply_downstream') ? (groupingDiagnosticsSoftLabelConfig.apply_downstream as boolean) : false
+    def groupingDiagnosticsSoftLabelTargetCol = groupingDiagnosticsSoftLabelConfig.target_col ? groupingDiagnosticsSoftLabelConfig.target_col.toString().trim() : (groupingDiagnosticsSoftLabelTargetCols ? groupingDiagnosticsSoftLabelTargetCols[0] : '')
+    def groupingDiagnosticsSoftLabelMinConfidence = groupingDiagnosticsSoftLabelConfig.min_confidence != null ? (groupingDiagnosticsSoftLabelConfig.min_confidence as double) : 0.70d
+    def groupingDiagnosticsSoftLabelMinNeighborAgreement = groupingDiagnosticsSoftLabelConfig.min_neighbor_agreement != null ? (groupingDiagnosticsSoftLabelConfig.min_neighbor_agreement as double) : 0.60d
+    def groupingDiagnosticsSoftLabelMinCvBalancedAccuracy = groupingDiagnosticsSoftLabelConfig.min_cv_balanced_accuracy != null ? (groupingDiagnosticsSoftLabelConfig.min_cv_balanced_accuracy as double) : 0.60d
+    if( groupingDiagnosticsApplySoftLabels && (!groupingDiagnosticsEnabled || !groupingDiagnosticsSoftLabelEnabled || !groupingDiagnosticsSoftLabelTargetCol) ) {
+        exit 1, "grouping_diagnostics.soft_labeling.apply_downstream requires enabled diagnostics, enabled soft labeling, and a target_col"
+    }
     def groupingDiagnosticsPowerConfig = groupingDiagnosticsConfig.power instanceof Map ? groupingDiagnosticsConfig.power : [:]
     boolean groupingDiagnosticsPowerEnabled = groupingDiagnosticsPowerConfig.containsKey('enabled') ? (groupingDiagnosticsPowerConfig.enabled as boolean) : false
     def groupingDiagnosticsPowerSizesRaw = groupingDiagnosticsPowerConfig.sample_sizes ?: '3,5,10,15,20'
@@ -2331,6 +2385,15 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         groupingDiagnosticsFormats: groupingDiagnosticsFormats,
         groupingDiagnosticsSoftLabelEnabled: groupingDiagnosticsSoftLabelEnabled,
         groupingDiagnosticsSoftLabelK: groupingDiagnosticsSoftLabelK,
+        groupingDiagnosticsSoftLabelTargetCols: groupingDiagnosticsSoftLabelTargetCols,
+        groupingDiagnosticsSoftLabelExcludeLabels: groupingDiagnosticsSoftLabelExcludeLabels,
+        groupingDiagnosticsSoftLabelMinClassSamples: groupingDiagnosticsSoftLabelMinClassSamples,
+        groupingDiagnosticsSoftLabelDistanceQuantile: groupingDiagnosticsSoftLabelDistanceQuantile,
+        groupingDiagnosticsApplySoftLabels: groupingDiagnosticsApplySoftLabels,
+        groupingDiagnosticsSoftLabelTargetCol: groupingDiagnosticsSoftLabelTargetCol,
+        groupingDiagnosticsSoftLabelMinConfidence: groupingDiagnosticsSoftLabelMinConfidence,
+        groupingDiagnosticsSoftLabelMinNeighborAgreement: groupingDiagnosticsSoftLabelMinNeighborAgreement,
+        groupingDiagnosticsSoftLabelMinCvBalancedAccuracy: groupingDiagnosticsSoftLabelMinCvBalancedAccuracy,
         groupingDiagnosticsPowerEnabled: groupingDiagnosticsPowerEnabled,
         groupingDiagnosticsPowerSizes: groupingDiagnosticsPowerSizes,
         groupingDiagnosticsPowerSimulations: groupingDiagnosticsPowerSimulations,
@@ -2765,6 +2828,7 @@ workflow RUN_METADATA_ANALYSES {
     metaMicroForMeasurementAssociation = metadata_stage.metadata_micro.map { it }
     metaMicroForGroupingDiagnostics = metadata_stage.metadata_micro.map { it }
     asvMetaForBatch = metadata_stage.asv_meta_micro.map { it }
+    asvMetaForGroupAugmentation = metadata_stage.asv_meta_micro.map { it }
     asvMetaSeedForCorrection = metadata_stage.asv_meta_micro.map { it }
     asvMetaForBubbleplotter = metadata_stage.asv_meta_micro.map { it }
     asvMetaForUmap = metadata_stage.asv_meta_micro.map { it }
@@ -2789,6 +2853,44 @@ workflow RUN_METADATA_ANALYSES {
     asvFinalForTaxonomyPatientAware = metadata_stage.asv_final_micro.map { it }
     asvFinalForLungStatus = metadata_stage.asv_final_micro.map { it }
     asvFinalForMasterSummary = metadata_stage.asv_final_micro.map { it }
+
+    grouping_diagnostics_stage = null
+    if( groupingDiagnosticsEnabled ) {
+        grouping_diagnostics_stage = GROUPING_DIAGNOSTICS(
+            metaMicroForGroupingDiagnostics,
+            asvFinalForGroupingDiagnostics
+        )
+    }
+
+    if( groupingDiagnosticsApplySoftLabels ) {
+        group_label_augmentation_stage = GROUP_LABEL_AUGMENTATION(
+            metadata_stage.metadata_micro.map { it },
+            asvMetaForGroupAugmentation,
+            grouping_diagnostics_stage.soft_assignments,
+            grouping_diagnostics_stage.soft_validation_summary
+        )
+        metaMicroForBatch = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForOutlier = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForPlotUpset = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForCollectors = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForDiversity = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForIndicspecies = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForIndicspeciesPlots = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForClustermaps = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForNetwork = group_label_augmentation_stage.metadata_augmented.map { it }
+        metaMicroForMeasurementAssociation = group_label_augmentation_stage.metadata_augmented.map { it }
+        asvMetaForBatch = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaSeedForCorrection = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForBubbleplotter = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForUmap = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForClustermaps = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForVocCorrelation = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForMeasurementAssociation = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForPowerAnalysis = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForTaxonomyPatientAware = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForLungStatus = group_label_augmentation_stage.asv_meta_augmented.map { it }
+        asvMetaForMasterSummary = group_label_augmentation_stage.asv_meta_augmented.map { it }
+    }
 
     if( plotUpsetEnabled ) {
         PLOT_UPSET(metaMicroForPlotUpset)
@@ -2894,13 +2996,6 @@ workflow RUN_METADATA_ANALYSES {
             asvMetaForMeasurementAssociation,
             metaMicroForMeasurementAssociation,
             asvFinalForMeasurementAssociation
-        )
-    }
-
-    if( groupingDiagnosticsEnabled ) {
-        GROUPING_DIAGNOSTICS(
-            metaMicroForGroupingDiagnostics,
-            asvFinalForGroupingDiagnostics
         )
     }
 
@@ -3547,9 +3642,6 @@ process FILTER_COUNTS {
     }
     publishDir filterCountsMitoDir, mode: 'copy', pattern: '*.mito.tsv'
 
-    when:
-    filterCountsEnabled
-
     input:
     tuple path(count_table), path(asv_fasta)
     path(taxonomy_table)
@@ -3560,6 +3652,9 @@ process FILTER_COUNTS {
     path("${filterCountsOutputName}".replace('.tsv','.micro.tsv')), optional: true, emit: filtered_micro
     path("${filterCountsOutputName}".replace('.tsv','.mito.tsv')), emit: filtered_mito
     path("${filterCountsOutputName}".replace('.tsv','.decon.tsv')), optional: true, emit: filtered_decon
+
+    when:
+    filterCountsEnabled
 
     script:
     def metadataArg = filterCountsMetadataPath ? """  --metadata "${filterCountsMetadataPath}" \\\n""" : ''
@@ -3593,9 +3688,6 @@ process SANKEY {
     cpus 1
     conda "${sankeyCondaEnvPath}"
 
-    when:
-    sankeyEnabled
-
     input:
     path(fastq_stats)
     path(filtered_stats)
@@ -3605,6 +3697,9 @@ process SANKEY {
 
     output:
     path("sankey.done"), emit: done
+
+    when:
+    sankeyEnabled
 
     script:
     def keepTypesArg = sankeyKeepTypes && !sankeyKeepTypes.isEmpty() ? "  --keep-types \"${sankeyKeepTypes.join(',')}\" \\\n" : ''
@@ -3699,9 +3794,6 @@ process PLOT_METADATA {
     cpus pipelineThreads
     conda "${plotMetadataCondaEnvPath}"
 
-    when:
-    metadataPlotsEnabled
-
     input:
     path(fastq_stats)
     path(asv_micro)
@@ -3716,6 +3808,9 @@ process PLOT_METADATA {
     path("ASV_meta_mito.tsv"), optional: true, emit: asv_meta_mito
     path("ASV_final.mito.tsv"), optional: true, emit: asv_final_mito
 
+    when:
+    metadataPlotsEnabled
+
     script:
     def includeRankAppend = metadataIncludeRank && !metadataIncludeRank.isEmpty() ?
         metadataIncludeRank.collect { "cmd+=( --include-rank \"${it}\" )" }.join('\n') : ''
@@ -3728,6 +3823,7 @@ process PLOT_METADATA {
     def metadataKeepTypesCsv = metadataKeepTypes && !metadataKeepTypes.isEmpty() ? metadataKeepTypes.join(',') : ''
     def metadataSubtractionGroupsCsv = metadataPlotsSubtractionGroups && !metadataPlotsSubtractionGroups.isEmpty() ? metadataPlotsSubtractionGroups.join(',') : ''
     def metadataGroupOrderCsv = metadataPlotsGroupOrder && !metadataPlotsGroupOrder.isEmpty() ? metadataPlotsGroupOrder.join(',') : ''
+    def metadataNormalizationColsCsv = metadataGroupNormalizationCols.join(',')
     def metadataMicroFile = "${outputDir}/metadata/metadata_updated_micro.tsv"
     def metadataMitoFile = "${outputDir}/mito/metadata/metadata_updated_mito.tsv"
     def asvMetaMicroFile = "${outputDir}/metadata/ASV_meta_micro.tsv"
@@ -3800,6 +3896,15 @@ if [[ -n "${metadataStratTable}" ]]; then
   fi
 fi
 
+if [[ "${metadataGroupNormalizationEnabled}" == "true" ]]; then
+  cmd+=( --normalize-group-cols "${metadataNormalizationColsCsv}" )
+  cmd+=( --normalize-group-pattern '${metadataGroupNormalizationPattern}' )
+  cmd+=( --normalize-group-replacement "${metadataGroupNormalizationReplacement}" )
+  if [[ "${metadataGroupNormalizationPreserveSource}" == "true" ]]; then
+    cmd+=( --preserve-normalized-source )
+  fi
+fi
+
 "\${cmd[@]}"
 
 link_if_exists() {
@@ -3823,14 +3928,14 @@ process PLOT_UPSET {
     cpus pipelineThreads
     conda "${plotUpsetCondaEnvPath}"
 
-    when:
-    plotUpsetEnabled
-
     input:
     path(metadata_table)
 
     output:
     path("plot_upset.done"), emit: done
+
+    when:
+    plotUpsetEnabled
 
     script:
     def taxonomyArg = plotUpsetTaxonomyPath ? """  --taxonomy-path "${plotUpsetTaxonomyPath}" \\\n""" : ''
@@ -3914,14 +4019,14 @@ process BUBBLEPLOTTER {
     cpus pipelineThreads
     conda "${bubbleplotterCondaEnvPath}"
 
-    when:
-    bubbleplotterEnabled
-
     input:
     path(asv_meta)
 
     output:
     path("bubbleplotter.done"), emit: done
+
+    when:
+    bubbleplotterEnabled
 
     script:
     def noAutoSizeArg = bubbleplotterNoAutoSize ? "  --no-auto-size \\\n" : ''
@@ -3951,14 +4056,14 @@ process UMAP_CLUSTERING {
     cpus pipelineThreads
     conda "${umapClusteringCondaEnvPath}"
 
-    when:
-    umapClusteringEnabled
-
     input:
     path(asv_meta)
 
     output:
     path("umap_clustering.done"), emit: done
+
+    when:
+    umapClusteringEnabled
 
     script:
     def umapGroup1OrderArg = umapClusteringGroup1Order && !umapClusteringGroup1Order.isEmpty() ? """  --group1-order "${umapClusteringGroup1Order.join(',')}" \\\n""" : ''
@@ -3997,9 +4102,6 @@ process ASV_BATCH_CORRECTION {
     cpus pipelineThreads
     conda "${batchCorrectionCondaEnvPath}"
 
-    when:
-    batchCorrectionEnabled
-
     input:
     path(metadata_table)
     path(asv_meta)
@@ -4018,6 +4120,9 @@ process ASV_BATCH_CORRECTION {
     path("batch_correction_umap_comparison.png"), emit: umap_plot
     path("batch_correction_statistics.tsv"), emit: correction_stats
     path("umap_hdbscan_results.tsv"), emit: umap_results
+
+    when:
+    batchCorrectionEnabled
 
     script:
     def bioCovArg = batchBiologicalCovariates ? """  --biological-covariates "${batchBiologicalCovariates}" \\\n""" : ''
@@ -4040,17 +4145,14 @@ process ASV_BATCH_CORRECTION {
     def umapComparisonPngFile = "${batchCorrectionOutputDirAbs}/batch_correction_umap_comparison.png"
     def batchCorrectionStatsFile = "${batchCorrectionOutputDirAbs}/batch_correction_statistics.tsv"
     def umapResultsFile = "${batchCorrectionOutputDirAbs}/umap_hdbscan_results.tsv"
-    def asv_final = "ASVs/${asv_counts}"
-    def updated_metadata = "metadata/${metadata_table}"
-    def asv_metadata = "metadata/${asv_meta}"
     """
 set -euo pipefail
 
 python "${batchCorrectionScriptPath}" \\
   --data-dir "${outputDir}" \\
-  --asv "${asv_final}" \\
-  --metadata "${updated_metadata}" \\
-  --asv-meta "${asv_metadata}" \\
+  --asv "\$PWD/${asv_counts}" \\
+  --metadata "\$PWD/${metadata_table}" \\
+  --asv-meta "\$PWD/${asv_meta}" \\
   --sample-id-col "${batchCorrectionSampleIdCol}" \\
   --batch-col "${batchCorrectionBatchCol}" \\
   --output-dir "${batchCorrectionOutputDir}" \\
@@ -4074,6 +4176,7 @@ ${minSamplesArg}  --hdbscan-selection-method "${batchHdbscanSelectionMethod}" \\
   --n-features-plot ${batchNFeaturesPlot} \\
   --biological-color-col "${batchBiologicalColorCols}" \\
   --color-palette-col "${batchColorPaletteCols}" \\
+  --biological-palettes-json '${batchBiologicalPalettesJson}' \\
   --random-state ${batchRandomState} \\
 ${optimizeFlag}  --verbose
 
@@ -4144,15 +4247,15 @@ process ASV_META_FROM_CORRECTED {
     cpus 1
     conda "${batchCorrectionCondaEnvPath}"
 
-    when:
-    batchCorrectionEnabled && (bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled)
-
     input:
     path(asv_meta)
     path(corrected_counts)
 
     output:
     path("ASV_meta_micro.corrected.tsv"), emit: asv_meta_corrected
+
+    when:
+    batchCorrectionEnabled && (bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled)
 
     script:
     """
@@ -4214,12 +4317,12 @@ process OUTLIER_CHECKER {
     cpus pipelineThreads
     conda "${outlierCondaEnvPath}"
 
-    when:
-    outlierEnabled
-
     input:
     path(asv_clr)
     path(metadata_table)
+
+    when:
+    outlierEnabled
 
     script:
     def groupColsArg = outlierGroupCols.join(',')
@@ -4262,12 +4365,12 @@ process COLLECTORS_CURVE {
     cpus pipelineThreads
     conda "${collectorsCondaEnvPath}"
 
-    when:
-    collectorsEnabled
-
     input:
     path(asv_counts)
     path(metadata_table)
+
+    when:
+    collectorsEnabled
 
     script:
     def collectorsGroupOrderArg = collectorsGroupOrder && !collectorsGroupOrder.isEmpty() ? """  --group-order "${collectorsGroupOrder.join(',')}" \\\n""" : ''
@@ -4297,15 +4400,15 @@ process DIVERSITY_ANALYSIS {
     cpus pipelineThreads
     conda "${diversityCondaEnvPath}"
 
-    when:
-    diversityEnabled
-
     input:
     path(metadata_table)
     path(asv_counts)
 
     output:
     path("diversity.done"), emit: done
+
+    when:
+    diversityEnabled
 
     script:
     def secondaryColArg = diversitySecondaryCol ? """  --secondary-col "${diversitySecondaryCol}" \\\n""" : ''
@@ -4416,9 +4519,6 @@ process INDICSPECIES {
     cpus pipelineThreads
     conda "${indicspeciesCondaEnvPath}"
 
-    when:
-    indicspeciesEnabled
-
     input:
     path(metadata_table)
     path(asv_counts)
@@ -4430,6 +4530,9 @@ process INDICSPECIES {
     path("indicspecies_group2_results.tsv"), emit: group2_results
     path("indicspecies_tables/*.tsv"), emit: all_tables
     path("indicspecies.done"), emit: done
+
+    when:
+    indicspeciesEnabled
 
     script:
     def indicspeciesGroupColsArg = indicspeciesGroupCols.join(',')
@@ -4506,15 +4609,15 @@ process INDICSPECIES_PLOTS {
     cpus pipelineThreads
     conda "${indicspeciesCondaEnvPath}"
 
-    when:
-    indicspeciesEnabled && indicspeciesPlotEnabled
-
     input:
     path(metadata_table)
     path(indicspecies_tables)
 
     output:
     path("indicspecies_plots.done"), emit: done
+
+    when:
+    indicspeciesEnabled && indicspeciesPlotEnabled
 
     script:
     def plotVennPath = indicspeciesPlotVennPath ?: ''
@@ -4690,14 +4793,14 @@ process INDICSPECIES_ALIGNED_PLOTS {
     cpus pipelineThreads
     conda "${indicspeciesCondaEnvPath}"
 
-    when:
-    indicspeciesEnabled && indicspeciesAlignedEnabled
-
     input:
     path(indicspecies_tables)
 
     output:
     path("indicspecies_aligned.done"), emit: done
+
+    when:
+    indicspeciesEnabled && indicspeciesAlignedEnabled
 
     script:
     """
@@ -4725,9 +4828,6 @@ process VOC_CORRELATION {
     cpus pipelineThreads
     conda "${vocCorrelationCondaEnvPath}"
 
-    when:
-    vocCorrelationEnabled
-
     input:
     path(asv_meta_table)
     path(asv_counts)
@@ -4735,6 +4835,9 @@ process VOC_CORRELATION {
 
     output:
     path("voc_correlation.done"), emit: done
+
+    when:
+    vocCorrelationEnabled
 
     script:
     def vocColsArgs = vocCorrelationVocCols.collect { col -> """  --voc-col "${col}" \\\n""" }.join('')
@@ -4773,9 +4876,6 @@ process MEASUREMENT_ASSOCIATION {
     cpus pipelineThreads
     conda "${measurementAssociationCondaEnvPath}"
 
-    when:
-    measurementAssociationEnabled
-
     input:
     path(asv_meta_table)
     path(metadata_table)
@@ -4783,6 +4883,9 @@ process MEASUREMENT_ASSOCIATION {
 
     output:
     path("measurement_association.done"), emit: done
+
+    when:
+    measurementAssociationEnabled
 
     script:
     def measurementTableArg = measurementAssociationTablePath ? """  --measurement-table "${measurementAssociationTablePath}" \\\n""" : ''
@@ -4827,19 +4930,24 @@ process GROUPING_DIAGNOSTICS {
     cpus pipelineThreads
     conda "${groupingDiagnosticsCondaEnvPath}"
 
-    when:
-    groupingDiagnosticsEnabled
-
     input:
     path(metadata_table)
     path(asv_counts)
 
     output:
     path("grouping_diagnostics.done"), emit: done
+    path("grouping_soft_label_assignments.tsv"), optional: true, emit: soft_assignments
+    path("grouping_soft_label_validation.tsv"), optional: true, emit: soft_validation
+    path("grouping_soft_label_validation_summary.tsv"), optional: true, emit: soft_validation_summary
+
+    when:
+    groupingDiagnosticsEnabled
 
     script:
     def groupColsArg = groupingDiagnosticsGroupCols.join(',')
-    def softLabelArg = groupingDiagnosticsSoftLabelEnabled ? """  --soft-label-missing \\\n  --soft-label-k ${groupingDiagnosticsSoftLabelK} \\\n""" : ''
+    def softLabelTargetColsArg = groupingDiagnosticsSoftLabelTargetCols.join(',')
+    def softLabelExcludeArg = groupingDiagnosticsSoftLabelExcludeLabels.join(',')
+    def softLabelArg = groupingDiagnosticsSoftLabelEnabled ? """  --soft-label-missing \\\n  --soft-label-k ${groupingDiagnosticsSoftLabelK} \\\n  --soft-label-group-cols "${softLabelTargetColsArg}" \\\n  --soft-label-exclude-labels "${softLabelExcludeArg}" \\\n  --soft-label-min-class-samples ${groupingDiagnosticsSoftLabelMinClassSamples} \\\n  --soft-label-distance-quantile ${groupingDiagnosticsSoftLabelDistanceQuantile} \\\n""" : ''
     def powerArg = groupingDiagnosticsPowerEnabled ? """  --power-enabled \\\n  --power-sample-sizes "${groupingDiagnosticsPowerSizes}" \\\n  --power-simulations ${groupingDiagnosticsPowerSimulations} \\\n  --power-permutations ${groupingDiagnosticsPowerPermutations} \\\n  --power-alpha ${groupingDiagnosticsPowerAlpha} \\\n""" : ''
 """
 set -euo pipefail
@@ -4865,16 +4973,63 @@ python "${groupingDiagnosticsScriptPath}" \\
   --formats "${groupingDiagnosticsFormats}" \\
 ${softLabelArg}${powerArg}  --power-min-groups ${groupingDiagnosticsPowerMinGroups}
 
+if [[ -f "${groupingDiagnosticsOutputDirAbs}/tables/grouping_soft_label_assignments.tsv" ]]; then
+  cp "${groupingDiagnosticsOutputDirAbs}/tables/grouping_soft_label_assignments.tsv" grouping_soft_label_assignments.tsv
+  cp "${groupingDiagnosticsOutputDirAbs}/tables/grouping_soft_label_validation.tsv" grouping_soft_label_validation.tsv
+  cp "${groupingDiagnosticsOutputDirAbs}/tables/grouping_soft_label_validation_summary.tsv" grouping_soft_label_validation_summary.tsv
+fi
+
 touch grouping_diagnostics.done
+"""
+}
+
+process GROUP_LABEL_AUGMENTATION {
+    cpus 1
+    conda "${groupLabelAugmentationCondaEnvPath}"
+    publishDir "${outputDir}/metadata", mode: 'copy', pattern: '*.augmented.tsv'
+
+    input:
+    path(metadata_table)
+    path(asv_meta_table)
+    path(soft_assignments)
+    path(soft_validation_summary)
+
+    output:
+    path("metadata_updated_micro.augmented.tsv"), emit: metadata_augmented
+    path("ASV_meta_micro.augmented.tsv"), emit: asv_meta_augmented
+    path("group_label_augmentation_audit.tsv"), emit: audit
+    path("group_label_augmentation.done"), emit: done
+
+    when:
+    groupingDiagnosticsApplySoftLabels
+
+    script:
+    def excludedLabelsArg = groupingDiagnosticsSoftLabelExcludeLabels.join(',')
+    """
+set -euo pipefail
+echo "group_label_augmentation.py md5: ${groupLabelAugmentationScriptHash}"
+
+python "${groupLabelAugmentationScriptPath}" \\
+  --metadata "${metadata_table}" \\
+  --asv-meta "${asv_meta_table}" \\
+  --assignments "${soft_assignments}" \\
+  --validation-summary "${soft_validation_summary}" \\
+  --sample-col "${groupingDiagnosticsSampleCol}" \\
+  --target-col "${groupingDiagnosticsSoftLabelTargetCol}" \\
+  --exclude-labels "${excludedLabelsArg}" \\
+  --min-confidence ${groupingDiagnosticsSoftLabelMinConfidence} \\
+  --min-neighbor-agreement ${groupingDiagnosticsSoftLabelMinNeighborAgreement} \\
+  --min-cv-balanced-accuracy ${groupingDiagnosticsSoftLabelMinCvBalancedAccuracy}
+
+mkdir -p "${groupingDiagnosticsOutputDirAbs}/tables"
+cp group_label_augmentation_audit.tsv "${groupingDiagnosticsOutputDirAbs}/tables/group_label_augmentation_audit.tsv"
+touch group_label_augmentation.done
 """
 }
 
 process GROUP_POWER_ANALYSIS {
     cpus pipelineThreads
     conda "${powerAnalysisCondaEnvPath}"
-
-    when:
-    powerAnalysisEnabled
 
     input:
     path(asv_meta)
@@ -4883,6 +5038,9 @@ process GROUP_POWER_ANALYSIS {
 
     output:
     path("power_analysis.done"), emit: done
+
+    when:
+    powerAnalysisEnabled
 
     script:
     def skipEstimateFlag = powerAnalysisSkipEstimate ? '1' : '0'
@@ -4956,15 +5114,15 @@ process TAXONOMY_GROUP_ASSOCIATION {
     cpus pipelineThreads
     conda "${taxonomyPatientAwareCondaEnvPath}"
 
-    when:
-    taxonomyPatientAwareEnabled
-
     input:
     path(asv_meta)
     path(asv_counts)
 
     output:
     path("taxonomy_patient_aware.done"), emit: done
+
+    when:
+    taxonomyPatientAwareEnabled
 
     script:
     def excludeContralateralFlag = taxonomyPatientAwareExcludeContralateral ? '1' : '0'
@@ -5077,15 +5235,15 @@ process PAIRED_GROUP_CONTRAST {
     cpus pipelineThreads
     conda "${lungStatusAnalysisCondaEnvPath}"
 
-    when:
-    lungStatusAnalysisEnabled
-
     input:
     path(asv_meta)
     path(asv_counts)
 
     output:
     path("lung_status_analysis.done"), emit: done
+
+    when:
+    lungStatusAnalysisEnabled
 
     script:
     """
@@ -5167,9 +5325,6 @@ process CLUSTERMAPS {
     cpus pipelineThreads
     conda "${clustermapsCondaEnvPath}"
 
-    when:
-    clustermapsEnabled
-
     input:
     path(asv_meta)
     path(metadata_table)
@@ -5177,6 +5332,9 @@ process CLUSTERMAPS {
 
     output:
     path("clustermaps.done"), emit: done
+
+    when:
+    clustermapsEnabled
 
     script:
     def group3ColArg = clustermapsGroup3Col ? """  --group3-col "${clustermapsGroup3Col}" \\\n""" : ''
@@ -5295,9 +5453,6 @@ process SPIECEASI {
     cpus pipelineThreads
     conda "${spieceasiCondaEnvPath}"
 
-    when:
-    spieceasiEnabled
-
     input:
     path(asv_counts)
     path(force_keep_asvs)
@@ -5307,6 +5462,9 @@ process SPIECEASI {
     path("spieceasi_network_pos_thr.graphml"), emit: graph_thr
     path("spieceasi_node_features.csv"), emit: node_features
     path("spieceasi.done"), emit: done
+
+    when:
+    spieceasiEnabled
 
     script:
     def transposeFlag = spieceasiTranspose ? 'TRUE' : 'FALSE'
@@ -5365,9 +5523,6 @@ process NETWORK_MODULES {
     cpus pipelineThreads
     conda "${networkModulesCondaEnvPath}"
 
-    when:
-    networkEnabled && networkModulesEnabled
-
     input:
     path(graph_all, stageAs: 'network_graph_all.graphml')
     path(graph_thr, stageAs: 'network_graph_sub.graphml')
@@ -5378,6 +5533,9 @@ process NETWORK_MODULES {
     path("network_modules_summary.tsv"), emit: summary
     path("network_modules_runs.tsv"), emit: runs
     path("network_modules.done"), emit: done
+
+    when:
+    networkEnabled && networkModulesEnabled
 
     script:
     def methodsCsv = networkModuleMethods.join(',')
@@ -5422,9 +5580,6 @@ process GRAPH_NETWORK {
     cpus pipelineThreads
     conda "${networkCondaEnvPath}"
 
-    when:
-    networkEnabled
-
     input:
     path(graph_all, stageAs: 'network_graph_all.graphml')
     path(graph_thr, stageAs: 'network_graph_sub.graphml')
@@ -5439,6 +5594,9 @@ process GRAPH_NETWORK {
 
     output:
     path("network.done"), emit: done
+
+    when:
+    networkEnabled
 
     script:
     def networkModesArg = networkModes && !networkModes.isEmpty() ? """  --modes ${networkModes.collect { "\"${it}\"" }.join(' ')} \\\n""" : ''
@@ -5497,9 +5655,6 @@ process ASV_MAG_NETWORK {
     cpus 1
     conda "${asvMagNetworkCondaEnvPath}"
 
-    when:
-    asvMagNetworkEnabled
-
     input:
     path(graph, stageAs: 'asv_mag_network_graph.graphml')
     path(node_features)
@@ -5509,6 +5664,9 @@ process ASV_MAG_NETWORK {
 
     output:
     path("asv_mag_network.done"), emit: done
+
+    when:
+    asvMagNetworkEnabled
 
     script:
     def magAbundanceArg = asvMagNetworkMagAbundance ? """  --mag-abundance "${asvMagNetworkMagAbundance}" \\\n""" : ''
@@ -5548,9 +5706,6 @@ process MODULE_MAG_ANCHORS {
     cpus 1
     conda "${networkCondaEnvPath}"
 
-    when:
-    networkEnabled && asvMagLinkEnabled
-
     input:
     path(modules_all)
     path(node_features)
@@ -5570,6 +5725,9 @@ process MODULE_MAG_ANCHORS {
     path("sample_module_score_heatmap.pdf"), optional: true, emit: sample_module_heatmap_pdf
     path("sample_module_score_heatmap.svg"), optional: true, emit: sample_module_heatmap_svg
     path("module_mag_anchors.done"), emit: done
+
+    when:
+    networkEnabled && asvMagLinkEnabled
 
     script:
     """
@@ -5606,9 +5764,6 @@ process MASTER_SUMMARY {
     cpus 1
     conda "${masterSummaryCondaEnvPath}"
 
-    when:
-    masterSummaryEnabled
-
     input:
     path(asv_meta)
     path(asv_counts)
@@ -5624,6 +5779,9 @@ process MASTER_SUMMARY {
     path("ASV_master_column_mapping.tsv"), optional: true, emit: master_colmap
     path("ASV_master_column_collisions_original.tsv"), optional: true, emit: master_collisions
     path("master_summary.done"), emit: done
+
+    when:
+    masterSummaryEnabled
 
     script:
     def whitelistArg = masterSummaryWhitelistCsv ? """  --whitelist "${masterSummaryWhitelistCsv}" \\\n""" : ''
@@ -5664,14 +5822,14 @@ process ASV_MAG_LINK {
     cpus asvMagLinkThreads
     conda "${asvMagLinkCondaEnvPath}"
 
-    when:
-    asvMagLinkEnabled
-
     input:
     path(filtered_fasta)
 
     output:
     path("asv_mag_link.done"), emit: done
+
+    when:
+    asvMagLinkEnabled
 
     script:
     def masterTsvArg = asvMagLinkMasterTsv ? """  --master-tsv "${asvMagLinkMasterTsv}" \\\n""" : ''

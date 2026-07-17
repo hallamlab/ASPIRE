@@ -200,6 +200,7 @@ def plot_indicspecies(df: pd.DataFrame, outdir: Path) -> None:
         ax.set_ylabel("Significant ASVs (q < alpha)")
         ax.tick_params(axis="x", rotation=30)
         ax.grid(axis="y", alpha=0.3)
+        ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), title="Duleg")
         plt.tight_layout()
         for ext in ("svg", "pdf"):
             plt.savefig(plot_dir / f"indicspecies_significant_counts.{ext}", bbox_inches="tight")
@@ -260,6 +261,7 @@ def plot_indicspecies(df: pd.DataFrame, outdir: Path) -> None:
         ax.set_ylabel("Significant ASV count")
         ax.tick_params(axis="x", rotation=35)
         ax.grid(axis="y", alpha=0.3)
+        ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), title="Duleg")
         plt.tight_layout()
         for ext in ("svg", "pdf"):
             plt.savefig(plot_dir / f"indicspecies_type_indicator_counts_by_label.{ext}", bbox_inches="tight")
@@ -278,6 +280,7 @@ def plot_indicspecies(df: pd.DataFrame, outdir: Path) -> None:
         ax2.set_xlabel("Indicator label class")
         ax2.set_ylabel("Significant ASV count")
         ax2.grid(axis="y", alpha=0.3)
+        ax2.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), title="Duleg")
         plt.tight_layout()
         for ext in ("svg", "pdf"):
             plt.savefig(plot_dir / f"indicspecies_type_indicator_counts_single_vs_combo.{ext}", bbox_inches="tight")
