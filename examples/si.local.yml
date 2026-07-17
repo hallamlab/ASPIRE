@@ -294,10 +294,9 @@ outlier_detection:
 collectors_curve:
   enabled: true
   sample_col: sampleID
-  group_col: o2_subcompartment_final
+  group_col: Depth
   color_col: Color
-  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
-  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
+  group_order: [10, 20, 40, 60, 75, 80, 85, 90, 97, 100, 110, 120, 135, 150, 165, 185, 200]
   permutations: 999
   seed: 42
   out_prefix: metadata/collectors_curve
@@ -314,10 +313,9 @@ plot_upset:
   domain: micro
   taxonomy_path:
   sample_id_col: sampleID
-  group_col: o2_subcompartment_final
+  group_col: Depth
   color_col: Color
-  group_order: [oxic__gmm0, oxic__gmm1, oxic__gmm2, oxic__gmm3, oxic__gmm4, dysoxic__gmm0, dysoxic__gmm1, dysoxic__gmm2, dysoxic__gmm3, suboxic__gmm0, suboxic__gmm1, suboxic__gmm2, suboxic__gmm3, anoxic__gmm0, anoxic__gmm1, outlier]
-  group_palette: "oxic__gmm0=#660000,oxic__gmm1=#B90000,oxic__gmm2=#FF0D0D,oxic__gmm3=#FF6060,oxic__gmm4=#FFB2B2,dysoxic__gmm0=#003300,dysoxic__gmm1=#00A600,dysoxic__gmm2=#1AFF1A,dysoxic__gmm3=#8CFF8C,suboxic__gmm0=#26667C,suboxic__gmm1=#42A5C5,suboxic__gmm2=#91CBDD,suboxic__gmm3=#E0F0F5,anoxic__gmm0=#330033,anoxic__gmm1=#FF8CFF,outlier=#FFFFFF"
+  group_order: [10, 20, 40, 60, 75, 80, 85, 90, 97, 100, 110, 120, 135, 150, 165, 185, 200]
   subset_groups:
   skip_venn: true
   raw_only: false
