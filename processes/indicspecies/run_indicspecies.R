@@ -207,8 +207,9 @@ if ("status" %in% group_specs) {
   # Status ISA aggregates within patient before testing between-status differences.
   required_cols <- c(required_cols, opt$`patient-col`)
 }
-if (length(stratified_specs) > 0) {
-  # Stratified ISA aggregates replicate samples to the patient level when possible.
+if (length(stratified_specs) > 0 &&
+    (is.null(opt$`block-col`) || !nzchar(opt$`block-col`))) {
+  # Without an explicit block, retain the legacy patient-level aggregation.
   required_cols <- c(required_cols, opt$`patient-col`)
 }
 if (!is.null(opt$`block-col`) && nzchar(opt$`block-col`)) {
@@ -317,14 +318,30 @@ apply_matrix_transform <- function(mat, method = "none") {
 run_indics <- function(X_samples_by_features, grouping, perms = 9999, duleg = FALSE, patient_blocks = NULL) {
   # indicspecies::multipatt expects samples in rows, species/features in columns
   # If patient_blocks provided, use blocked permutations (for within-patient comparisons)
+  grouping <- droplevels(as.factor(grouping))
+  n_groups <- nlevels(grouping)
+  if (n_groups < 2) {
+    stop("Indicator-species analysis requires at least two represented groups.")
+  }
   if (!is.null(patient_blocks)) {
     message("  Using blocked permutations (patient as blocking factor)")
     ctrl <- how(nperm = perms, blocks = patient_blocks)
   } else {
     ctrl <- how(nperm = perms)
   }
+  # The union of every represented group is not an indicator pattern: it only
+  # identifies features occurring broadly across the complete cohort. Exclude
+  # that combination during fitting so multipatt returns the best informative
+  # proper subset instead of selecting the full union and discarding it later.
+  max_order <- if (isTRUE(duleg)) 1L else max(1L, n_groups - 1L)
   suppressWarnings({
-    multipatt(x = X_samples_by_features, cluster = grouping, duleg = duleg, control = ctrl)
+    multipatt(
+      x = X_samples_by_features,
+      cluster = grouping,
+      duleg = duleg,
+      max.order = max_order,
+      control = ctrl
+    )
   })
 }
 
@@ -347,21 +364,49 @@ summarize_multipatt <- function(fit) {
       mutate(q.value = p.adjust(.data[["p.value"]], method = "fdr"),
              significant = q.value < opt$`q-threshold`)
   }
-  out
+  annotate_association_scope(out)
+}
+
+annotate_association_scope <- function(df) {
+  s_cols <- grep("^s\\.", names(df), value = TRUE)
+  if (length(s_cols) == 0 || nrow(df) == 0) {
+    df$association_group_count <- integer(nrow(df))
+    df$association_groups <- character(nrow(df))
+    df$association_scope <- character(nrow(df))
+    if ("significant" %in% names(df)) df$indicator_class <- "not_significant"
+    return(df)
+  }
+  selected <- as.matrix(df[, s_cols, drop = FALSE]) == 1
+  selected[is.na(selected)] <- FALSE
+  group_names <- sub("^s\\.", "", s_cols)
+  df$association_group_count <- rowSums(selected)
+  df$association_groups <- apply(selected, 1, function(mask) paste(group_names[mask], collapse = "+"))
+  df$association_scope <- ifelse(
+    df$association_group_count == 1, "single_group",
+    ifelse(df$association_group_count > 1, "multigroup", "unassigned")
+  )
+  if ("significant" %in% names(df)) {
+    df$indicator_class <- ifelse(
+      !df$significant, "not_significant",
+      ifelse(df$association_group_count == 1, "single_group_indicator", "multigroup_indicator")
+    )
+  }
+  df
+}
+
+drop_full_union_patterns <- function(df) {
+  s_cols <- grep("^s\\.", names(df), value = TRUE)
+  if (length(s_cols) == 0 || nrow(df) == 0) {
+    return(df)
+  }
+  # Defensive output check. run_indics() excludes this pattern during fitting,
+  # but retain the guard for tables assembled from heterogeneous inputs.
+  is_full_union <- rowSums(df[, s_cols, drop = FALSE], na.rm = TRUE) == length(s_cols)
+  df[!is_full_union, , drop = FALSE]
 }
 
 write_tables <- function(df_sign_only, df_full, base) {
-  drop_full_union_patterns <- function(df) {
-    s_cols <- grep("^s\\.", names(df), value = TRUE)
-    if (length(s_cols) == 0 || nrow(df) == 0) {
-      return(df)
-    }
-    # Non-informative union pattern: feature associated with all groups.
-    is_full_union <- rowSums(df[, s_cols, drop = FALSE], na.rm = TRUE) == length(s_cols)
-    df[!is_full_union, , drop = FALSE]
-  }
-
-  df_sign_only <- drop_full_union_patterns(df_sign_only)
+  df_sign_only <- annotate_association_scope(drop_full_union_patterns(df_sign_only))
   df_full <- drop_full_union_patterns(df_full)
 
   out_results <- file.path(outdir, paste0(base, "_results.tsv"))
@@ -369,14 +414,6 @@ write_tables <- function(df_sign_only, df_full, base) {
   readr::write_tsv(df_sign_only, out_results)
   readr::write_tsv(df_full, out_summary)
 
-  # Backward-compatible alias for historical DULEG naming: *_results_DULEG.tsv
-  if (grepl("_DULEG$", base)) {
-    base_legacy <- sub("_DULEG$", "", base)
-    out_results_legacy <- file.path(outdir, paste0(base_legacy, "_results_DULEG.tsv"))
-    out_summary_legacy <- file.path(outdir, paste0(base_legacy, "_summary_DULEG.tsv"))
-    readr::write_tsv(df_sign_only, out_results_legacy)
-    readr::write_tsv(df_full, out_summary_legacy)
-  }
 }
 
 # Convert each sample to relative abundance, then average within groups.
@@ -472,8 +509,6 @@ for (gcol in group_specs) {
     # Collect per-site results into legacy pooled status outputs expected by ASPIRE readers.
     pooled_status_sign <- list()
     pooled_status_full <- list()
-    pooled_status_sign_duleg <- list()
-    pooled_status_full_duleg <- list()
 
     site_levels <- unique(as.character(meta_keep$type_group))
     site_levels <- site_levels[!is.na(site_levels)]
@@ -546,21 +581,16 @@ for (gcol in group_specs) {
       fit1 <- run_indics(X_pat, grouping_pat, perms = opt$perms, duleg = FALSE, patient_blocks = NULL)
       res1_sign <- as.data.frame(fit1$sign) %>% rownames_to_column("ASV")
       res1_full <- summarize_multipatt(fit1)
+      # Filter before pooling so each stratum is evaluated against only the
+      # groups represented in that stratum, rather than the union of columns
+      # introduced later by bind_rows().
+      res1_sign <- drop_full_union_patterns(res1_sign)
+      res1_full <- drop_full_union_patterns(res1_full)
       site_slug <- gsub("[^A-Za-z0-9]+", "_", site)
       write_tables(res1_sign, res1_full, paste0("status_", site_slug, "_indicator_species"))
 
       pooled_status_sign[[length(pooled_status_sign) + 1]] <- res1_sign %>% mutate(type_group = site)
       pooled_status_full[[length(pooled_status_full) + 1]] <- res1_full %>% mutate(type_group = site)
-
-      message("Running multipatt for 'status' within type_group='", site,
-              "' (DULEG-restricted mode, duleg=TRUE) …")
-      fit2 <- run_indics(X_pat, grouping_pat, perms = opt$perms, duleg = TRUE, patient_blocks = NULL)
-      res2_sign <- as.data.frame(fit2$sign) %>% rownames_to_column("ASV")
-      res2_full <- summarize_multipatt(fit2)
-      write_tables(res2_sign, res2_full, paste0("status_", site_slug, "_indicator_species_DULEG"))
-
-      pooled_status_sign_duleg[[length(pooled_status_sign_duleg) + 1]] <- res2_sign %>% mutate(type_group = site)
-      pooled_status_full_duleg[[length(pooled_status_full_duleg) + 1]] <- res2_full %>% mutate(type_group = site)
 
       # Extra status analysis for Lung Brush: remove contralateral samples from cancer patients.
       if (isTRUE(opt$`status-extra-no-contralateral`) && !isTRUE(opt$`status-exclude-contralateral`) &&
@@ -627,16 +657,6 @@ for (gcol in group_specs) {
                   paste0("status_", site_slug, "_no_contralateral_indicator_species")
                 )
 
-                message("Running multipatt for 'status' within type_group='", site,
-                        "' excluding contralateral cancer samples (DULEG-restricted mode, duleg=TRUE) …")
-                fit2_nc <- run_indics(X_pat_nc, grouping_pat_nc, perms = opt$perms,
-                                      duleg = TRUE, patient_blocks = NULL)
-                res2_nc_sign <- as.data.frame(fit2_nc$sign) %>% rownames_to_column("ASV")
-                res2_nc_full <- summarize_multipatt(fit2_nc)
-                write_tables(
-                  res2_nc_sign, res2_nc_full,
-                  paste0("status_", site_slug, "_no_contralateral_indicator_species_DULEG")
-                )
               }
             }
           }
@@ -647,9 +667,6 @@ for (gcol in group_specs) {
     # Emit legacy pooled files expected by existing ASPIRE plotting workflows.
     if (length(pooled_status_sign) > 0) {
       write_tables(bind_rows(pooled_status_sign), bind_rows(pooled_status_full), "status_indicator_species")
-    }
-    if (length(pooled_status_sign_duleg) > 0) {
-      write_tables(bind_rows(pooled_status_sign_duleg), bind_rows(pooled_status_full_duleg), "status_indicator_species_DULEG")
     }
 
     next
@@ -689,12 +706,22 @@ for (gcol in group_specs) {
       length(unique(values[!is.na(values)]))
     })
     if (all(groups_per_block < 2)) {
-      warning(
-        "Grouping '", gcol, "' is constant within every block; disabling blocked permutations."
+      message(
+        "Grouping '", gcol, "' is constant within blocks; aggregating to one community profile per block."
       )
+      X_for_isa <- aggregate_mean_relative(X, blocking_ids)
+      block_group_map <- meta_keep %>%
+        transmute(block_id___ = blocking_ids, group_id___ = as.character(.data[[gcol]])) %>%
+        filter(!is.na(block_id___), !is.na(group_id___), group_id___ != "") %>%
+        distinct() %>%
+        group_by(block_id___) %>%
+        summarise(group_id___ = first(group_id___), .groups = "drop")
+      group_vec <- block_group_map$group_id___[match(rownames(X_for_isa), block_group_map$block_id___)]
+      keep_blocks <- !is.na(group_vec)
+      X_for_isa <- X_for_isa[keep_blocks, , drop = FALSE]
+      grouping_for_isa <- droplevels(factor(group_vec[keep_blocks]))
       use_blocking <- FALSE
       patient_blocks <- NULL
-      blocking_ids <- NULL
     }
   }
 
@@ -745,6 +772,19 @@ for (gcol in group_specs) {
       next
     }
   }
+  if (!use_blocking && !is.null(blocking_ids)) {
+    tab_blocks <- table(grouping_for_isa)
+    small_blocks <- names(tab_blocks[tab_blocks < opt$`min-n`])
+    if (length(small_blocks) > 0) {
+      keep_blocks <- !(grouping_for_isa %in% small_blocks)
+      grouping_for_isa <- droplevels(grouping_for_isa[keep_blocks])
+      X_for_isa <- X_for_isa[keep_blocks, , drop = FALSE]
+    }
+    if (length(unique(grouping_for_isa)) < 2) {
+      warning("Grouping column '", gcol, "' has <2 independent block-level groups after aggregation; skipping.")
+      next
+    }
+  }
   X_for_isa <- apply_matrix_transform(X_for_isa, opt$transform)
 
   message("Running multipatt for '", gcol, "' (general multipatt, duleg=FALSE) …")
@@ -753,15 +793,8 @@ for (gcol in group_specs) {
   res1_full <- summarize_multipatt(fit1)
   write_tables(res1_sign, res1_full, paste0(gcol_slug, "_indicator_species"))
 
-  message("Running multipatt for '", gcol, "' (DULEG-restricted mode, duleg=TRUE) …")
-  fit2 <- run_indics(X_for_isa, grouping_for_isa, perms = opt$perms, duleg = TRUE, patient_blocks = patient_blocks)
-  res2_sign <- as.data.frame(fit2$sign) %>% rownames_to_column("ASV")
-  res2_full <- summarize_multipatt(fit2)
-  write_tables(res2_sign, res2_full, paste0(gcol_slug, "_indicator_species_DULEG"))
-  
   if (tolower(gcol) == "type_group") {
     write_tables(res1_sign, res1_full, "Type_Group_indicator_species")
-    write_tables(res2_sign, res2_full, "Type_Group_indicator_species_DULEG")
   }
 }
 
@@ -788,8 +821,6 @@ for (spec in stratified_specs) {
 
   pooled_sign <- list()
   pooled_full <- list()
-  pooled_sign_duleg <- list()
-  pooled_full_duleg <- list()
 
   for (within_value in within_levels) {
     site_mask <- !is.na(meta[[within_col]]) & as.character(meta[[within_col]]) == as.character(within_value)
@@ -829,40 +860,38 @@ for (spec in stratified_specs) {
     X_for_isa <- X_site
     grouping_for_isa <- grouping_site
 
-    if (opt$`patient-col` %in% colnames(meta_site)) {
-      X_for_isa <- aggregate_mean_relative(X_site, meta_site[[opt$`patient-col`]])
-      group_map <- meta_site %>%
-        transmute(
-          patient_id___ = as.character(.data[[opt$`patient-col`]]),
-          group_id___ = as.character(.data[[group_col]])
-        ) %>%
-        filter(!is.na(patient_id___), !is.na(group_id___)) %>%
-        distinct() %>%
-        group_by(patient_id___) %>%
-        summarise(
-          n_groups___ = n_distinct(group_id___),
-          group_id___ = first(group_id___),
-          .groups = "drop"
-        )
-
-      mixed_patients <- group_map$patient_id___[group_map$n_groups___ > 1]
-      if (length(mixed_patients) > 0) {
-        warning("Stratified ISA for ", group_col, " within ", within_col, "='",
-                within_value, "' has patients with multiple group labels; using first label for: ",
-                paste(mixed_patients, collapse = ", "))
+    stratified_blocks <- NULL
+    stratified_block_col <- if (!is.null(opt$`block-col`) && nzchar(opt$`block-col`)) opt$`block-col` else opt$`patient-col`
+    if (stratified_block_col %in% colnames(meta_site)) {
+      block_ids <- as.character(meta_site[[stratified_block_col]])
+      groups_per_block <- tapply(as.character(grouping_site), block_ids, function(values) {
+        length(unique(values[!is.na(values)]))
+      })
+      if (all(groups_per_block < 2)) {
+        X_for_isa <- aggregate_mean_relative(X_site, block_ids)
+        group_map <- meta_site %>%
+          transmute(block_id___ = block_ids, group_id___ = as.character(.data[[group_col]])) %>%
+          filter(!is.na(block_id___), !is.na(group_id___), group_id___ != "") %>%
+          distinct() %>% group_by(block_id___) %>%
+          summarise(group_id___ = first(group_id___), .groups = "drop")
+        group_vec <- group_map$group_id___[match(rownames(X_for_isa), group_map$block_id___)]
+        keep_block <- !is.na(group_vec)
+        X_for_isa <- X_for_isa[keep_block, , drop = FALSE]
+        grouping_for_isa <- droplevels(factor(group_vec[keep_block]))
+      } else {
+        collapsed <- aggregate_to_patient_group(X_site, block_ids, grouping_site)
+        X_for_isa <- collapsed$X
+        grouping_for_isa <- droplevels(factor(collapsed$group))
+        stratified_blocks <- droplevels(factor(collapsed$patient))
       }
 
-      group_vec <- group_map$group_id___[match(rownames(X_for_isa), group_map$patient_id___)]
-      keep_pat <- !is.na(group_vec)
-      X_for_isa <- X_for_isa[keep_pat, , drop = FALSE]
-      grouping_for_isa <- droplevels(factor(group_vec[keep_pat]))
-
-      tab_pat <- table(grouping_for_isa)
-      small_pat <- names(tab_pat[tab_pat < opt$`min-n`])
-      if (length(small_pat) > 0) {
-        keep_pat_min <- !(grouping_for_isa %in% small_pat)
-        grouping_for_isa <- droplevels(grouping_for_isa[keep_pat_min])
-        X_for_isa <- X_for_isa[keep_pat_min, , drop = FALSE]
+      tab_block <- table(grouping_for_isa)
+      small_block <- names(tab_block[tab_block < opt$`min-n`])
+      if (length(small_block) > 0) {
+        keep_block_min <- !(grouping_for_isa %in% small_block)
+        grouping_for_isa <- droplevels(grouping_for_isa[keep_block_min])
+        X_for_isa <- X_for_isa[keep_block_min, , drop = FALSE]
+        if (!is.null(stratified_blocks)) stratified_blocks <- droplevels(stratified_blocks[keep_block_min])
       }
     }
 
@@ -881,7 +910,7 @@ for (spec in stratified_specs) {
 
     message("Running stratified multipatt for '", group_col, "' within '",
             within_col, "'='", within_value, "' (general multipatt, duleg=FALSE) …")
-    fit1 <- run_indics(X_for_isa, grouping_for_isa, perms = opt$perms, duleg = FALSE, patient_blocks = NULL)
+    fit1 <- run_indics(X_for_isa, grouping_for_isa, perms = opt$perms, duleg = FALSE, patient_blocks = stratified_blocks)
     res1_sign <- as.data.frame(fit1$sign) %>%
       rownames_to_column("ASV") %>%
       mutate(stratified_within_col = within_col, stratified_within_value = within_value,
@@ -889,29 +918,19 @@ for (spec in stratified_specs) {
     res1_full <- summarize_multipatt(fit1) %>%
       mutate(stratified_within_col = within_col, stratified_within_value = within_value,
              stratified_group_col = group_col)
+    # Apply the defensive full-union check within this stratum before pooled
+    # tables gain s.* columns belonging to other strata.
+    res1_sign <- drop_full_union_patterns(res1_sign)
+    res1_full <- drop_full_union_patterns(res1_full)
     write_tables(res1_sign, res1_full, base)
     pooled_sign[[length(pooled_sign) + 1]] <- res1_sign
     pooled_full[[length(pooled_full) + 1]] <- res1_full
 
-    message("Running stratified multipatt for '", group_col, "' within '",
-            within_col, "'='", within_value, "' (DULEG-restricted mode, duleg=TRUE) …")
-    fit2 <- run_indics(X_for_isa, grouping_for_isa, perms = opt$perms, duleg = TRUE, patient_blocks = NULL)
-    res2_sign <- as.data.frame(fit2$sign) %>%
-      rownames_to_column("ASV") %>%
-      mutate(stratified_within_col = within_col, stratified_within_value = within_value,
-             stratified_group_col = group_col)
-    res2_full <- summarize_multipatt(fit2) %>%
-      mutate(stratified_within_col = within_col, stratified_within_value = within_value,
-             stratified_group_col = group_col)
-    write_tables(res2_sign, res2_full, paste0(base, "_DULEG"))
-    pooled_sign_duleg[[length(pooled_sign_duleg) + 1]] <- res2_sign
-    pooled_full_duleg[[length(pooled_full_duleg) + 1]] <- res2_full
   }
 
   if (length(pooled_sign) > 0) {
     pooled_base <- paste0("stratified_", group_slug, "_within_", within_slug, "_indicator_species")
     write_tables(bind_rows(pooled_sign), bind_rows(pooled_full), pooled_base)
-    write_tables(bind_rows(pooled_sign_duleg), bind_rows(pooled_full_duleg), paste0(pooled_base, "_DULEG"))
   }
 }
 

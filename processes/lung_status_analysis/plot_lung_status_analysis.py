@@ -17,6 +17,10 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 
 import numpy as np
 import pandas as pd
@@ -30,7 +34,7 @@ from skbio.stats.ordination import pcoa
 mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["svg.fonttype"] = "none"
 mpl.rcParams["savefig.dpi"] = 600
-plt.rcParams.update({"font.size": 12})
+plt.rcParams.update({"font.size": 22, "font.family": "Times New Roman"})
 sns.set_theme()
 sns.set_style("white")
 

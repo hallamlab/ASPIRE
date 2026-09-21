@@ -1,0 +1,123 @@
+# ASPIRE demo: high-accuracy, full-length bacterial/archaeal 16S amplicons.
+#
+# Intended input:
+#   - one single-end FASTQ per sample (normally PacBio CCS/HiFi consensus reads)
+#   - reads already demultiplexed, primer trimmed, and oriented 5'->3'
+#   - approximately V1-V9 / near-full-length 16S (normally about 1.2-1.7 kb)
+#
+# This is NOT a shotgun-read 16S assembler and is not recommended unchanged
+# for raw Oxford Nanopore reads. ASPIRE currently infers ASVs with VSEARCH
+# UNOISE rather than the PacBio-specific DADA2 denoise-ccs model. Validate the
+# retained-length, error, chimera, and mock-community results before treating
+# exact sequence variants as biological ASVs.
+
+paths:
+  input_dir: /abs/path/full_length_16s_fastqs
+  output_dir: /abs/path/full_length_16s_aspire_output
+  # Strongly recommended for single-end long reads. Leave fastq_r2 blank.
+  manifest: /abs/path/full_length_16s_manifest.tsv
+  runtime_dir: /abs/path/full_length_16s_aspire_output/.aspire
+  keep_runtime_dir: true
+
+resources:
+  sample_threads: 2
+  analysis_threads: 25
+  max_parallel_sample_tasks: 12
+  single_end: true
+
+filename_patterns:
+  r1_tokens: [R1, ccs, hifi]
+  r2_tokens: [R2]
+  ext_patterns:
+    - "\\.fastq\\.gz$"
+    - "\\.fq\\.gz$"
+    - "\\.fastq$"
+    - "\\.fq$"
+  sample_strip_regex: "(_R1)?(_ccs|_hifi)?$"
+
+# Primer removal and orientation are deliberately not encoded as fixed base
+# trimming: full-length primer sequences and orientation must be handled before
+# ASPIRE because their sequences are study specific.
+fastp:
+  trim_front_r1: 0
+  trim_tail_r1: 0
+  trim_front_r2: 0
+  trim_tail_r2: 0
+
+# MERGE_READS passes single-end input through unchanged. These values are used
+# only if paired records are accidentally supplied.
+merge:
+  max_diffs: 20
+  min_overlap: 20
+  trunc_quality: 5
+  allow_stagger: false
+
+# Starting values for high-accuracy full-length consensus reads. Inspect the
+# empirical length/error distributions and adjust for the actual primer pair.
+filter:
+  max_ee: 2.0
+  min_len: 1000
+  max_len: 1700
+
+concat:
+  relabel: true
+  label_sep: ":"
+
+unoise:
+  min_size: 3
+
+table_filter:
+  min_sample_sum: 1000
+  min_asv_sum: 0
+
+# SINA recognizes V1-V9 using the full-length SILVA coordinate interval and
+# retains that interval rather than standardizing reads to a short V-region.
+sina:
+  reference:
+  reference_url: https://www.arb-silva.de/fileadmin/silva_databases/release_138_2/ARB_files/SILVA_138.2_SSURef_NR99_03_07_24_opt.arb.gz
+  download_subdir: sina_reference
+  regions: [V1-V9]
+  trim_to: V1-V9
+  batch_size: 100000
+  keep_gaps: false
+  threads: 25
+  verbose: false
+
+taxonomy:
+  ref_taxonomy:
+  ref_taxonomy_url: https://data.qiime2.org/2024.10/common/silva-138-99-tax.qza
+  ref_taxonomy_filename: silva-138_2-ssu-nr99-tax.qza
+  ref_sequences:
+  ref_sequences_url: https://data.qiime2.org/2024.10/common/silva-138-99-seqs.qza
+  ref_sequences_filename: silva-138_2-ssu-nr99-seqs-DNA.qza
+  download_subdir: taxonomy_reference
+  output_dir: taxonomy
+  output_tsv: ASV_SILVA_tax.full-length.vsearch.tsv
+  stats_tsv: ASV_SILVA_stats.full-length.vsearch.tsv
+  uppercase_fasta: ASVs.full_length.upper.fasta
+  threads: 25
+
+# The demo stops after core ASV inference and taxonomy. Enable these only after
+# providing study-specific metadata and contaminant/mitochondrial references.
+mito:
+  enabled: false
+
+filter_counts:
+  enabled: false
+
+metadata_plots:
+  enabled: false
+
+general_stats:
+  enabled: true
+
+sankey:
+  enabled: false
+
+spieceasi:
+  enabled: false
+  network_enabled: false
+  modules_enabled: false
+
+master_summary:
+  enabled: false

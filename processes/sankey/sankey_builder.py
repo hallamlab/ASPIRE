@@ -42,6 +42,11 @@ import os
 import re
 import sys
 from pathlib import Path
+_style_path = str(Path(__file__).resolve().parents[1])
+if _style_path not in sys.path:
+    sys.path.insert(0, _style_path)
+from shared_plot_style import install_publication_style
+install_publication_style()
 from typing import Dict, List, Tuple, Sequence, Optional
 from xml.sax.saxutils import escape
 
@@ -57,8 +62,8 @@ import matplotlib.pyplot as plt
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['font.family'] = 'Source Sans Pro'
+plt.rcParams.update({'font.size': 22})
+plt.rcParams['font.family'] = 'Times New Roman'
 sns.set_theme()
 sns.set_style("white")
 
@@ -261,8 +266,7 @@ def write_fallback_svg(output_svg: Path, title: str, steps: List[str], counts: L
     elements = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
-        f'<text x="{margin_x}" y="48" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="{text_color}">{escape(title)}</text>',
-        f'<text x="{margin_x}" y="78" font-family="Arial, sans-serif" font-size="14" fill="#666666">Static fallback export; interactive Sankey is available in the matching HTML file.</text>',
+        f'<text x="{margin_x}" y="48" font-family="Times New Roman" font-size="26" font-weight="700" fill="{text_color}">{escape(title)}</text>',
     ]
 
     columns = [
@@ -274,7 +278,7 @@ def write_fallback_svg(output_svg: Path, title: str, steps: List[str], counts: L
 
     for heading, values, x in columns:
         elements.append(
-            f'<text x="{x}" y="{top - 28}" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="{text_color}">{escape(heading)}</text>'
+            f'<text x="{x}" y="{top - 28}" font-family="Times New Roman" font-size="22" font-weight="700" fill="{text_color}">{escape(heading)}</text>'
         )
         for idx, (name, value) in enumerate(values.items()):
             y = top + idx * row_h
@@ -283,7 +287,7 @@ def write_fallback_svg(output_svg: Path, title: str, steps: List[str], counts: L
             label = f"{name}: {int(value):,}" if labeled else f"{int(value):,}"
             elements.extend([
                 f'<rect x="{x}" y="{y - 18}" width="{bar_w}" height="22" rx="2" fill="{fill}" opacity="0.9"/>',
-                f'<text x="{x}" y="{y + 20}" font-family="Arial, sans-serif" font-size="12" fill="{text_color}">{escape(label)}</text>',
+                f'<text x="{x}" y="{y + 24}" font-family="Times New Roman" font-size="22" fill="{text_color}">{escape(label)}</text>',
             ])
 
     # Simple flow guide so the fallback still reads as a left-to-right process.
@@ -295,6 +299,20 @@ def write_fallback_svg(output_svg: Path, title: str, steps: List[str], counts: L
 
     elements.append("</svg>")
     output_svg.write_text("\n".join(elements) + "\n", encoding="utf-8")
+
+    fig, ax = plt.subplots(figsize=(12, 7.6))
+    ax.axis("off")
+    ax.set_title(title, loc="left")
+    columns = [("Input groups", lmp_in, 0.02), ("Processing steps", dict(zip(steps, counts)), 0.36),
+               ("Output groups", lmp_out, 0.70)]
+    for heading, values, x in columns:
+        ax.text(x, 0.92, heading, transform=ax.transAxes, fontweight="bold", va="top")
+        for index, (name, value) in enumerate(values.items()):
+            label = f"{name}: {int(value):,}" if labeled else f"{int(value):,}"
+            ax.text(x, 0.84 - index * 0.075, label, transform=ax.transAxes, va="top")
+    fig.savefig(output_svg.with_suffix(".png"))
+    fig.savefig(output_svg.with_suffix(".pdf"))
+    plt.close(fig)
 
 
 def build_sankey(steps: List[str], counts: List[int],
@@ -420,15 +438,17 @@ def build_sankey(steps: List[str], counts: List[int],
             color=link_colors,
         ),
     )])
-    fig.update_layout(title_text=title, font_size=12)
+    fig.update_layout(title_text=title, font={"family": "Times New Roman", "size": 22})
     output_html.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(str(output_html))
     print(f"✔ Sankey saved: {output_html}")
     try:
-        output_svg = output_html.with_suffix(".svg")
-        fig.write_image(str(output_svg))
-        print(f"✔ Sankey saved: {output_svg}")
+        for suffix in (".svg", ".pdf", ".png"):
+            output_static = output_html.with_suffix(suffix)
+            fig.write_image(str(output_static), scale=2 if suffix == ".png" else 1)
+            print(f"✔ Sankey saved: {output_static}")
     except Exception as exc:
+        output_svg = output_html.with_suffix(".svg")
         write_fallback_svg(output_svg, title, steps, counts, lmp_in, lmp_out, palette, labeled)
         print(
             f"[WARN] Could not export Sankey SVG for {output_html}: {exc}. "

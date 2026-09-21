@@ -29,6 +29,11 @@ python asv_umap_clustering.py \
 import argparse
 import sys
 from pathlib import Path
+_style_path = str(Path(__file__).resolve().parents[1])
+if _style_path not in sys.path:
+    sys.path.insert(0, _style_path)
+from shared_plot_style import install_publication_style
+install_publication_style()
 from typing import Optional, List, Tuple
 import warnings
 

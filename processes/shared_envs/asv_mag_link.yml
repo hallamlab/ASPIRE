@@ -11,3 +11,8 @@ dependencies:
   - matplotlib-base
   - seaborn
   - blast
+  - barrnap
+  # The current Bioconda HMMER build used by barrnap 0.9 links against
+  # libgsl.so.25, which is provided by GSL 2.6.  An unconstrained solve can
+  # otherwise install GSL 2.7 (libgsl.so.27) and leave nhmmer unusable.
+  - gsl=2.6

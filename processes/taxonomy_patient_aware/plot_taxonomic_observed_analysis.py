@@ -18,6 +18,10 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 from typing import Iterable
 
 import numpy as np
@@ -31,7 +35,7 @@ import seaborn as sns
 mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["svg.fonttype"] = "none"
 mpl.rcParams["savefig.dpi"] = 600
-plt.rcParams.update({"font.size": 12})
+plt.rcParams.update({"font.size": 22, "font.family": "Times New Roman"})
 sns.set_theme()
 sns.set_style("white")
 
@@ -710,7 +714,10 @@ def effect_heatmap(df: pd.DataFrame, tax_level: str, col_name: str, value_name: 
 def main() -> None:
     p = argparse.ArgumentParser(description="Plot observed taxonomic analysis results")
     p.add_argument("--data-long", required=True)
-    p.add_argument("--cancer-results", required=True)
+    p.add_argument(
+        "--cancer-results",
+        help="Optional comparison results. Cancer/comparison plots are omitted when unset.",
+    )
     p.add_argument("--sampletype-results", required=True)
     p.add_argument("--outdir", required=True)
     p.add_argument("--alpha", type=float, default=0.05)
@@ -735,9 +742,9 @@ def main() -> None:
 
     long_df = pd.read_csv(args.data_long, sep="\t", low_memory=False)
     long_df[args.type_col] = long_df[args.type_col].map(canonicalize_sample_type)
-    cancer_res = pd.read_csv(args.cancer_results, sep="\t")
+    cancer_res = pd.read_csv(args.cancer_results, sep="\t") if args.cancer_results else None
     pair_res = pd.read_csv(args.sampletype_results, sep="\t")
-    if "sample_type" in cancer_res.columns:
+    if cancer_res is not None and "sample_type" in cancer_res.columns:
         cancer_res["sample_type"] = cancer_res["sample_type"].map(canonicalize_sample_type)
     if "group1" in pair_res.columns:
         pair_res["group1"] = pair_res["group1"].map(canonicalize_sample_type)
@@ -756,16 +763,17 @@ def main() -> None:
             case_col=args.case_col,
             count_col=args.count_col,
         )
-        plot_cancer_boxplots(
-            rel_df,
-            cancer_res,
-            tax_level=tax_level,
-            outdir=outdir,
-            type_col=args.type_col,
-            case_col=args.case_col,
-            alpha=args.alpha,
-            top_n=args.top_n,
-        )
+        if cancer_res is not None:
+            plot_cancer_boxplots(
+                rel_df,
+                cancer_res,
+                tax_level=tax_level,
+                outdir=outdir,
+                type_col=args.type_col,
+                case_col=args.case_col,
+                alpha=args.alpha,
+                top_n=args.top_n,
+            )
 
         plot_sample_type_three_group_boxplots(
             rel_df,
@@ -787,25 +795,26 @@ def main() -> None:
             alpha=args.alpha,
             top_n=args.top_n,
         )
-        plot_cancer_boxplots_significant_panels(
-            rel_df,
-            cancer_res,
-            tax_level=tax_level,
-            outdir=outdir,
-            type_col=args.type_col,
-            case_col=args.case_col,
-            alpha=args.alpha,
-            top_n=args.top_n,
-        )
+        if cancer_res is not None:
+            plot_cancer_boxplots_significant_panels(
+                rel_df,
+                cancer_res,
+                tax_level=tax_level,
+                outdir=outdir,
+                type_col=args.type_col,
+                case_col=args.case_col,
+                alpha=args.alpha,
+                top_n=args.top_n,
+            )
 
-        effect_heatmap(
-            cancer_res,
-            tax_level=tax_level,
-            col_name="sample_type",
-            value_name="delta_median",
-            out_base=outdir / f"effect_heatmap_cancer_{tax_level}",
-            top_n=args.top_n,
-        )
+            effect_heatmap(
+                cancer_res,
+                tax_level=tax_level,
+                col_name="sample_type",
+                value_name="delta_median",
+                out_base=outdir / f"effect_heatmap_cancer_{tax_level}",
+                top_n=args.top_n,
+            )
         effect_heatmap(
             pair_res,
             tax_level=tax_level,

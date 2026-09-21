@@ -7,6 +7,10 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 
 import matplotlib.pyplot as plt
 import pandas as pd

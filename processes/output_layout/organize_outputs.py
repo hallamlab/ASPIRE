@@ -23,7 +23,14 @@ MODULE_DIRS = {
     "indicspecies": "indicator_analysis",
     "voc_correlation": "voc_correlation",
     "measurement_association": "measurement_association",
+    "titan": "threshold_indicator_taxa",
+    "microbial_compartments": "microbial_compartments",
+    "microbial_state_interpretation": "microbial_state_interpretation",
+    "ecological_context_atlas": "ecological_context_atlas",
+    "community_turnover": "community_turnover",
+    "asv_time_depth_curtain": "asv_time_depth_curtain",
     "grouping_diagnostics": "grouping_diagnostics",
+    "community_predictor_comparison": "community_predictor_comparison",
     "power_analysis": "power_analysis",
     "group_power_analysis": "power_analysis",
     "taxonomy_patient_aware": "taxonomy",
@@ -32,8 +39,11 @@ MODULE_DIRS = {
     "paired_group_contrast": "paired_group_contrast",
     "clustermaps": "clustermaps",
     "spieceasi": "network_analysis",
+    "genome_cooccurrence": "genome_network_analysis",
     "asv_mag_link": "asv_mag_link",
     "asv_mag_network": "asv_mag_network",
+    "asv_mag_curtains": "asv_mag_curtains",
+    "group_guild_function": "group_guild_function",
     "mito": "non_target_filtering",
     "taxonomy": "taxonomy",
     "stats": "general_stats",
@@ -302,14 +312,10 @@ def data_accounting_summary(modules_dir: Path) -> str:
         )
 
     visual_specs = (
-        ("Data-loss Sankey", modules_dir / "sankey" / "plots", ("data_loss_sankey.label.html", "data_loss_sankey.label.svg", "data_loss_sankey.svg"), "*sankey*.html", "Sample and sequence retention across processing stages."),
+        ("Data-loss Sankey", modules_dir / "sankey" / "plots", ("data_loss_sankey.label.html", "data_loss_sankey.html"), "*sankey*.html", "Interactive sample and sequence retention across processing stages."),
         ("Read-depth swarmplot", modules_dir / "metadata_plots" / "plots", ("type_group_swarmplot_micro.svg", "type_group_swarmplot_micro_raw.svg"), "*swarmplot*.svg", "Final read-depth distributions across analyzed groups."),
-        ("ASV overlap UpSet", modules_dir / "upset" / "plots", ("final_micro_upset.svg", "final_upset.svg"), "*upset*.svg", "ASV presence and overlap across analyzed groups."),
-        ("Collector's curve", modules_dir / "collectors_curve" / "plots", ("collectors_curve_overlay.svg", "collectors_curve_faceted.svg"), "*collector*.svg", "Accumulation of observed ASVs as samples are added, providing a descriptive view of sampling coverage."),
-        ("Grouping diagnostics", modules_dir / "grouping_diagnostics" / "plots", ("grouping_metric_summary.svg", "grouping_metric_summary.png"), "grouping_metric_summary.*", "PERMANOVA, silhouette, and within-versus-between distance summaries for configured metadata groupings."),
-        ("Grouping ordination", modules_dir / "grouping_diagnostics" / "plots", ("grouping_ordination_bray.svg", "grouping_ordination_bray.png"), "grouping_ordination_*", "Community ordination panels colored by each configured grouping variable."),
-        ("Grouping power", modules_dir / "grouping_diagnostics" / "plots", ("grouping_power.svg", "grouping_power.png"), "grouping_power.*", "Balanced resampling support curves for the configured grouping variables."),
-        ("ASV-MAG network mapping", modules_dir / "asv_mag_network" / "plots" / "qc", ("asv_mag_network_mapping_classes.svg", "asv_mag_network_mapping_classes.png"), "asv_mag_network_mapping_classes.*", "Taxonomy-filtered ASV-MAG mapping classes used to annotate ASV association networks."),
+        ("Collector's curve", modules_dir / "collectors_curve" / "plots", ("collectors_curve_overlay.svg", "collectors_curve_faceted.svg"), "*collector*overlay*.svg", "Accumulation of observed ASVs as samples are added, providing a compact view of sampling coverage."),
+        ("ASV overlap UpSet", modules_dir / "upset" / "plots", ("final_micro_upset.svg", "final_upset.svg"), "final*upset.svg", "Presence and overlap of retained ASVs across the analyzed groups."),
     )
     visuals = []
     for title, root, names, pattern, description in visual_specs:
@@ -375,7 +381,7 @@ def write_summary_artifacts(modules_dir: Path, summary_dir: Path) -> None:
         ])
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
-        '<style>text{font-family:Source Sans Pro,sans-serif;font-size:12px;fill:#202020}</style>'
+        '<style>text{font-family:"Times New Roman";font-size:22px;fill:#202020}</style>'
         '<rect width="100%" height="100%" fill="white"/>'
         '<text x="20" y="28" font-size="20" font-weight="700">ASPIRE module outputs</text>'
         '<rect x="680" y="16" width="12" height="12" fill="#0072B2"/><text x="698" y="27">Tables</text>'
@@ -423,10 +429,10 @@ def write_summary_artifacts(modules_dir: Path, summary_dir: Path) -> None:
     )
     report = f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>ASPIRE run report</title>
-<style>body{{font-family:Source Sans Pro,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#202020}}h1{{margin-bottom:.2rem}}section{{margin:2.5rem 0}}.grid,.metrics,.group-tables,.visual-grid{{display:grid;gap:1rem}}.grid{{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}.metrics{{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:1.4rem 0}}.metric{{border-top:4px solid #0072B2;background:#f4f7f8;padding:1rem}}.metric strong{{display:block;font-size:1.55rem}}.metric span,figcaption span{{display:block;color:#555;margin-top:.25rem}}.group-tables{{grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin:1.4rem 0}}.group-tables h3{{margin-bottom:.4rem}}table{{border-collapse:collapse;width:100%}}th,td{{border-bottom:1px solid #ddd;padding:.45rem;text-align:left}}th:last-child,td:last-child{{text-align:right}}.visual-grid{{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:1.5rem}}figure{{margin:0;border:1px solid #d8d8d8;padding:.7rem}}figure.wide{{grid-column:1/-1}}figure iframe{{width:100%;height:520px;border:0}}figcaption{{padding:.6rem .2rem .2rem}}article{{border:1px solid #d8d8d8;border-radius:8px;padding:1rem}}article h2{{font-size:1.05rem;margin-top:0}}a{{color:#006a8e;margin-right:1rem}}li{{margin:.55rem 0}}img{{width:100%;height:auto}}.sources a{{display:inline-block;margin:.25rem .6rem .25rem 0}}</style></head>
+<style>body{{font-family:"Times New Roman";font-size:22px;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#202020}}h1{{margin-bottom:.2rem}}section{{margin:2.5rem 0}}.grid,.metrics,.group-tables,.visual-grid{{display:grid;gap:1rem}}.grid{{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}.metrics{{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:1.4rem 0}}.metric{{border-top:4px solid #0072B2;background:#f4f7f8;padding:1rem}}.metric strong{{display:block;font-size:1.55rem}}.metric span,figcaption span{{display:block;color:#555;margin-top:.25rem}}.group-tables{{grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin:1.4rem 0}}.group-tables h3{{margin-bottom:.4rem}}table{{border-collapse:collapse;width:100%}}th,td{{border-bottom:1px solid #ddd;padding:.45rem;text-align:left}}th:last-child,td:last-child{{text-align:right}}.visual-grid{{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1.5rem}}figure{{margin:0;border:1px solid #d8d8d8;padding:.7rem}}figure.wide{{grid-column:1/-1}}figure iframe{{width:100%;height:620px;border:0}}figcaption{{padding:.6rem .2rem .2rem}}article{{border:1px solid #d8d8d8;border-radius:8px;padding:1rem}}article h2{{font-size:1.05rem;margin-top:0}}a{{color:#006a8e;margin-right:1rem}}li{{margin:.55rem 0}}img{{width:100%;height:auto}}.sources a{{display:inline-block;margin:.25rem .6rem .25rem 0}}@media(max-width:850px){{.visual-grid{{grid-template-columns:1fr}}figure.wide{{grid-column:auto}}}}</style></head>
 <body><h1>ASPIRE run report</h1><p>Non-interpretive inventory of published module outputs and execution provenance.</p>
 {data_accounting_summary(modules_dir)}
-<section id="output-inventory"><h2>Output Inventory</h2><p>Published tables and plots organized by analytical module.</p>
+<section id="output-inventory"><h2>Output Inventory</h2><p>Published tables and plots organized by analytical module. Detailed and large analytical figures are linked here rather than embedded in the run summary.</p>
 <img src="../plots/module_output_summary.svg" alt="Module output counts"><div class="grid">{''.join(cards)}</div></section>
 {run_details}
 <p>See <a href="../tables/module_output_manifest.tsv">module_output_manifest.tsv</a> for checksums and exact paths.</p></body></html>"""
@@ -461,6 +467,15 @@ def organize(output_dir: Path, config_path: Path | None = None) -> None:
         summary_dir / "report",
     ):
         directory.mkdir(parents=True, exist_ok=True)
+
+    # Do not preserve the obsolete empty clinical-comparison directory when the
+    # current taxonomy-group run did not produce that analysis.
+    comparison_source = output_dir / "taxonomy_group_association" / "cancer_vs_control"
+    if not tree_has_files(comparison_source):
+        shutil.rmtree(
+            modules_dir / "taxonomy" / "tables" / "cancer_vs_control",
+            ignore_errors=True,
+        )
 
     move_metadata_outputs(output_dir, modules_dir, summary_dir)
 
@@ -505,7 +520,13 @@ def organize(output_dir: Path, config_path: Path | None = None) -> None:
         elif source.exists():
             shutil.rmtree(source, ignore_errors=True)
 
-    reserved = {".aspire", "modules", "intermediates", "references", "summary", "logs"}
+    # The canonical preprocessing dataset is an input contract for the
+    # independent analysis phase, not a module output. Keep it at a stable
+    # top-level path so output organization cannot invalidate that contract.
+    reserved = {
+        ".aspire", "modules", "intermediates", "references", "summary", "logs",
+        "preprocessing_dataset",
+    }
     for source in sorted(
         path for path in output_dir.iterdir()
         if path.is_dir() and path.name not in reserved and not path.name.startswith(".")
@@ -560,6 +581,9 @@ def publish(staging_dir: Path, output_dir: Path, config_path: Path | None = None
     try:
         shutil.copytree(staging_dir, temporary, dirs_exist_ok=True, symlinks=False)
         organize(temporary, config_path)
+        canonical_dataset = output_dir / "preprocessing_dataset"
+        if canonical_dataset.is_dir() and not (temporary / "preprocessing_dataset").exists():
+            shutil.copytree(canonical_dataset, temporary / "preprocessing_dataset")
         try:
             staging_dir.relative_to(output_dir)
             staging_inside_output = True

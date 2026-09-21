@@ -25,6 +25,10 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import re
 import warnings
 from itertools import combinations, combinations_with_replacement
@@ -43,8 +47,8 @@ from matplotlib.patches import Patch
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['font.family'] = 'Source Sans Pro'
+plt.rcParams.update({'font.size': 22})
+plt.rcParams['font.family'] = 'Times New Roman'
 sns.set_theme()
 sns.set_style("white")
 
@@ -912,6 +916,8 @@ def get_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional stratification_timeseries table to merge into metadata.",
     )
+    io.add_argument("--cruise-group-assignments", type=Path, default=None,
+                    help="Optional cruise-level environmental group assignments table.")
 
     cols = p.add_argument_group("Columns / Groups")
     cols.add_argument("--group1-col", default="group1", help="Primary grouping column in metadata")
@@ -973,6 +979,9 @@ def get_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional comma-separated stratification_timeseries columns to merge into metadata (defaults to all non-key columns).",
     )
+    cols.add_argument("--cruise-group-meta-join-col", default="Cruise")
+    cols.add_argument("--cruise-group-join-col", default="Cruise")
+    cols.add_argument("--cruise-group-include-cols", default="cruise_group,max_prob,resp_entropy_normalized,assignment_uncertain,PC1,PC2")
     cols.add_argument("--keep-types", default="",
                       help="Comma-separated list of types to keep (order honored)")
     cols.add_argument(
@@ -1045,10 +1054,12 @@ def main():
     taxonomy_path = resolve(args.taxonomy)
     biochem_assignments_path = resolve(args.biochem_assignments) if args.biochem_assignments else None
     stratification_timeseries_path = resolve(args.stratification_timeseries) if args.stratification_timeseries else None
+    cruise_group_assignments_path = resolve(args.cruise_group_assignments) if args.cruise_group_assignments else None
     biochem_include_cols = parse_list_csv(args.biochem_include_cols)
     biochem_meta_join_cols = parse_list_csv(args.biochem_meta_join_cols)
     biochem_join_cols = parse_list_csv(args.biochem_join_cols)
     stratification_include_cols = parse_list_csv(args.stratification_include_cols)
+    cruise_group_include_cols = parse_list_csv(args.cruise_group_include_cols)
 
     if bool(biochem_meta_join_cols) != bool(biochem_join_cols):
         raise ValueError(
@@ -1069,6 +1080,8 @@ def main():
             print(f"[i] Biochem assignments: {biochem_assignments_path}")
         if stratification_timeseries_path:
             print(f"[i] Stratification timeseries: {stratification_timeseries_path}")
+        if cruise_group_assignments_path:
+            print(f"[i] Cruise group assignments: {cruise_group_assignments_path}")
 
     # Read data
     meta_sample_col = args.sample_id_col
@@ -1098,6 +1111,24 @@ def main():
             meta_join_cols=[args.stratification_meta_join_col],
             biochem_join_cols=[args.stratification_join_col],
             verbose=args.verbose,
+        )
+    if cruise_group_assignments_path:
+        cruise_df = load_biochem_assignments(cruise_group_assignments_path)
+        rename = {
+            "max_prob": "cruise_group_max_prob",
+            "resp_entropy_normalized": "cruise_group_entropy",
+            "assignment_uncertain": "cruise_group_uncertain",
+            "PC1": "cruise_group_PC1",
+            "PC2": "cruise_group_PC2",
+        }
+        selected = [args.cruise_group_join_col] + [c for c in cruise_group_include_cols if c in cruise_df.columns]
+        cruise_df = cruise_df[selected].rename(columns=rename)
+        renamed_include = [rename.get(c, c) for c in cruise_group_include_cols if c in selected]
+        meta = merge_biochem_assignments(
+            meta=meta, biochem_df=cruise_df, meta_sample_col=meta_sample_col,
+            biochem_sample_col=args.cruise_group_join_col, include_cols=renamed_include,
+            meta_join_cols=[args.cruise_group_meta_join_col],
+            biochem_join_cols=[args.cruise_group_join_col], verbose=args.verbose,
         )
 
     normalize_group_cols = parse_list_csv(args.normalize_group_cols)

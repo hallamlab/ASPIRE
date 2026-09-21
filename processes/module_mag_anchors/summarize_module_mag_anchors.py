@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -81,20 +85,25 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--best-stats", default=None, help="Optional network_modules_best_stats_all.tsv")
     ap.add_argument("--taxonomy", default=None, help="Optional taxonomy table with Feature ID / Taxon columns")
     ap.add_argument("--outdir", required=True, help="Output directory")
-    ap.add_argument("--top-n", type=int, default=3, help="Top N anchors to summarize per module")
+    ap.add_argument(
+        "--top-n",
+        type=int,
+        default=1,
+        help=(
+            "Within-module top rank retained independently for degree, "
+            "eigenvector centrality, and betweenness; an ASV is an anchor "
+            "when it qualifies for at least one metric."
+        ),
+    )
     return ap.parse_args()
 
 
 def load_asv_counts(path: str) -> pd.DataFrame:
-    counts = read_table(path, sep="\t")
+    counts = pd.read_csv(path, sep="\t", index_col=0, low_memory=False)
     if counts.empty:
         return pd.DataFrame()
-    if "ASV_ID" in counts.columns:
-        counts["ASV_ID"] = normalize_asv_id(counts["ASV_ID"])
-        counts = counts.drop_duplicates(subset=["ASV_ID"]).set_index("ASV_ID")
-    else:
-        counts.index = normalize_asv_id(pd.Series(counts.index, index=counts.index))
-        counts = counts[~counts.index.duplicated(keep="first")]
+    counts.index = normalize_asv_id(pd.Series(counts.index, index=counts.index))
+    counts = counts[~counts.index.duplicated(keep="first")]
     return counts.apply(pd.to_numeric, errors="coerce").fillna(0.0)
 
 

@@ -37,6 +37,7 @@ conda-local/
 nxf-tmp.*
 work/
 .aspire/
+.asv_pipeline.generated.*.nf
 
 # Common Nextflow report/trace artifacts (when emitted in repo root)
 timeline.html
@@ -60,3 +61,17 @@ mock_run*.manifest.tsv
 *.swp
 *.swo
 *~
+
+# Local manuscript writing, publication packages, and exploratory audits
+/docs/ASPIRE_METHODS.md
+/docs/ASPIRE_RESULTS.md
+/docs/ASPIRE_manuscript_supplements.zip
+/docs/manuscript_*
+/docs/showcase_overlay_preview/
+/scripts/manuscript/
+/processes/diversity_analysis/BASIN_RERUN.md
+
+# Local input manifests, cleanup configuration, and backups
+/examples/si.primer_trimmed.manifest.tsv
+/examples/si.old-output-cleanup.yml
+*.BAK

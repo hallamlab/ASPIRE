@@ -37,6 +37,10 @@ comma-separated CLI mappings.
 
 import argparse
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 from typing import Optional
 import warnings
 import re
@@ -53,8 +57,8 @@ import matplotlib.lines as mlines
 mpl.rcParams['pdf.fonttype'] = 42      # Keep text as text in PDF
 mpl.rcParams['svg.fonttype'] = 'none'  # Keep text as text in SVG
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['font.family'] = 'Source Sans Pro'
+plt.rcParams.update({'font.size': 22})
+plt.rcParams['font.family'] = 'Times New Roman'
 sns.set_theme()
 sns.set_style("white")
 

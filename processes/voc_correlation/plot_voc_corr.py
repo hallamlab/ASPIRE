@@ -11,6 +11,10 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -20,8 +24,8 @@ from scipy.stats import mannwhitneyu, spearmanr
 mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["svg.fonttype"] = "none"
 mpl.rcParams["savefig.dpi"] = 600
-plt.rcParams.update({"font.size": 12})
-plt.rcParams["font.family"] = "Source Sans Pro"
+plt.rcParams.update({"font.size": 22})
+plt.rcParams["font.family"] = "Times New Roman"
 sns.set_theme()
 sns.set_style("white")
 

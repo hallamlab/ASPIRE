@@ -39,12 +39,11 @@ env <- env[, colSums(is.na(env)) < nrow(env), drop = FALSE]
 if (ncol(env) < 1) {
   stop("No usable numeric measurement columns after NA filtering")
 }
-for (col in colnames(env)) {
-  vals <- env[[col]]
-  if (anyNA(vals)) {
-    vals[is.na(vals)] <- median(vals, na.rm = TRUE)
-    env[[col]] <- vals
-  }
+complete <- complete.cases(env)
+asv <- asv[complete, , drop = FALSE]
+env <- env[complete, , drop = FALSE]
+if (nrow(env) < 3) {
+  stop("Need at least three complete-case samples for constrained ordination")
 }
 env <- env[, vapply(env, function(x) sd(x, na.rm = TRUE) > 0, logical(1)), drop = FALSE]
 if (ncol(env) < 1) {

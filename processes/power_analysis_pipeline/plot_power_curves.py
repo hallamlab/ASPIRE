@@ -23,6 +23,10 @@ python plot_power_curves.py \
 
 import argparse
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import warnings
 import numpy as np
 import pandas as pd
@@ -36,8 +40,8 @@ warnings.filterwarnings('ignore')
 mpl.rcParams['pdf.fonttype'] = 42      # Keep text as text in PDF
 mpl.rcParams['svg.fonttype'] = 'none'  # Keep text as text in SVG
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 11})
-plt.rcParams['font.family'] = 'Source Sans Pro'
+plt.rcParams.update({'font.size': 22})
+plt.rcParams['font.family'] = 'Times New Roman'
 plt.rcParams['axes.linewidth'] = 0.8   # Thinner panel borders
 sns.set_theme()
 sns.set_style("white")

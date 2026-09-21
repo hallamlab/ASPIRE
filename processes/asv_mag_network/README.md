@@ -14,18 +14,33 @@ instead of rerunning network inference or ASV-MAG alignment.
 - Optional MAG abundance table.
 - Optional functional annotation tables keyed by `genome_id`.
 
-Preferred MAG abundance input is long-form read counts:
+Ecological anchors use the shared `asv_mag_network.anchor_top_n` setting. ASVs
+are ranked independently within their module by degree, eigenvector centrality,
+and betweenness centrality and are retained when they qualify for at least one
+metric. The default top rank is 1; tied ranks are retained.
+
+Preferred MAG abundance input is a long-form table with an explicit value
+column. For an upstream-normalized metagenome table, for example:
 
 ```tsv
-genome_id	sample_id	read_count
-MAG_001	SampleA	1234
+genome_id	sample_id	fpkm
+MAG_001	SampleA	1.234
 MAG_001	SampleB	0
-MAG_002	SampleA	55
+MAG_002	SampleA	0.055
 ```
 
-Read counts are normalized to per-sample relative abundance within the MAG
-table, ASV counts are normalized the same way, and agreement is computed per
-accepted ASV-MAG pair using only samples shared by that pair.
+Set `mag_abundance_value_col: fpkm` and
+`mag_abundance_normalization: provided_fpkm` to preserve these values, or
+use `tpm` and `provided_tpm` for transcript abundance. For raw paired-end
+recruitment counts, provide the matching SeqKit table and use
+`mag_abundance_normalization: auto` or `input_fragment_fpm`. Both settings
+require the SeqKit table; legacy `median_ratio` must be selected explicitly.
+R1 and R2 counts
+must agree, and one mate's `num_seqs` becomes the number of input fragments.
+MAG recruitment is then reported as fragments per million input fragments.
+ASV counts remain sample-relative, and agreement is computed per accepted
+ASV-MAG pair using only samples shared by that pair. Separate abundance and
+SeqKit inputs are supported for metagenomes and metatranscriptomes.
 
 For studies where MAG identifiers differ by source prefix/order, set
 `mag_id_mode: suffix_after_double_underscore`. This keeps capitalization and

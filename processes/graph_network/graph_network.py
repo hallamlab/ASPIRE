@@ -12,9 +12,11 @@ Features
 """
 
 import argparse
+import gc
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, Tuple, Optional, List
@@ -24,8 +26,15 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+_sys_path_style = str(Path(__file__).resolve().parents[1])
+if _sys_path_style not in sys.path:
+    sys.path.insert(0, _sys_path_style)
+from shared_plot_style import install_publication_style
+install_publication_style()
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
+import matplotlib.patheffects as mpatheffects
+from matplotlib.path import Path as MplPath
 import seaborn as sns
 import math
 from collections import Counter
@@ -40,9 +49,9 @@ except Exception:
 # ---------------------------- Global style -----------------------------------
 mpl.rcParams['pdf.fonttype'] = 42                 # text as text in PDF
 mpl.rcParams['svg.fonttype'] = 'none'             # text as text in SVG
-plt.rcParams.update({'font.size': 12})
+plt.rcParams.update({'font.size': 22})
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams['font.family'] = 'Source Sans Pro'
+plt.rcParams['font.family'] = 'Times New Roman'
 sns.set_theme()
 sns.set_style("white")
 NOT_FOCUS_COLOR = "#D3D3D3"
@@ -84,6 +93,7 @@ SIZE_CONFIG = {
     "abundance_reference": 5000.0,
     "abundance_reference_area": 80.0,
 }
+LABEL_CONFIG = {"max_labels": 100}
 
 
 # ---------------------------- Helpers ----------------------------------------
@@ -182,7 +192,12 @@ def save_figure(figpath: str) -> None:
     except Exception as e:
         print(f"[!] save_figure failed for {figpath}: {e}")
     finally:
-        plt.close()
+        fig = plt.gcf()
+        plt.close(fig)
+        # Large network figures contain many mutually-referencing Matplotlib
+        # artists.  Explicit collection prevents their memory accumulating
+        # across a long --modes run.
+        gc.collect()
 
 
 def natural_sort_key(value: object) -> Tuple:
@@ -538,32 +553,57 @@ def draw_edges_light(
 
 def draw_nodes_one_by_one(G: nx.Graph, pos: Dict, color_fn, size_fn, alpha_fn=None,
                           lw_fn=None):
-    for n in G.nodes():
-        color = color_fn(n)
-        size = size_fn(n)
-        alpha = alpha_fn(n) if alpha_fn else 1.0
-        lw = lw_fn(n) if lw_fn else 0.25
-        nx.draw_networkx_nodes(
-            G, pos, nodelist=[n],
-            node_color=[color], node_size=[size],
-            edgecolors='black', linewidths=lw, alpha=alpha
-        )
+    """Draw heterogeneous nodes in one collection instead of one per node.
+
+    The old implementation created thousands of PathCollections for a large
+    graph.  That made multi-mode runs retain excessive renderer memory even
+    after figures were closed.
+    """
+    nodes = list(G.nodes())
+    if not nodes:
+        return
+    coll = nx.draw_networkx_nodes(
+        G,
+        pos,
+        nodelist=nodes,
+        node_color=[color_fn(n) for n in nodes],
+        node_size=[size_fn(n) for n in nodes],
+        edgecolors="black",
+        linewidths=[lw_fn(n) if lw_fn else 0.25 for n in nodes],
+        alpha=[alpha_fn(n) if alpha_fn else 1.0 for n in nodes],
+    )
+    return coll
+
+
+def set_edge_artist_zorder(artists, zorder):
+    """Handle NetworkX collections, arrow-patch lists, and empty edge results."""
+    if artists is None:
+        return
+    if isinstance(artists, (list, tuple)):
+        for artist in artists:
+            artist.set_zorder(zorder)
+    else:
+        artists.set_zorder(zorder)
 
 
 def draw_selected_nodes_one_by_one(G: nx.Graph, pos: Dict, nodes: List[str], color_fn, size_fn, alpha_fn=None,
                                    lw_fn=None, zorder: Optional[float] = None):
-    for n in nodes:
-        color = color_fn(n)
-        size = size_fn(n)
-        alpha = alpha_fn(n) if alpha_fn else 1.0
-        lw = lw_fn(n) if lw_fn else 0.25
-        coll = nx.draw_networkx_nodes(
-            G, pos, nodelist=[n],
-            node_color=[color], node_size=[size],
-            edgecolors='black', linewidths=lw, alpha=alpha
-        )
-        if zorder is not None:
-            coll.set_zorder(zorder)
+    selected = [n for n in nodes if n in G]
+    if not selected:
+        return None
+    coll = nx.draw_networkx_nodes(
+        G,
+        pos,
+        nodelist=selected,
+        node_color=[color_fn(n) for n in selected],
+        node_size=[size_fn(n) for n in selected],
+        edgecolors="black",
+        linewidths=[lw_fn(n) if lw_fn else 0.25 for n in selected],
+        alpha=[alpha_fn(n) if alpha_fn else 1.0 for n in selected],
+    )
+    if zorder is not None:
+        coll.set_zorder(zorder)
+    return coll
 
 
 def label_selected(G: nx.Graph, pos: Dict, select_nodes: List[str], text_attr: str = 'Taxon'):
@@ -573,6 +613,18 @@ def label_selected(G: nx.Graph, pos: Dict, select_nodes: List[str], text_attr: s
             key=lambda node: _safe_float(G.nodes[node].get("Degree", G.degree(node)), 0.0),
             reverse=True,
         )[: min(10, G.number_of_nodes())]
+    max_labels = max(0, int(LABEL_CONFIG["max_labels"]))
+    if max_labels and len(select_nodes) > max_labels:
+        original_count = len(select_nodes)
+        select_nodes = sorted(
+            select_nodes,
+            key=lambda node: _safe_float(G.nodes[node].get("Degree", G.degree(node)), 0.0),
+            reverse=True,
+        )[:max_labels]
+        print(
+            f"[WARN] Requested {original_count} node labels; showing the "
+            f"{max_labels} highest-degree nodes to keep the figure readable and bounded."
+        )
     if not _HAS_ADJUSTTEXT:
         print("[WARN] adjustText not installed; using direct labels.")
         labels = {node: str(G.nodes[node].get(text_attr, node)) for node in select_nodes}
@@ -1262,6 +1314,7 @@ def plot_group_isa(
         return
 
     node_colors = []
+    node_components: List[List[str]] = []
     node_sizes  = []
     visible_labels: List[str] = []
     visible_scores: List[float] = []
@@ -1279,6 +1332,11 @@ def plot_group_isa(
         has_signal = keep_focus and node_lbl and raw_score > 0
         c = palette_get(palette_norm, node_lbl, NOT_FOCUS_COLOR) if has_signal else NOT_FOCUS_COLOR
         node_colors.append(c)
+        components = [
+            part for part in re.split(r"\s*\+\s*", node_lbl)
+            if part and palette_get(palette_norm, part, "") and has_signal
+        ]
+        node_components.append(components)
 
         s = isa_marker_area(raw_score, isa_scale)
         if not has_signal:
@@ -1287,7 +1345,11 @@ def plot_group_isa(
             s = 1.0
         node_sizes.append(s)
         if has_signal:
-            visible_labels.append(node_lbl)
+            # Multi-group indicators are drawn as pies, so their legend must
+            # describe the component slices rather than the combined label.
+            # Tracking only labels that reach the plot also prevents globally
+            # configured but absent groups from appearing in the legend.
+            visible_labels.extend(components if components else [node_lbl])
             visible_scores.append(raw_score)
 
     fig, ax = figure_ax((17, 14))
@@ -1296,14 +1358,43 @@ def plot_group_isa(
     e_w = edge_widths_from_weights(G, scale=edge_width_scale, min_width=0.25)
     nx.draw_networkx_edges(G, pos, edgelist=list(G.edges()), width=e_w, edge_color=NOT_FOCUS_COLOR, alpha=0.8, ax=ax)
 
-    # Nodes: single call with complete nodelist (never empty)
+    # Single-group indicators use their exact legend color. Multigroup
+    # indicators are segmented into exact component colors instead of averaging
+    # them into misleading earthy blends.
+    single_nodes = [
+        node for node, parts in zip(nodes, node_components)
+        if len(parts) <= 1
+    ]
+    single_idx = [nodes.index(node) for node in single_nodes]
     nx.draw_networkx_nodes(
         G, pos,
-        nodelist=nodes,
-        node_color=node_colors,
-        node_size=node_sizes,
-        edgecolors="black", linewidths=0.25, alpha=0.9, ax=ax
+        nodelist=single_nodes,
+        node_color=[node_colors[idx] for idx in single_idx],
+        node_size=[node_sizes[idx] for idx in single_idx],
+        edgecolors="black", linewidths=0.25, alpha=1.0, ax=ax,
     )
+    for node, size, parts in zip(nodes, node_sizes, node_components):
+        if len(parts) <= 1:
+            continue
+        x, y = pos[node]
+        angles = np.linspace(0.0, 360.0, len(parts) + 1)
+        for index, part in enumerate(parts):
+            radians = np.deg2rad(np.linspace(angles[index], angles[index + 1], 24))
+            vertices = np.vstack([
+                [0.0, 0.0],
+                np.column_stack([np.cos(radians), np.sin(radians)]),
+                [0.0, 0.0],
+            ])
+            codes = [MplPath.MOVETO] + [MplPath.LINETO] * len(radians) + [MplPath.CLOSEPOLY]
+            ax.scatter(
+                [x], [y], s=size, marker=MplPath(vertices, codes),
+                facecolor=palette_get(palette_norm, part, NOT_FOCUS_COLOR),
+                edgecolor="none", linewidth=0, zorder=3,
+            )
+        ax.scatter(
+            [x], [y], s=size, marker="o", facecolor="none",
+            edgecolor="black", linewidth=0.25, zorder=4,
+        )
 
     if label:
         for n in nodes:
@@ -1313,10 +1404,7 @@ def plot_group_isa(
                         fontsize=9, fontweight="bold",
                         ha="center", va="center")
 
-    if legend_order:
-        ordered_labels = canonicalize_group_type_order(legend_order)
-    else:
-        ordered_labels = ordered_present_labels(visible_labels, legend_order)
+    ordered_labels = ordered_present_labels(visible_labels, legend_order)
     if focus_label:
         ordered_labels = [
             lbl for lbl in ordered_labels
@@ -1550,6 +1638,17 @@ def collect_isa_summary_paths(
     variant_by_name: Dict[str, Dict[bool, str]] = {}
     for path in sorted(Path(".").glob("*_indicator_species*_summary.tsv")):
         name = infer_group_name(str(path), "")
+        if name.startswith("stratified_"):
+            try:
+                preview = pd.read_csv(path, sep="\t", usecols=lambda col: col == "stratified_within_value")
+            except Exception:
+                preview = pd.DataFrame()
+            # Pooled stratified tables combine several outer-state values and
+            # cannot be represented honestly by one network color overlay.
+            # Per-state files are retained as distinct overlays instead.
+            if ("stratified_within_value" in preview and
+                    preview["stratified_within_value"].dropna().astype(str).nunique() > 1):
+                continue
         if name:
             variant_by_name.setdefault(name, {})[isa_summary_is_duleg(str(path))] = str(path.resolve())
 
@@ -1727,10 +1826,17 @@ def select_best_modules(
     modules_df: pd.DataFrame,
     min_size: int,
     min_stability: float,
+    graph: Optional[nx.Graph] = None,
+    top_n: int = 8,
     ensure_one: bool = True
 ) -> Tuple[set, pd.DataFrame]:
-    """Select high-quality modules based on size and mean node stability."""
-    empty_stats = pd.DataFrame(columns=["module_label", "n_nodes", "mean_node_stability", "is_best"])
+    """Rank stable modules by topology and retain only the strongest few."""
+    empty_stats = pd.DataFrame(columns=[
+        "module_label", "n_nodes", "mean_node_stability", "internal_edges",
+        "internal_weight", "edge_density", "conductance",
+        "weighted_modularity_contribution", "module_quality_score",
+        "quality_rank", "passes_hard_filters", "is_best",
+    ])
     if modules_df is None or modules_df.empty:
         return set(), empty_stats
 
@@ -1752,10 +1858,76 @@ def select_best_modules(
          )
          .reset_index()
     )
-    stats["is_best"] = (
+    for column in (
+        "internal_edges", "internal_weight", "edge_density", "conductance",
+        "weighted_modularity_contribution",
+    ):
+        stats[column] = np.nan
+
+    if graph is not None and graph.number_of_nodes() > 0:
+        taxon_to_node = {
+            str(data.get("Taxon", data.get("name", node))): node
+            for node, data in graph.nodes(data=True)
+        }
+        total_weight = sum(
+            abs(_safe_float(data.get("weight", 1.0), 1.0))
+            for _, _, data in graph.edges(data=True)
+        )
+        total_weight = max(float(total_weight), 1e-12)
+        label_members = x.groupby("module_label")["Taxon"].apply(
+            lambda values: {
+                taxon_to_node[str(value)] for value in values
+                if str(value) in taxon_to_node
+            }
+        )
+        for idx, row in stats.iterrows():
+            members = label_members.get(row["module_label"], set())
+            subgraph = graph.subgraph(members)
+            internal_weight = sum(
+                abs(_safe_float(data.get("weight", 1.0), 1.0))
+                for _, _, data in subgraph.edges(data=True)
+            )
+            cut_weight = sum(
+                abs(_safe_float(data.get("weight", 1.0), 1.0))
+                for node in members
+                for neighbor, data in graph[node].items()
+                if neighbor not in members
+            )
+            degree_weight = (2.0 * internal_weight) + cut_weight
+            possible_edges = len(members) * (len(members) - 1) / 2.0
+            stats.loc[idx, "internal_edges"] = subgraph.number_of_edges()
+            stats.loc[idx, "internal_weight"] = internal_weight
+            stats.loc[idx, "edge_density"] = (
+                subgraph.number_of_edges() / possible_edges if possible_edges > 0 else 0.0
+            )
+            stats.loc[idx, "conductance"] = (
+                cut_weight / degree_weight if degree_weight > 0 else 1.0
+            )
+            stats.loc[idx, "weighted_modularity_contribution"] = (
+                (internal_weight / total_weight)
+                - ((degree_weight / (2.0 * total_weight)) ** 2)
+            )
+
+    stats["passes_hard_filters"] = (
         (stats["n_nodes"] >= int(min_size))
         & (stats["mean_node_stability"].fillna(0.0) >= float(min_stability))
     )
+    topology = stats["weighted_modularity_contribution"].fillna(0.0).clip(lower=0.0)
+    separation = (1.0 - stats["conductance"].fillna(1.0)).clip(lower=0.0)
+    stats["module_quality_score"] = (
+        stats["mean_node_stability"].fillna(0.0)
+        * np.log1p(stats["n_nodes"].fillna(0.0))
+        * (1.0 + topology)
+        * (0.5 + 0.5 * separation)
+    )
+    stats = stats.sort_values(
+        ["passes_hard_filters", "module_quality_score", "mean_node_stability", "n_nodes", "module_label"],
+        ascending=[False, False, False, False, True],
+    ).reset_index(drop=True)
+    stats["quality_rank"] = np.arange(1, len(stats) + 1)
+    stats["is_best"] = False
+    eligible = stats.index[stats["passes_hard_filters"]].tolist()[:max(1, int(top_n))]
+    stats.loc[eligible, "is_best"] = True
     best = set(stats.loc[stats["is_best"], "module_label"].astype(str).tolist())
 
     if ensure_one and not best and not stats.empty:
@@ -1941,6 +2113,150 @@ def annotate_modules_with_isa(
     return out
 
 
+def annotate_modules_with_renewal_tests(
+    modules_df: pd.DataFrame,
+    association_path: Optional[str],
+    profiles_path: Optional[str],
+    max_q: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Attach significant module-level renewal contrasts to every member ASV.
+
+    These labels summarize ecological-module tests; they are deliberately not
+    described as ASV-level renewal indicators. The source data retain the
+    internal ``baseline`` name, whereas figure labels use ``stagnation``.
+    """
+    if modules_df is None or modules_df.empty:
+        return modules_df, pd.DataFrame()
+    out = modules_df.copy()
+    out["renewal_module_label"] = "No supported renewal-phase contrast"
+    out["renewal_module_color"] = NOT_FOCUS_COLOR
+    out["renewal_module_supported_tests"] = ""
+    out["renewal_module_min_q"] = np.nan
+    out["active_renewal_module_label"] = "No supported renewal/post-renewal contrast"
+    out["active_renewal_module_color"] = NOT_FOCUS_COLOR
+    out["active_renewal_module_q"] = np.nan
+    out["active_renewal_stagnation_mean"] = np.nan
+    out["active_renewal_mean"] = np.nan
+    out["active_renewal_minus_stagnation"] = np.nan
+    out["active_renewal_to_stagnation_ratio"] = np.nan
+    if not association_path or not os.path.isfile(association_path):
+        return out, pd.DataFrame()
+    tests = load_table(association_path)
+    required = {"analysis", "module_label", "adjusted_pvalue"}
+    missing = required - set(tests.columns)
+    if missing:
+        raise ValueError(
+            "Module-renewal association table lacks required columns: "
+            + ", ".join(sorted(missing))
+        )
+    tests = tests.copy()
+    tests["module_label"] = tests["module_label"].astype(str)
+    tests["adjusted_pvalue"] = pd.to_numeric(tests["adjusted_pvalue"], errors="coerce")
+    significant = tests.loc[tests["adjusted_pvalue"].le(max_q)].copy()
+    label_map: Dict[str, str] = {}
+    tests_map: Dict[str, str] = {}
+    q_map: Dict[str, float] = {}
+    for module_label, frame in significant.groupby("module_label"):
+        analyses = set(frame["analysis"].astype(str))
+        onset = "renewal_vs_baseline" in analyses
+        post = "post_renewal_vs_baseline" in analyses
+        active = "active_vs_baseline" in analyses
+        omnibus = "three_phase_omnibus" in analyses
+        if onset and post:
+            label = "Renewal/post-renewal vs stagnation"
+        elif onset:
+            label = "Renewal onset vs stagnation"
+        elif post:
+            label = "Post-renewal vs stagnation"
+        elif active:
+            label = "Renewal/post-renewal vs stagnation"
+        elif omnibus:
+            label = "Renewal phase vs stagnation"
+        else:
+            continue
+        label_map[module_label] = label
+        tests_map[module_label] = ";".join(sorted(analyses))
+        q_map[module_label] = float(frame["adjusted_pvalue"].min())
+    out["renewal_module_label"] = out["module_label"].astype(str).map(label_map).fillna(
+        "No supported renewal-phase contrast"
+    )
+    colors = {
+        "Renewal onset vs stagnation": "#0072B2",
+        "Post-renewal vs stagnation": "#E69F00",
+        "Renewal/post-renewal vs stagnation": "#56B4E9",
+        "Renewal phase vs stagnation": "#CC79A7",
+        "No supported renewal-phase contrast": NOT_FOCUS_COLOR,
+    }
+    out["renewal_module_color"] = out["renewal_module_label"].map(colors).fillna(NOT_FOCUS_COLOR)
+    out["renewal_module_supported_tests"] = out["module_label"].astype(str).map(tests_map).fillna("")
+    out["renewal_module_min_q"] = out["module_label"].astype(str).map(q_map)
+    active = significant.loc[significant["analysis"].astype(str).eq("active_vs_baseline")].copy()
+    active_q = active.groupby("module_label")["adjusted_pvalue"].min().to_dict()
+    out["active_renewal_module_q"] = out["module_label"].astype(str).map(active_q)
+    if profiles_path and os.path.isfile(profiles_path) and active_q:
+        profiles = load_table(profiles_path)
+        profile_required = {
+            "module_label", "renewal_phase", "samples_n", "mean_module_relative_abundance"
+        }
+        profile_missing = profile_required - set(profiles.columns)
+        if profile_missing:
+            raise ValueError(
+                "Module-renewal profile table lacks required columns: "
+                + ", ".join(sorted(profile_missing))
+            )
+        profiles = profiles.copy()
+        profiles["module_label"] = profiles["module_label"].astype(str)
+        profiles["samples_n"] = pd.to_numeric(profiles["samples_n"], errors="coerce")
+        profiles["mean_module_relative_abundance"] = pd.to_numeric(
+            profiles["mean_module_relative_abundance"], errors="coerce"
+        )
+        direction_map: Dict[str, str] = {}
+        stagnation_map: Dict[str, float] = {}
+        active_mean_map: Dict[str, float] = {}
+        delta_map: Dict[str, float] = {}
+        ratio_map: Dict[str, float] = {}
+        for module_label in active_q:
+            frame = profiles.loc[profiles["module_label"].eq(module_label)]
+            baseline = frame.loc[frame["renewal_phase"].astype(str).isin(["baseline", "stagnation"])]
+            active_phases = frame.loc[
+                frame["renewal_phase"].astype(str).isin(["renewal", "post-renewal"])
+            ]
+            if baseline.empty or active_phases.empty:
+                continue
+            stagnation_mean = float(np.average(
+                baseline["mean_module_relative_abundance"], weights=baseline["samples_n"]
+            ))
+            active_mean = float(np.average(
+                active_phases["mean_module_relative_abundance"], weights=active_phases["samples_n"]
+            ))
+            delta = active_mean - stagnation_mean
+            direction_map[module_label] = (
+                "Higher during renewal/post-renewal" if delta > 0
+                else "Higher during stagnation" if delta < 0
+                else "Equal pooled abundance"
+            )
+            stagnation_map[module_label] = stagnation_mean
+            active_mean_map[module_label] = active_mean
+            delta_map[module_label] = delta
+            ratio_map[module_label] = active_mean / stagnation_mean if stagnation_mean > 0 else np.nan
+        out["active_renewal_module_label"] = out["module_label"].astype(str).map(direction_map).fillna(
+            "No supported renewal/post-renewal contrast"
+        )
+        active_colors = {
+            "Higher during renewal/post-renewal": "#0072B2",
+            "Higher during stagnation": "#E69F00",
+            "Equal pooled abundance": "#7A5195",
+        }
+        out["active_renewal_module_color"] = out["active_renewal_module_label"].map(
+            active_colors
+        ).fillna(NOT_FOCUS_COLOR)
+        out["active_renewal_stagnation_mean"] = out["module_label"].astype(str).map(stagnation_map)
+        out["active_renewal_mean"] = out["module_label"].astype(str).map(active_mean_map)
+        out["active_renewal_minus_stagnation"] = out["module_label"].astype(str).map(delta_map)
+        out["active_renewal_to_stagnation_ratio"] = out["module_label"].astype(str).map(ratio_map)
+    return out, significant
+
+
 def plot_modules(
     G: nx.Graph,
     pos: Dict,
@@ -2015,6 +2331,488 @@ def plot_modules(
     )
 
 
+def _taxonomy_display(value: object, rank: str) -> str:
+    """Return a stable display value for incomplete SILVA taxonomy."""
+    if pd.isna(value):
+        return f"Unclassified {rank.lower()}"
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none", "unassigned", "uncultured"}:
+        return f"Unclassified {rank.lower()}"
+    return text.replace("_", " ")
+
+
+def _categorical_palette(labels: Iterable[object]) -> Dict[str, str]:
+    """Build a deterministic, collision-free palette within one figure set."""
+    clean = sorted({_taxonomy_display(value, "taxon") for value in labels}, key=natural_sort_key)
+    classified = [label for label in clean if not label.lower().startswith("unclassified")]
+    colors = sns.color_palette("husl", max(len(classified), 1))
+    palette = {label: mcolors.to_hex(color) for label, color in zip(classified, colors)}
+    for label in clean:
+        if label.lower().startswith("unclassified"):
+            palette[label] = "#BDBDBD"
+    return palette
+
+
+def render_module_taxonomy_subnetworks(
+    G: nx.Graph,
+    pos: Dict,
+    modules: pd.DataFrame,
+    outdir: str,
+    *,
+    anchor_top_n: int,
+    prominence_metrics: List[str],
+    prominence_threshold: float,
+    prominence_label_top_n: int,
+    prominence_min_area: float,
+    prominence_max_area: float,
+    edge_width_scale: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Render an induced, phylum-colored subnetwork for every ecological module.
+
+    Complete-network SPIEC-EASI coordinates provide the structural reference
+    for every induced module subnetwork. Each module is translated and scaled
+    uniformly to fill its own plotting panel; no node-specific displacement or
+    repulsion is applied. Numbered annotations are placed in ordered exterior
+    lanes and connected back to their source nodes. A rank-based
+    consortium-prominence index controls node area, and an eligible ASV--MAG
+    link controls border width.
+    """
+    if modules is None or modules.empty:
+        print("[WARN] No module assignments available for module subnetworks.")
+        return pd.DataFrame(), pd.DataFrame()
+    if anchor_top_n < 1:
+        raise ValueError("anchor_top_n must be at least one")
+    metric_attributes = {
+        "max_relative_abundance": "max_relative_abundance",
+        "eigenvector": "EigenCentral",
+        "participation": "Participation",
+        "degree": "Degree",
+        "betweenness": "Betweenness",
+    }
+    invalid_metrics = [metric for metric in prominence_metrics if metric not in metric_attributes]
+    if invalid_metrics:
+        raise ValueError(
+            "Unsupported module-subnetwork prominence metric(s): "
+            + ", ".join(invalid_metrics)
+        )
+    if not prominence_metrics:
+        raise ValueError("At least one module-subnetwork prominence metric is required")
+    if prominence_label_top_n < 0:
+        raise ValueError("prominence_label_top_n cannot be negative")
+    if not 0.0 <= prominence_threshold <= 1.0:
+        raise ValueError("prominence_threshold must be between zero and one")
+    if prominence_min_area <= 0 or prominence_max_area < prominence_min_area:
+        raise ValueError("Invalid module-subnetwork prominence marker-area range")
+
+    root = Path(outdir) / "module_subnetworks"
+    shutil.rmtree(root, ignore_errors=True)
+    root.mkdir(parents=True, exist_ok=True)
+    module_lookup = modules[["Taxon", "module_label"]].dropna().copy()
+    module_lookup["Taxon"] = module_lookup["Taxon"].astype(str)
+    module_lookup["module_label"] = module_lookup["module_label"].astype(str)
+    module_by_taxon = module_lookup.drop_duplicates("Taxon").set_index("Taxon")["module_label"].to_dict()
+    taxon_to_node = {
+        str(G.nodes[node].get("Taxon", node)): node for node in G.nodes()
+    }
+
+    neighbor_modules: Dict[object, List[str]] = {node: [] for node in G.nodes()}
+    for source, target in G.edges():
+        source_taxon = str(G.nodes[source].get("Taxon", source))
+        target_taxon = str(G.nodes[target].get("Taxon", target))
+        if target_taxon in module_by_taxon:
+            neighbor_modules[source].append(module_by_taxon[target_taxon])
+        if source_taxon in module_by_taxon:
+            neighbor_modules[target].append(module_by_taxon[source_taxon])
+
+    def participation(node: object) -> float:
+        labels = neighbor_modules.get(node, [])
+        if not labels:
+            return 0.0
+        fractions = pd.Series(labels).value_counts().to_numpy(float) / len(labels)
+        return float(1.0 - np.square(fractions).sum())
+
+    def scaled_marker_area(score: float) -> float:
+        bounded = min(max(_safe_float(score, 0.0), 0.0), 1.0)
+        return float(prominence_min_area + bounded * (prominence_max_area - prominence_min_area))
+
+    def pfg_taxonomy(attrs: Dict[str, object]) -> str:
+        """Compact taxonomic label used in module-subnetwork figure keys."""
+        return "; ".join([
+            f"P: {_taxonomy_display(attrs.get('Phylum'), 'phylum')}",
+            f"F: {_taxonomy_display(attrs.get('Family'), 'family')}",
+            f"G: {_taxonomy_display(attrs.get('Genus'), 'genus')}",
+        ])
+
+    audit_rows: List[Dict[str, object]] = []
+    manifest_rows: List[Dict[str, object]] = []
+    for module_label in sorted(module_lookup["module_label"].unique(), key=natural_sort_key):
+        taxa = set(module_lookup.loc[module_lookup["module_label"].eq(module_label), "Taxon"])
+        nodes = [taxon_to_node[taxon] for taxon in taxa if taxon in taxon_to_node and taxon_to_node[taxon] in pos]
+        if not nodes:
+            continue
+        H = G.subgraph(nodes).copy()
+        pos_h = {node: pos[node] for node in H.nodes()}
+
+        metrics = pd.DataFrame({
+            "node": list(H.nodes()),
+            "Degree": [_safe_float(G.nodes[node].get("Degree", 0.0)) for node in H.nodes()],
+            "EigenCentral": [_safe_float(G.nodes[node].get("EigenCentral", 0.0)) for node in H.nodes()],
+            "Betweenness": [get_betweenness_value(G.nodes[node]) for node in H.nodes()],
+            "max_relative_abundance": [_safe_float(G.nodes[node].get("max_relative_abundance", 0.0)) for node in H.nodes()],
+            "Participation": [participation(node) for node in H.nodes()],
+        })
+        anchor_flags = np.zeros(len(metrics), dtype=bool)
+        for metric in ("Degree", "EigenCentral", "Betweenness"):
+            metrics[f"anchor_rank_{metric.lower()}"] = metrics[metric].rank(
+                method="min", ascending=False
+            )
+            anchor_flags |= metrics[f"anchor_rank_{metric.lower()}"].le(anchor_top_n).to_numpy()
+        metrics["is_ecological_anchor"] = anchor_flags
+        percentile_columns = []
+        for metric in prominence_metrics:
+            source_column = metric_attributes[metric]
+            percentile_column = f"prominence_percentile_{metric}"
+            values = pd.to_numeric(metrics[source_column], errors="coerce").fillna(0.0)
+            if len(values) == 1:
+                percentiles = pd.Series([1.0], index=values.index)
+            else:
+                ranks = values.rank(method="average", ascending=True)
+                percentiles = (ranks - 1.0) / (len(values) - 1.0)
+            metrics[percentile_column] = percentiles.clip(0.0, 1.0)
+            percentile_columns.append(percentile_column)
+        metrics["consortium_prominence_score"] = metrics[percentile_columns].mean(axis=1)
+        metrics["consortium_prominence_rank"] = metrics["consortium_prominence_score"].rank(
+            method="min", ascending=False
+        ).astype(int)
+        metrics["is_high_prominence_asv"] = metrics["consortium_prominence_score"].ge(
+            prominence_threshold
+        )
+        score_by_node = metrics.set_index("node")["consortium_prominence_score"].to_dict()
+        rank_by_node = metrics.set_index("node")["consortium_prominence_rank"].to_dict()
+        high_prominence_by_node = metrics.set_index("node")["is_high_prominence_asv"].to_dict()
+        marker_area_by_node = {
+            node: scaled_marker_area(score_by_node[node]) for node in H.nodes()
+        }
+        ordered_nodes = sorted(
+            H.nodes(), key=lambda node: natural_sort_key(str(G.nodes[node].get("Taxon", node)))
+        )
+        raw_coordinates = np.vstack([
+            np.asarray(pos_h[node], dtype=float) for node in ordered_nodes
+        ])
+        raw_min = raw_coordinates.min(axis=0)
+        raw_max = raw_coordinates.max(axis=0)
+        raw_center = (raw_min + raw_max) / 2.0
+        raw_span = float(np.max(raw_max - raw_min))
+        if raw_span <= 1e-12:
+            raw_span = 1.0
+        # Uniform affine zoom retains orientation, relative distances, and
+        # aspect ratio while making each module use the available panel.
+        reference_coordinates = (raw_coordinates - raw_center) * (1.64 / raw_span)
+        display_pos_h = {
+            node: reference_coordinates[index].copy()
+            for index, node in enumerate(ordered_nodes)
+        }
+
+        mag_nodes = [node for node in H.nodes() if bool(G.nodes[node].get("has_mag_pair", False))]
+        high_prominence_nodes = [node for node in H.nodes() if bool(high_prominence_by_node[node])]
+        top_nodes = [
+            node for node in H.nodes()
+            if rank_by_node[node] <= prominence_label_top_n
+        ]
+        label_nodes = sorted(
+            set(mag_nodes + high_prominence_nodes + top_nodes),
+            key=lambda node: natural_sort_key(str(G.nodes[node].get("Taxon", node))),
+        )
+        label_number = {node: index for index, node in enumerate(label_nodes, start=1)}
+
+        for _, row in metrics.iterrows():
+            node = row["node"]
+            attrs = G.nodes[node]
+            audit_rows.append({
+                "ecological_module": module_label,
+                "graph_node_id": str(node),
+                "ASV_ID": str(attrs.get("Taxon", node)),
+                "phylum": _taxonomy_display(attrs.get("Phylum"), "phylum"),
+                "family": _taxonomy_display(attrs.get("Family"), "family"),
+                "genus": _taxonomy_display(attrs.get("Genus"), "genus"),
+                "degree": row["Degree"],
+                "eigenvector_centrality": row["EigenCentral"],
+                "betweenness": row["Betweenness"],
+                "max_relative_abundance": row["max_relative_abundance"],
+                "participation_coefficient": row["Participation"],
+                "anchor_rank_degree": row["anchor_rank_degree"],
+                "anchor_rank_eigenvector": row["anchor_rank_eigencentral"],
+                "anchor_rank_betweenness": row["anchor_rank_betweenness"],
+                "is_ecological_anchor": bool(row["is_ecological_anchor"]),
+                **{column: row[column] for column in percentile_columns},
+                "consortium_prominence_score": row["consortium_prominence_score"],
+                "consortium_prominence_rank": row["consortium_prominence_rank"],
+                "consortium_prominence_threshold": prominence_threshold,
+                "is_high_prominence_asv": bool(row["is_high_prominence_asv"]),
+                "consortium_prominence_metrics": ",".join(prominence_metrics),
+                "has_eligible_mag_link": bool(attrs.get("has_mag_pair", False)),
+                "plot_label_number": label_number.get(node, ""),
+                "plot_label_text": (
+                    f"{label_number[node]}: {str(attrs.get('Taxon', node))} - {pfg_taxonomy(attrs)}"
+                    if node in label_number else ""
+                ),
+                "spieceasi_x": float(pos_h[node][0]),
+                "spieceasi_y": float(pos_h[node][1]),
+                "display_x": float(display_pos_h[node][0]),
+                "display_y": float(display_pos_h[node][1]),
+                "display_displacement": 0.0,
+                "layout_scope": "uniform module zoom of SPIEC-EASI coordinates; nodes were not individually repositioned",
+            })
+
+        for rank, attr in (("phylum", "Phylum"),):
+            rank_dir = root / rank
+            rank_dir.mkdir(parents=True, exist_ok=True)
+            labels = {
+                node: _taxonomy_display(G.nodes[node].get(attr), rank)
+                for node in H.nodes()
+            }
+            palette = _categorical_palette(labels.values())
+            role_specs = [
+                (
+                    "Top-ranked prominence ASVs",
+                    sorted(top_nodes, key=lambda node: natural_sort_key(str(G.nodes[node].get("Taxon", node)))),
+                ),
+                (
+                    f"High-prominence ASVs (score >= {prominence_threshold:.2f})",
+                    sorted(high_prominence_nodes, key=lambda node: natural_sort_key(str(G.nodes[node].get("Taxon", node)))),
+                ),
+                (
+                    "Genome-linked ASVs (bold border)",
+                    sorted(mag_nodes, key=lambda node: natural_sort_key(str(G.nodes[node].get("Taxon", node)))),
+                ),
+            ]
+            # Long P/F/G labels are shown one ASV per row. Give every role its
+            # own full-width legend band and place the genome-linked group
+            # directly below the two prominence-based ASV groups.
+            role_column_counts = [1 for _ in role_specs]
+            role_row_counts = [
+                max(1, int(math.ceil(max(1, len(role_nodes)) / column_count)))
+                for (_, role_nodes), column_count in zip(role_specs, role_column_counts)
+            ]
+            role_band_heights = [1.20 + 0.46 * row_count for row_count in role_row_counts]
+            network_band_height = 10.8
+            fig_height = network_band_height + sum(role_band_heights) + 0.8
+            fig = plt.figure(figsize=(20, fig_height))
+            grid = fig.add_gridspec(
+                4, 2,
+                width_ratios=(4.6, 1.7),
+                height_ratios=(network_band_height, *role_band_heights),
+                wspace=0.04,
+                hspace=0.25,
+            )
+            ax = fig.add_subplot(grid[0, 0])
+            encoding_ax = fig.add_subplot(grid[0, 1])
+            asv_key_axes = [fig.add_subplot(grid[index, :]) for index in range(1, 4)]
+            encoding_ax.axis("off")
+            for key_ax in asv_key_axes:
+                key_ax.axis("off")
+            edge_widths = edge_widths_from_weights(
+                H, scale=edge_width_scale, min_width=0.30, max_width=1.65
+            )
+            network_edge_artist = nx.draw_networkx_edges(
+                H, display_pos_h, ax=ax, width=edge_widths,
+                edge_color="#4A4A4A", alpha=0.88,
+            )
+            set_edge_artist_zorder(network_edge_artist, 1)
+            # Draw high-prominence and genome-linked ASVs last so both encodings remain visible.
+            for is_high_prominence in (False, True):
+                for has_mag in (False, True):
+                    draw_nodes = [
+                        node for node in H.nodes()
+                        if bool(high_prominence_by_node[node]) == is_high_prominence
+                        and bool(G.nodes[node].get("has_mag_pair", False)) == has_mag
+                    ]
+                    if not draw_nodes:
+                        continue
+                    draw_nodes = sorted(draw_nodes, key=lambda node: score_by_node[node])
+                    node_artist = nx.draw_networkx_nodes(
+                        H, display_pos_h, nodelist=draw_nodes, ax=ax,
+                        node_color=[palette[labels[node]] for node in draw_nodes],
+                        node_size=[marker_area_by_node[node] for node in draw_nodes],
+                        node_shape="D" if is_high_prominence else "o",
+                        edgecolors=["black" if has_mag else "#666666" for _ in draw_nodes],
+                        linewidths=[2.8 if has_mag else 0.55 for _ in draw_nodes],
+                        alpha=1.0,
+                    )
+                    node_artist.set_zorder(3)
+            # Keep the network itself untouched. Numbered annotations occupy
+            # deterministic exterior lanes, sorted in the same vertical order
+            # as their source nodes so leader lines do not cross within a lane.
+            external_label_positions: Dict[object, np.ndarray] = {}
+            module_center = np.mean(
+                np.vstack([display_pos_h[node] for node in H.nodes()]), axis=0
+            )
+            node_vectors = {
+                node: np.asarray(display_pos_h[node], dtype=float) - module_center
+                for node in H.nodes()
+            }
+            network_radius = max(
+                (float(np.linalg.norm(vector)) for vector in node_vectors.values()),
+                default=1.0,
+            )
+            if network_radius <= 1e-12:
+                network_radius = 1.0
+            left_labels = sorted(
+                [node for node in label_nodes if display_pos_h[node][0] < module_center[0]],
+                key=lambda node: display_pos_h[node][1],
+            )
+            right_labels = sorted(
+                [node for node in label_nodes if display_pos_h[node][0] >= module_center[0]],
+                key=lambda node: display_pos_h[node][1],
+            )
+            lane_x = 1.18 * network_radius
+            lane_y_extent = 0.92 * network_radius
+            for side, lane_nodes in ((-1.0, left_labels), (1.0, right_labels)):
+                lane_y = (
+                    [0.0]
+                    if len(lane_nodes) == 1
+                    else np.linspace(-lane_y_extent, lane_y_extent, len(lane_nodes))
+                )
+                for node, y_offset in zip(lane_nodes, lane_y):
+                    external_label_positions[node] = module_center + np.asarray([
+                        side * lane_x, float(y_offset)
+                    ])
+
+            plot_radius = network_radius * 1.34
+            ax.set_xlim(module_center[0] - plot_radius, module_center[0] + plot_radius)
+            ax.set_ylim(module_center[1] - plot_radius, module_center[1] + plot_radius)
+
+            # Draw each leader all the way to its source coordinate beneath
+            # the node layer. The node masks the final segment, producing an
+            # unambiguous visual connection at the marker boundary without a
+            # gap or a line across the marker face.
+            for node in label_nodes:
+                source = np.asarray(display_pos_h[node], dtype=float)
+                target = np.asarray(external_label_positions[node], dtype=float)
+                ax.plot(
+                    [source[0], target[0]], [source[1], target[1]],
+                    color="#2F2F2F", linewidth=1.0, alpha=0.95,
+                    solid_capstyle="round", zorder=2,
+                )
+
+            for node in label_nodes:
+                label_position = external_label_positions[node]
+                ax.annotate(
+                    str(label_number[node]),
+                    xy=display_pos_h[node], xycoords="data",
+                    xytext=label_position, textcoords="data",
+                    ha="center", va="center", fontsize=10.5, fontweight="bold",
+                    color="black", zorder=31, annotation_clip=False,
+                    bbox=dict(
+                        boxstyle="circle,pad=0.28", facecolor="white",
+                        edgecolor="#2F2F2F", linewidth=0.9,
+                    ),
+                )
+
+            tax_handles = [
+                mpatches.Patch(facecolor=palette[label], edgecolor="none", label=label)
+                for label in sorted(palette, key=natural_sort_key)
+            ]
+            enc_handles = [
+                plt.Line2D([], [], marker="D", linestyle="None", markersize=9,
+                           markerfacecolor="#BDBDBD", markeredgecolor="#666666",
+                           markeredgewidth=0.55, label=f"High-prominence ASV (score >= {prominence_threshold:.2f})"),
+                plt.Line2D([], [], marker="o", linestyle="None", markersize=9,
+                           markerfacecolor="white", markeredgecolor="black",
+                           markeredgewidth=2.8, label="Eligible ASV-genome link"),
+            ]
+            size_handles = [
+                ax.scatter([], [], s=scaled_marker_area(value), facecolor="#BDBDBD", edgecolor="#666666",
+                           linewidth=0.55, label=f"{value:.1f}")
+                for value in (0.0, 0.5, 1.0)
+            ]
+            sidebar_handles = tax_handles + enc_handles + size_handles
+            sidebar_legend = encoding_ax.legend(
+                handles=sidebar_handles,
+                title=f"{rank.title()} and node encoding",
+                frameon=False,
+                handletextpad=0.55,
+                labelspacing=0.55,
+                fontsize=8.0,
+                loc="upper left",
+                bbox_to_anchor=(0.0, 1.0),
+            )
+            role_legends = []
+            for key_ax, (role_title, role_nodes), column_count in zip(
+                asv_key_axes, role_specs, role_column_counts
+            ):
+                role_handles = [
+                    plt.Line2D(
+                        [], [], linestyle="None", marker=None,
+                        label=(
+                            f"{label_number[node]}: {str(G.nodes[node].get('Taxon', node))} - "
+                            f"{pfg_taxonomy(G.nodes[node])}"
+                        ),
+                    )
+                    for node in role_nodes
+                ]
+                if not role_handles:
+                    role_handles = [
+                        plt.Line2D([], [], linestyle="None", marker=None, label="None in this module")
+                    ]
+                role_legends.append(key_ax.legend(
+                    handles=role_handles,
+                    title=role_title,
+                    frameon=False,
+                    handlelength=0.0,
+                    handletextpad=0.0,
+                    columnspacing=1.6,
+                    labelspacing=0.48,
+                    fontsize=7.3,
+                    loc="upper left",
+                    bbox_to_anchor=(0.0, 0.0, 1.0, 1.0),
+                    mode="expand" if column_count > 1 else None,
+                    borderaxespad=0.0,
+                    ncol=column_count,
+                ))
+            ax.set_aspect("equal", adjustable="box")
+            ax.axis("off")
+            ax.set_title(
+                f"Ecological module {module_label}\n"
+                f"Node color: {rank} | Node size: consortium prominence | Bold border: genome linked"
+            )
+            fig.subplots_adjust(left=0.035, right=0.985, top=0.93, bottom=0.035)
+            stem = rank_dir / f"{module_label}_{rank}_prominence_mag_subnetwork"
+            for extension in ("pdf", "png", "svg"):
+                kwargs = {"dpi": 600} if extension == "png" else {}
+                fig.savefig(
+                    stem.with_suffix(f".{extension}"), bbox_inches="tight",
+                    pad_inches=0.5,
+                    **kwargs,
+                )
+            plt.close(fig)
+            manifest_rows.append({
+                "ecological_module": module_label,
+                "taxonomy_rank": rank,
+                "nodes_n": H.number_of_nodes(),
+                "internal_edges_n": H.number_of_edges(),
+                "labeled_top_prominence_n": len(top_nodes),
+                "high_prominence_asvs_n": len(high_prominence_nodes),
+                "labeled_total_n": len(label_nodes),
+                "mag_linked_asvs_n": sum(bool(G.nodes[node].get("has_mag_pair", False)) for node in H.nodes()),
+                "output_stem": str(stem.relative_to(Path(outdir))),
+                "layout_scope": "uniform module zoom without node displacement; numbered labels use ordered exterior lanes",
+            })
+
+    audit = pd.DataFrame(audit_rows)
+    manifest = pd.DataFrame(manifest_rows)
+    if not audit.empty:
+        audit.to_csv(root / "module_subnetwork_node_audit.tsv", sep="\t", index=False)
+        high_prominence = audit.loc[audit["is_high_prominence_asv"]].sort_values(
+            ["ecological_module", "consortium_prominence_rank", "ASV_ID"],
+            kind="mergesort",
+        )
+        high_prominence.to_csv(root / "module_high_prominence_asvs.tsv", sep="\t", index=False)
+    if not manifest.empty:
+        manifest.to_csv(root / "module_subnetwork_plot_manifest.tsv", sep="\t", index=False)
+    return audit, manifest
+
+
 # ---------------------------- Main pipeline ----------------------------------
 def main():
     p = argparse.ArgumentParser(
@@ -2070,6 +2868,8 @@ def main():
                    help="Minimum node count for a module to be considered best [default: 5].")
     p.add_argument("--module-best-min-stability", type=float, default=0.7,
                    help="Minimum mean node stability for a module to be considered best [default: 0.7].")
+    p.add_argument("--module-best-top-n", type=int, default=8,
+                   help="Maximum number of topologically strongest stable modules to highlight.")
     p.add_argument("--module-best-only", action="store_true",
                    help="Color/label only best modules in module plots; non-best modules are light gray.")
     p.add_argument("--module-isa-only", action="store_true",
@@ -2082,6 +2882,24 @@ def main():
                    help="Minimum ISA stat used to mark ASVs as significant for module ISA association.")
     p.add_argument("--module-isa-max-q", type=float, default=0.05,
                    help="Maximum ISA q-value used to mark ASVs as significant for module ISA association.")
+    p.add_argument("--module-subnetworks", action="store_true",
+                   help="Render one fixed-layout, phylum-colored subnetwork for every ecological module.")
+    p.add_argument("--anchor-top-n", type=int, default=1,
+                   help="Within-module top-N rank used for degree/eigenvector/betweenness anchor union [default: 1].")
+    p.add_argument("--module-subnetwork-prominence-metrics", default="max_relative_abundance,eigenvector,participation",
+                   help="Comma-separated properties combined as equal-weight within-module percentiles for node size.")
+    p.add_argument("--module-subnetwork-prominence-threshold", type=float, default=0.75,
+                   help="Composite-score threshold used to mark high-prominence ASVs with diamond nodes.")
+    p.add_argument("--module-subnetwork-label-top-n", type=int, default=3,
+                   help="Label this many highest-prominence ASVs per module in addition to every genome-linked ASV.")
+    p.add_argument("--module-subnetwork-prominence-min-area", type=float, default=30.0)
+    p.add_argument("--module-subnetwork-prominence-max-area", type=float, default=520.0)
+    p.add_argument("--module-renewal-association", default=None,
+                   help="Optional module-level renewal association table used for an indirect ASV-network overlay.")
+    p.add_argument("--module-renewal-profiles", default=None,
+                   help="Module abundance summaries used to assign direction to significant pooled renewal contrasts.")
+    p.add_argument("--module-renewal-max-q", type=float, default=0.05,
+                   help="Maximum adjusted p-value for module-level renewal overlay support [default: 0.05].")
 
     # Layout options
     p.add_argument("--layout-json-all", default=None, help="Cache/Load layout JSON for graph-pos-all.")
@@ -2111,6 +2929,8 @@ def main():
                    help="Maximum marker area for abundance-scaled plots.")
     p.add_argument("--abundance-scale-power", type=float, default=1.6,
                    help="Power used to spread abundance sizes after log scaling.")
+    p.add_argument("--max-labels", type=int, default=100,
+                   help="Maximum collision-adjusted node labels per plot; 0 disables the limit [default: 100].")
 
     # Which plots to render
     p.add_argument("--modes", nargs="+", default=["all"],
@@ -2122,6 +2942,7 @@ def main():
     SIZE_CONFIG["abundance_size_mode"] = str(args.abundance_size_mode).strip().lower()
     SIZE_CONFIG["abundance_reference"] = _safe_float(args.abundance_reference, 5000.0)
     SIZE_CONFIG["abundance_reference_area"] = _safe_float(args.abundance_reference_area, 80.0)
+    LABEL_CONFIG["max_labels"] = max(0, int(args.max_labels))
 
     data_dir = args.data_dir
     os.makedirs(args.outdir, exist_ok=True)
@@ -2155,15 +2976,19 @@ def main():
         isa_focus_map = {}
     summary_by_group = collect_isa_summary_paths(
         isa_group_cols,
-        group1_summary_path,
-        group2_summary_path,
+        group1_summary_path if (args.group1_summary or not args.isa_group_cols) else "",
+        group2_summary_path if (args.group2_summary or not args.isa_group_cols) else "",
         group1_name,
         group2_name,
         None if args.isa_summary_mode == "auto" else args.isa_summary_mode,
     )
-    isa_group_cols = [name for name in isa_group_cols if name in summary_by_group]
-    if not isa_group_cols:
-        isa_group_cols = list(summary_by_group.keys())
+    requested_groups = [name for name in isa_group_cols if name in summary_by_group]
+    # Stratified ISA tables are discovered from the staged INDICSPECIES outputs.
+    # Retain requested standalone overlays first, then append every stratified
+    # comparison so downstream network figures do not silently discard them.
+    isa_group_cols = requested_groups + [
+        name for name in summary_by_group if name not in requested_groups
+    ]
     modules_sub_path = args.modules_sub
     modules_all_path = args.modules_all
     asv_mag_pairing_path = args.asv_mag_pairing or os.path.join(data_dir, "asv_mag_link/tables/asv2mag_pairing.tsv")
@@ -2173,12 +2998,18 @@ def main():
     ensure_cols(nf, ["Taxon", "Degree", "Betweenness", "Closeness", "EigenCentral"], "node_features")
 
     asv = load_table(asv_counts_path, sep='\t', index_col=0)
-    asv_stack = asv.stack().reset_index()
+    asv_numeric = asv.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    sample_totals = asv_numeric.sum(axis=0).replace(0.0, np.nan)
+    asv_relative = asv_numeric.divide(sample_totals, axis=1).fillna(0.0)
+    asv_stack = asv_numeric.stack().reset_index()
     asv_stack.columns = ['ASV_ID', 'sample', 'count']
     abund_stats = asv_stack.groupby('ASV_ID')['count'].agg(['mean', 'median']).reset_index()
     abund_stats['mean'] = abund_stats['mean'].astype(float)
     abund_stats['median'] = abund_stats['median'].astype(float)
-    abund_stats = abund_stats[['ASV_ID', 'mean', 'median']]
+    abund_stats = abund_stats.set_index('ASV_ID')
+    abund_stats['max_relative_abundance'] = asv_relative.max(axis=1)
+    abund_stats['prevalence'] = asv_numeric.gt(0).mean(axis=1)
+    abund_stats = abund_stats.reset_index()[['ASV_ID', 'mean', 'median', 'max_relative_abundance', 'prevalence']]
 
     tax = load_table(taxonomy_path, sep='\t')
     if "Feature ID" in tax.columns:
@@ -2192,8 +3023,9 @@ def main():
     # normalize ASV_ID if it contains suffix like ';...' at end
     tax['ASV_ID'] = [x.rsplit(';', 1)[0] if isinstance(x, str) and ';' in x else x for x in tax['ASV_ID']]
     # expand taxonomy levels
+    tax['CompleteTaxonomy'] = tax['Taxon'].fillna('Unassigned').astype(str)
     tdf = pd.DataFrame([split_taxa_string(x) for x in tax['Taxon']])
-    tax = pd.concat([tax[['ASV_ID']], tdf], axis=1).set_index('ASV_ID', drop=True)
+    tax = pd.concat([tax[['ASV_ID', 'CompleteTaxonomy']], tdf], axis=1).set_index('ASV_ID', drop=True)
 
     metadata_df = None
     if args.metadata and os.path.exists(args.metadata):
@@ -2350,6 +3182,21 @@ def main():
         tax.reset_index(), left_on='Taxon', right_on='ASV_ID', how='left'
     ).set_index('GraphML_ID')
 
+    # Module-quality statistics require topology, so load the graphs before
+    # selecting and ranking modules.
+    def load_graph(path: str) -> nx.Graph:
+        if not os.path.exists(path):
+            die(f"GraphML not found: {path}")
+        return nx.read_graphml(path)
+
+    G_all = load_graph(graph_all)
+    G_sub = load_graph(graph_sub)
+    for graph_name, graph_obj in (("all", G_all), ("sub", G_sub)):
+        isolates = list(nx.isolates(graph_obj))
+        if isolates:
+            graph_obj.remove_nodes_from(isolates)
+            print(f"[INFO] Removed {len(isolates)} unconnected nodes from {graph_name} network rendering.")
+
     # modules tables (optional)
     modules_sub = load_modules_table(modules_sub_path, "sub")
     modules_all = load_modules_table(modules_all_path, "all")
@@ -2362,12 +3209,16 @@ def main():
         modules_sub,
         min_size=args.module_best_min_size,
         min_stability=args.module_best_min_stability,
+        graph=G_sub,
+        top_n=args.module_best_top_n,
         ensure_one=True
     )
     best_all_labels, best_all_stats = select_best_modules(
         modules_all,
         min_size=args.module_best_min_size,
         min_stability=args.module_best_min_stability,
+        graph=G_all,
+        top_n=args.module_best_top_n,
         ensure_one=True
     )
     if not best_sub_stats.empty:
@@ -2439,6 +3290,32 @@ def main():
         modules_sub = _apply_isa_module_focus(modules_sub)
         modules_all = _apply_isa_module_focus(modules_all)
 
+    modules_sub, renewal_tests_sub = annotate_modules_with_renewal_tests(
+        modules_sub, args.module_renewal_association, args.module_renewal_profiles,
+        args.module_renewal_max_q
+    )
+    modules_all, renewal_tests_all = annotate_modules_with_renewal_tests(
+        modules_all, args.module_renewal_association, args.module_renewal_profiles,
+        args.module_renewal_max_q
+    )
+    if not modules_all.empty:
+        renewal_audit_columns = [
+            "Taxon", "module_label", "renewal_module_label",
+            "renewal_module_supported_tests", "renewal_module_min_q",
+            "active_renewal_module_label", "active_renewal_module_q",
+            "active_renewal_stagnation_mean", "active_renewal_mean",
+            "active_renewal_minus_stagnation", "active_renewal_to_stagnation_ratio",
+        ]
+        modules_all[renewal_audit_columns].to_csv(
+            os.path.join(args.outdir, "network_asv_module_renewal_overlay.tsv"),
+            sep="\t", index=False,
+        )
+    if not renewal_tests_all.empty:
+        renewal_tests_all.to_csv(
+            os.path.join(args.outdir, "network_source_module_renewal_associations.tsv"),
+            sep="\t", index=False,
+        )
+
     if not modules_sub.empty and "module_plot_keep" in modules_sub.columns:
         keep_sub = int(pd.to_numeric(modules_sub["module_plot_keep"], errors="coerce").fillna(False).astype(bool).sum())
         kept_mod_sub = int(modules_sub.loc[modules_sub["module_plot_keep"].astype(bool), "module_label"].nunique()) if keep_sub > 0 else 0
@@ -2477,23 +3354,17 @@ def main():
         'A_group2', 'B_group2', 'AxB_group2', 'group2_label', 'group2_color',
         'module_id', 'module_label', 'module_color', 'module_is_best', 'module_color_plot', 'module_label_plot',
         'module_has_isa', 'module_isa_label', 'module_isa_color', 'module_isa_legend', 'module_plot_keep',
+        'renewal_module_label', 'renewal_module_color', 'renewal_module_supported_tests', 'renewal_module_min_q',
+        'active_renewal_module_label', 'active_renewal_module_color', 'active_renewal_module_q',
+        'active_renewal_stagnation_mean', 'active_renewal_mean',
+        'active_renewal_minus_stagnation', 'active_renewal_to_stagnation_ratio',
         'node_stability',
         'has_mag_pair', 'mag_pair_status', 'best_genome_id', 'mag_taxonomy_label',
-        'Phylum', 'mean', 'median'
+        'CompleteTaxonomy', 'Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species',
+        'mean', 'median', 'max_relative_abundance', 'prevalence'
     ]
     for spec in isa_specs:
         keep_cols.extend([spec["label_attr"], spec["score_attr"], spec["color_attr"]])
-
-    # -------------------- Load graphs + positions -----------------------------
-    def load_graph(path: str) -> nx.Graph:
-        if not os.path.exists(path):
-            die(f"GraphML not found: {path}")
-        G = nx.read_graphml(path)
-        # GraphML may load numeric node IDs as strings; good for attribute joins
-        return G
-
-    G_all = load_graph(graph_all)
-    G_sub = load_graph(graph_sub)
 
     # Attach attributes (each plot function can use what it needs)
     for spec in isa_specs:
@@ -2512,6 +3383,46 @@ def main():
     pos_all = spring_layout_cached(G_all, seed=args.layout_seed,
                                    scale_xy=args.layout_scale,
                                    layout_json=args.layout_json_all)
+    layout_rows = []
+    for node, coordinates in pos_all.items():
+        attributes = G_all.nodes[node]
+        asv_id = attributes.get("Taxon", attributes.get("name", node))
+        asv_id = re.sub(r";.*$", "", str(asv_id).strip())
+        layout_rows.append({
+            "graph_node_id": str(node),
+            "ASV_ID": asv_id,
+            "spieceasi_x": float(coordinates[0]),
+            "spieceasi_y": float(coordinates[1]),
+            "layout_seed": int(args.layout_seed),
+            "layout_scale": float(args.layout_scale),
+        })
+    layout_table = pd.DataFrame(layout_rows).sort_values("ASV_ID")
+    if layout_table["ASV_ID"].duplicated().any():
+        duplicated = sorted(layout_table.loc[
+            layout_table["ASV_ID"].duplicated(keep=False), "ASV_ID"
+        ].unique())
+        raise ValueError(
+            "SPIEC-EASI layout contains duplicate ASV identifiers: "
+            + ", ".join(duplicated[:10])
+        )
+    layout_table.to_csv(
+        os.path.join(args.outdir, "spieceasi_network_layout_all.tsv"),
+        sep="\t", index=False,
+    )
+    if args.module_subnetworks:
+        render_module_taxonomy_subnetworks(
+            G_all,
+            pos_all,
+            modules_all,
+            args.outdir,
+            anchor_top_n=args.anchor_top_n,
+            prominence_metrics=[value.strip() for value in args.module_subnetwork_prominence_metrics.split(",") if value.strip()],
+            prominence_threshold=args.module_subnetwork_prominence_threshold,
+            prominence_label_top_n=args.module_subnetwork_label_top_n,
+            prominence_min_area=args.module_subnetwork_prominence_min_area,
+            prominence_max_area=args.module_subnetwork_prominence_max_area,
+            edge_width_scale=args.edge_width_scale,
+        )
     same_graph_structure = (
         set(G_all.nodes()) == set(G_sub.nodes()) and
         {frozenset((u, v)) for u, v in G_all.edges()} == {frozenset((u, v)) for u, v in G_sub.edges()}
@@ -3103,6 +4014,11 @@ def main():
 
     # Module overlays
     module_filter_attr = "module_plot_keep" if args.module_isa_only else None
+    module_legend_title = (
+        "ISA-associated ecological modules"
+        if (args.module_isa_only or args.module_color_by_isa)
+        else "Ecological modules"
+    )
     if "module_sub" in modes:
         if modules_sub.empty:
             print("[WARN] module_sub requested, but no module assignments were loaded.")
@@ -3114,8 +4030,8 @@ def main():
                 filter_attr=module_filter_attr,
                 degree_scale=args.degree_scale, edge_width_scale=args.edge_width_scale,
                 label=False,
-                title="SPIEC-EASI Network (POS_SUB)\nNode color: ISA-associated modules | Node size: Degree",
-                legend_title="ISA-associated modules"
+                title=f"SPIEC-EASI Network (POS_SUB)\nNode color: {module_legend_title} | Node size: Degree",
+                legend_title=module_legend_title
             )
     if "module_sub_labeled" in modes:
         if modules_sub.empty:
@@ -3128,8 +4044,8 @@ def main():
                 filter_attr=module_filter_attr,
                 degree_scale=args.degree_scale, edge_width_scale=args.edge_width_scale,
                 label=True,
-                title="SPIEC-EASI Network (POS_SUB)\nNode color: ISA-associated modules | Node size: Degree (Labeled)",
-                legend_title="ISA-associated modules"
+                title=f"SPIEC-EASI Network (POS_SUB)\nNode color: {module_legend_title} | Node size: Degree (Labeled)",
+                legend_title=module_legend_title
             )
     if "module_all" in modes:
         if modules_all.empty:
@@ -3142,8 +4058,8 @@ def main():
                 filter_attr=module_filter_attr,
                 degree_scale=args.degree_scale, edge_width_scale=args.edge_width_scale,
                 label=False,
-                title="SPIEC-EASI Network (POS_ALL)\nNode color: ISA-associated modules | Node size: Degree",
-                legend_title="ISA-associated modules"
+                title=f"SPIEC-EASI Network (POS_ALL)\nNode color: {module_legend_title} | Node size: Degree",
+                legend_title=module_legend_title
             )
     if "module_all_labeled" in modes:
         if modules_all.empty:
@@ -3156,9 +4072,44 @@ def main():
                 filter_attr=module_filter_attr,
                 degree_scale=args.degree_scale, edge_width_scale=args.edge_width_scale,
                 label=True,
-                title="SPIEC-EASI Network (POS_ALL)\nNode color: ISA-associated modules | Node size: Degree (Labeled)",
-                legend_title="ISA-associated modules"
+                title=f"SPIEC-EASI Network (POS_ALL)\nNode color: {module_legend_title} | Node size: Degree (Labeled)",
+                legend_title=module_legend_title
             )
+
+    # Renewal was tested at the ecological-module level, not as a direct ASV
+    # indicator analysis.  The overlay therefore colors all ASVs belonging to
+    # modules with supported renewal-phase contrasts and leaves other modules
+    # gray.  This preserves the correct inferential unit in the figure itself.
+    if args.module_renewal_association and not modules_all.empty:
+        out = os.path.join(args.outdir, "network_ecological_module_renewal_phase_POS_ALL.svg")
+        plot_modules(
+            G_all, pos_all, out,
+            color_attr="renewal_module_color", label_attr="renewal_module_label",
+            filter_attr=None,
+            degree_scale=args.degree_scale, edge_width_scale=args.edge_width_scale,
+            label=False,
+            title=("SPIEC-EASI Network (POS_ALL)\n"
+                   "Node color: significant ecological-module renewal contrast "
+                   "(baseline shown as stagnation) | Node size: Degree"),
+            legend_title="Module-level renewal association",
+        )
+        active_out = os.path.join(
+            args.outdir,
+            "network_ecological_module_renewal_post_renewal_vs_stagnation_POS_ALL.svg",
+        )
+        plot_modules(
+            G_all, pos_all, active_out,
+            color_attr="active_renewal_module_color",
+            label_attr="active_renewal_module_label",
+            filter_attr=None,
+            degree_scale=args.degree_scale,
+            edge_width_scale=args.edge_width_scale,
+            label=False,
+            title=("SPIEC-EASI Network (POS_ALL)\n"
+                   "Node color: direction of significant ecological-module difference between "
+                   "renewal/post-renewal and stagnation | Node size: Degree"),
+            legend_title="Direction of module-level difference",
+        )
 
     if "mag_pair_sub" in modes:
         if asv_mag_pairing.empty:

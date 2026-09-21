@@ -175,6 +175,12 @@ def build_config(
     config = yaml.safe_load(template.read_text())
     config = absolute_project_paths(config, project_dir)
     config = apply_thread_defaults(config, threads)
+    config.setdefault("resources", {}).update(
+        sample_threads=1,
+        analysis_threads=threads,
+        max_parallel_sample_tasks=threads,
+    )
+    config["resources"].pop("threads", None)
 
     metadata = str((dataset / "sample_metadata.tsv").resolve())
     config["paths"].update(

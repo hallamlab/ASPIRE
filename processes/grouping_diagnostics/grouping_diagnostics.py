@@ -14,10 +14,15 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.spatial.distance import pdist, squareform
+from scipy.stats import f_oneway
 from sklearn.metrics import balanced_accuracy_score, silhouette_score
 
 
@@ -92,6 +97,43 @@ def transform_counts(counts: pd.DataFrame, transform: str) -> pd.DataFrame:
     if transform == "log1p":
         return np.log1p(counts)
     return counts.copy()
+
+
+def cruise_depth_profiles(
+    counts: pd.DataFrame,
+    metadata: pd.DataFrame,
+    cruise_col: str,
+    depth_col: str,
+    min_prevalence: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build equal-depth-weighted Hellinger profiles with one row per cruise."""
+    sample_rel = transform_counts(counts, "relative")
+    frame = metadata.loc[sample_rel.index, [cruise_col, depth_col]].copy()
+    frame["_cruise"] = frame[cruise_col].fillna("").astype(str).str.strip()
+    frame["_depth"] = pd.to_numeric(frame[depth_col], errors="coerce")
+    valid = frame["_cruise"].ne("") & frame["_depth"].notna()
+    sample_rel, frame = sample_rel.loc[valid], frame.loc[valid]
+    indexed = sample_rel.copy()
+    indexed["_cruise"], indexed["_depth"] = frame["_cruise"], frame["_depth"]
+    observed = indexed.groupby(["_cruise", "_depth"]).mean()
+    n_cruises = observed.index.get_level_values(0).nunique()
+    coverage = observed.reset_index().groupby("_depth")["_cruise"].nunique()
+    retained = sorted(coverage[coverage / max(n_cruises, 1) >= min_prevalence].index)
+    if len(retained) < 2:
+        raise ValueError("Fewer than two anchored depths passed cruise-depth prevalence")
+    rows, names, audit = [], [], []
+    for cruise in sorted(observed.index.get_level_values(0).unique()):
+        profile = observed.xs(cruise, level=0).sort_index()
+        n_observed = int(profile.index.isin(retained).sum())
+        profile = profile.reindex(retained).interpolate(method="index", limit_direction="both")
+        profile = profile.div(profile.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
+        rows.append(np.sqrt(profile.to_numpy()).reshape(-1))
+        names.append(cruise)
+        audit.append({"cruise": cruise, "observed_retained_depths": n_observed,
+                      "retained_depths": len(retained), "interpolated_depths": len(retained) - n_observed,
+                      "coverage_fraction": n_observed / len(retained)})
+    columns = [f"depth_{depth:g}__{asv}" for depth in retained for asv in sample_rel.columns]
+    return pd.DataFrame(rows, index=names, columns=columns), pd.DataFrame(audit)
 
 
 def distance_matrix(values: pd.DataFrame, metric: str) -> np.ndarray:
@@ -191,6 +233,377 @@ def within_between(distance: np.ndarray, labels: pd.Series) -> dict[str, float]:
         "within_pairs": len(within),
         "between_pairs": len(between),
     }
+
+
+def bh_adjust(values: pd.Series) -> pd.Series:
+    result = pd.Series(np.nan, index=values.index, dtype=float)
+    valid = pd.to_numeric(values, errors="coerce").dropna()
+    if valid.empty:
+        return result
+    ordered = valid.sort_values()
+    adjusted = ordered.to_numpy() * len(ordered) / np.arange(1, len(ordered) + 1)
+    adjusted = np.minimum.accumulate(adjusted[::-1])[::-1]
+    result.loc[ordered.index] = np.minimum(adjusted, 1.0)
+    return result
+
+
+def restricted_label_permutation(
+    labels: np.ndarray,
+    cruises: np.ndarray,
+    rng: np.random.Generator,
+    scheme: str,
+) -> np.ndarray:
+    shuffled = labels.copy()
+    cruise_levels = pd.unique(cruises)
+    if scheme == "within_cruise":
+        for cruise in cruise_levels:
+            idx = np.flatnonzero(cruises == cruise)
+            if len(idx) > 1:
+                shuffled[idx] = labels[rng.permutation(idx)]
+        return shuffled
+    # Shuffle complete cruise labels, retaining all bottles from a cruise as one
+    # experimental unit. This is required for season and cruise-state labels.
+    cruise_label = {cruise: pd.unique(labels[cruises == cruise])[0] for cruise in cruise_levels}
+    permuted = rng.permutation([cruise_label[cruise] for cruise in cruise_levels])
+    mapping = dict(zip(cruise_levels, permuted))
+    return np.asarray([mapping[cruise] for cruise in cruises], dtype=object)
+
+
+def restricted_permanova(
+    distance: np.ndarray,
+    labels: pd.Series,
+    cruises: pd.Series,
+    permutations: int,
+    seed: int,
+    scheme: str,
+) -> dict[str, float | str]:
+    observed = permanova(distance, labels, 0, seed)
+    observed_f = float(observed.get("pseudo_f", np.nan))
+    if not np.isfinite(observed_f):
+        observed.update({"p_value": np.nan, "permutations": 0, "permutation_scheme": scheme})
+        return observed
+    label_values = labels.astype(str).to_numpy()
+    cruise_values = cruises.astype(str).to_numpy()
+    rng = np.random.default_rng(seed)
+    hits = completed = 0
+    for _ in range(permutations):
+        shuffled = restricted_label_permutation(label_values, cruise_values, rng, scheme)
+        stat = permanova(distance, pd.Series(shuffled), 0, seed).get("pseudo_f", np.nan)
+        if np.isfinite(stat):
+            hits += int(float(stat) >= observed_f)
+            completed += 1
+    observed.update({
+        "p_value": (hits + 1) / (completed + 1) if completed else np.nan,
+        "permutations": completed,
+        "permutation_scheme": scheme,
+    })
+    return observed
+
+
+def restricted_permdisp(
+    distance: np.ndarray,
+    labels: pd.Series,
+    cruises: pd.Series,
+    permutations: int,
+    seed: int,
+    scheme: str,
+) -> dict[str, float]:
+    coords, _ = pcoa(distance)
+    label_values = labels.astype(str).to_numpy()
+    cruise_values = cruises.astype(str).to_numpy()
+
+    def statistic(current: np.ndarray) -> float:
+        distances = np.zeros(len(current), dtype=float)
+        groups = pd.unique(current)
+        for group in groups:
+            idx = np.flatnonzero(current == group)
+            centroid = coords[idx].mean(axis=0)
+            distances[idx] = np.linalg.norm(coords[idx] - centroid, axis=1)
+        samples = [distances[current == group] for group in groups]
+        if len(samples) < 2 or any(len(sample) < 2 for sample in samples):
+            return np.nan
+        return float(f_oneway(*samples).statistic)
+
+    observed = statistic(label_values)
+    if not np.isfinite(observed):
+        return {"permdisp_f": np.nan, "permdisp_p_value": np.nan}
+    rng = np.random.default_rng(seed + 991)
+    hits = completed = 0
+    for _ in range(permutations):
+        shuffled = restricted_label_permutation(label_values, cruise_values, rng, scheme)
+        stat = statistic(shuffled)
+        if np.isfinite(stat):
+            hits += int(stat >= observed)
+            completed += 1
+    return {
+        "permdisp_f": observed,
+        "permdisp_p_value": (hits + 1) / (completed + 1) if completed else np.nan,
+    }
+
+
+def hierarchical_row(
+    distance: np.ndarray,
+    labels: pd.Series,
+    cruises: pd.Series,
+    permutations: int,
+    seed: int,
+    scheme: str,
+) -> dict:
+    row: dict = {
+        "n_samples": len(labels),
+        "n_cruises": cruises.astype(str).nunique(),
+        "n_groups": labels.astype(str).nunique(),
+        "permutation_scheme": scheme,
+    }
+    if row["n_samples"] < 3 or row["n_cruises"] < 2 or row["n_groups"] < 2:
+        row["status"] = "skipped_insufficient_groups"
+        return row
+    row.update(restricted_permanova(distance, labels, cruises, permutations, seed, scheme))
+    row.update(restricted_permdisp(distance, labels, cruises, permutations, seed, scheme))
+    row.update(within_between(distance, labels))
+    try:
+        row["silhouette"] = silhouette_score(distance, labels.astype(str), metric="precomputed")
+    except ValueError:
+        row["silhouette"] = np.nan
+    n, groups = row["n_samples"], row["n_groups"]
+    r2 = float(row.get("r2", np.nan))
+    row["adjusted_r2"] = 1 - (1 - r2) * (n - 1) / (n - groups) if np.isfinite(r2) and n > groups else np.nan
+    return row
+
+
+def categorical_design(frame: pd.DataFrame, terms: list[str]) -> np.ndarray:
+    pieces = [np.ones((len(frame), 1), dtype=float)]
+    for term in terms:
+        dummy = pd.get_dummies(frame[term].astype(str), prefix=term, drop_first=True, dtype=float)
+        if dummy.shape[1]:
+            pieces.append(dummy.to_numpy(dtype=float))
+    return np.column_stack(pieces)
+
+
+def interaction_statistic(
+    distance: np.ndarray,
+    frame: pd.DataFrame,
+    gower: np.ndarray | None = None,
+) -> dict[str, float]:
+    if gower is None:
+        squared = distance ** 2
+        gower = -0.5 * (
+            squared - squared.mean(axis=0)[None, :] - squared.mean(axis=1)[:, None] + squared.mean()
+        )
+    baseline = categorical_design(frame, ["outer", "bottle"])
+    full = categorical_design(frame, ["outer", "bottle", "interaction"])
+    rank0, rank1 = np.linalg.matrix_rank(baseline), np.linalg.matrix_rank(full)
+    total = float(np.trace(gower))
+    ss0 = float(np.trace(np.linalg.pinv(baseline.T @ baseline) @ baseline.T @ gower @ baseline))
+    ss1 = float(np.trace(np.linalg.pinv(full.T @ full) @ full.T @ gower @ full))
+    ss_interaction = max(0.0, ss1 - ss0)
+    ss_residual = max(0.0, total - ss1)
+    df_interaction = rank1 - rank0
+    df_residual = len(frame) - rank1
+    pseudo_f = (
+        (ss_interaction / df_interaction) / (ss_residual / df_residual)
+        if df_interaction > 0 and df_residual > 0 and ss_residual > 0 else np.nan
+    )
+    partial_r2 = (
+        ss_interaction / (ss_interaction + ss_residual)
+        if ss_interaction + ss_residual > 0 else np.nan
+    )
+    return {
+        "interaction_pseudo_f": pseudo_f,
+        "interaction_partial_r2": partial_r2,
+        "interaction_df": df_interaction,
+        "residual_df": df_residual,
+    }
+
+
+def hierarchical_interaction(
+    distance: np.ndarray,
+    metadata: pd.DataFrame,
+    outer_col: str,
+    bottle_col: str,
+    cruise_col: str,
+    permutations: int,
+    seed: int,
+) -> dict:
+    valid = metadata[[outer_col, bottle_col, cruise_col]].notna().all(axis=1).to_numpy()
+    idx = np.flatnonzero(valid)
+    frame = pd.DataFrame({
+        "outer": metadata.iloc[idx][outer_col].astype(str).to_numpy(),
+        "bottle": metadata.iloc[idx][bottle_col].astype(str).to_numpy(),
+        "cruise": metadata.iloc[idx][cruise_col].astype(str).to_numpy(),
+    })
+    frame["interaction"] = frame["outer"] + "::" + frame["bottle"]
+    row = {
+        "cruise_group_col": outer_col,
+        "bottle_group_col": bottle_col,
+        "n_samples": len(frame),
+        "n_cruises": frame["cruise"].nunique(),
+        "n_cruise_groups": frame["outer"].nunique(),
+        "n_bottle_groups": frame["bottle"].nunique(),
+        "permutation_scheme": "whole_cruise",
+    }
+    if len(frame) < 4 or frame["outer"].nunique() < 2 or frame["bottle"].nunique() < 2:
+        row["status"] = "skipped_insufficient_groups"
+        return row
+    dist_sub = subset_distance(distance, idx)
+    squared = dist_sub ** 2
+    gower = -0.5 * (
+        squared - squared.mean(axis=0)[None, :] - squared.mean(axis=1)[:, None] + squared.mean()
+    )
+    observed = interaction_statistic(dist_sub, frame, gower)
+    row.update(observed)
+    observed_f = observed["interaction_pseudo_f"]
+    if not np.isfinite(observed_f):
+        row.update({"interaction_p_value": np.nan, "permutations": 0, "status": "aliased_interaction"})
+        return row
+    rng = np.random.default_rng(seed)
+    hits = completed = 0
+    cruise_values = frame["cruise"].to_numpy()
+    outer_values = frame["outer"].to_numpy()
+    for _ in range(permutations):
+        permuted = frame.copy()
+        permuted["outer"] = restricted_label_permutation(
+            outer_values, cruise_values, rng, "whole_cruise"
+        )
+        permuted["interaction"] = permuted["outer"] + "::" + permuted["bottle"]
+        stat = interaction_statistic(dist_sub, permuted, gower)["interaction_pseudo_f"]
+        if np.isfinite(stat):
+            hits += int(stat >= observed_f)
+            completed += 1
+    row.update({
+        "interaction_p_value": (hits + 1) / (completed + 1) if completed else np.nan,
+        "permutations": completed,
+        "status": "ok",
+    })
+    return row
+
+
+def run_hierarchical_diagnostics(
+    distance: np.ndarray,
+    metadata: pd.DataFrame,
+    bottle_group_cols: list[str],
+    cruise_group_cols: list[str],
+    cruise_col: str,
+    permutations: int,
+    seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Cross bottle organizations with cruise states using cruise-aware inference."""
+    within_rows: list[dict] = []
+    across_rows: list[dict] = []
+    interaction_rows: list[dict] = []
+    for outer_col in cruise_group_cols:
+        if outer_col not in metadata:
+            continue
+        for outer_level in sorted(metadata[outer_col].dropna().astype(str).unique()):
+            outer_mask = metadata[outer_col].astype(str).eq(outer_level).to_numpy()
+            for bottle_col in bottle_group_cols:
+                if bottle_col not in metadata:
+                    continue
+                valid = outer_mask & metadata[bottle_col].notna().to_numpy() & metadata[cruise_col].notna().to_numpy()
+                idx = np.flatnonzero(valid)
+                labels = metadata.iloc[idx][bottle_col].astype(str).reset_index(drop=True)
+                cruises = metadata.iloc[idx][cruise_col].astype(str).reset_index(drop=True)
+                varies_within = metadata.iloc[idx].assign(_label=labels.to_numpy()).groupby(cruise_col)["_label"].nunique().gt(1).any()
+                scheme = "within_cruise" if varies_within else "whole_cruise"
+                row = hierarchical_row(subset_distance(distance, idx), labels, cruises,
+                                       permutations, seed + len(within_rows), scheme)
+                row.update({"cruise_group_col": outer_col, "cruise_group_level": outer_level,
+                            "bottle_group_col": bottle_col})
+                within_rows.append(row)
+
+        for bottle_col in bottle_group_cols:
+            if bottle_col not in metadata:
+                continue
+            interaction_rows.append(hierarchical_interaction(
+                distance, metadata, outer_col, bottle_col, cruise_col,
+                permutations, seed + 20000 + len(interaction_rows),
+            ))
+            for bottle_level in sorted(metadata[bottle_col].dropna().astype(str).unique()):
+                valid = (
+                    metadata[bottle_col].astype(str).eq(bottle_level).to_numpy()
+                    & metadata[outer_col].notna().to_numpy()
+                    & metadata[cruise_col].notna().to_numpy()
+                )
+                idx = np.flatnonzero(valid)
+                labels = metadata.iloc[idx][outer_col].astype(str).reset_index(drop=True)
+                cruises = metadata.iloc[idx][cruise_col].astype(str).reset_index(drop=True)
+                row = hierarchical_row(subset_distance(distance, idx), labels, cruises,
+                                       permutations, seed + 10000 + len(across_rows), "whole_cruise")
+                row.update({"cruise_group_col": outer_col, "bottle_group_col": bottle_col,
+                            "bottle_group_level": bottle_level})
+                across_rows.append(row)
+
+    within = pd.DataFrame(within_rows)
+    across = pd.DataFrame(across_rows)
+    interactions = pd.DataFrame(interaction_rows)
+    for table in (within, across):
+        if not table.empty and "p_value" in table:
+            table["q_value"] = table.groupby(
+                ["cruise_group_col", "bottle_group_col"], dropna=False
+            )["p_value"].transform(bh_adjust)
+        if not table.empty and "permdisp_p_value" in table:
+            table["permdisp_q_value"] = table.groupby(
+                ["cruise_group_col", "bottle_group_col"], dropna=False
+            )["permdisp_p_value"].transform(bh_adjust)
+
+    bottle_rank = pd.DataFrame()
+    if not within.empty:
+        ok = within[within["status"].eq("ok")].copy()
+        if not ok.empty:
+            bottle_rank = ok.groupby(["cruise_group_col", "bottle_group_col"], as_index=False).agg(
+                cruise_states_tested=("cruise_group_level", "nunique"),
+                median_adjusted_r2=("adjusted_r2", "median"),
+                min_adjusted_r2=("adjusted_r2", "min"),
+                median_silhouette=("silhouette", "median"),
+                significant_state_fraction=("q_value", lambda x: float((x <= 0.05).mean())),
+                dispersion_warning_fraction=("permdisp_q_value", lambda x: float((x <= 0.05).mean())),
+                median_cruises=("n_cruises", "median"),
+            )
+            bottle_rank["performance_rank"] = bottle_rank.groupby("cruise_group_col")["median_adjusted_r2"].rank(
+                ascending=False, method="min"
+            ).astype(int)
+            bottle_rank = bottle_rank.sort_values(["cruise_group_col", "performance_rank", "bottle_group_col"])
+
+    cruise_rank = pd.DataFrame()
+    if not across.empty:
+        ok = across[across["status"].eq("ok")].copy()
+        if not ok.empty:
+            # First summarize levels within each bottle organization so a
+            # 17-level depth grouping cannot outweigh a 3-level O2 grouping.
+            organization = ok.groupby(
+                ["cruise_group_col", "bottle_group_col"], as_index=False
+            ).agg(
+                median_adjusted_r2=("adjusted_r2", "median"),
+                median_silhouette=("silhouette", "median"),
+                significant_level_fraction=("q_value", lambda x: float((x <= 0.05).mean())),
+                dispersion_warning_fraction=("permdisp_q_value", lambda x: float((x <= 0.05).mean())),
+                median_cruises=("n_cruises", "median"),
+                matched_bottle_levels_tested=("bottle_group_level", "count"),
+            )
+            cruise_rank = organization.groupby("cruise_group_col", as_index=False).agg(
+                bottle_organizations_tested=("bottle_group_col", "nunique"),
+                matched_bottle_levels_tested=("matched_bottle_levels_tested", "sum"),
+                median_adjusted_r2=("median_adjusted_r2", "median"),
+                median_silhouette=("median_silhouette", "median"),
+                significant_level_fraction=("significant_level_fraction", "mean"),
+                dispersion_warning_fraction=("dispersion_warning_fraction", "mean"),
+                median_cruises=("median_cruises", "median"),
+            )
+            cruise_rank["performance_rank"] = cruise_rank["median_adjusted_r2"].rank(
+                ascending=False, method="min"
+            ).astype(int)
+            cruise_rank = cruise_rank.sort_values(["performance_rank", "cruise_group_col"])
+    if not interactions.empty and "interaction_p_value" in interactions:
+        interactions["interaction_q_value"] = interactions.groupby("cruise_group_col")[
+            "interaction_p_value"
+        ].transform(bh_adjust)
+    if not bottle_rank.empty and not interactions.empty:
+        bottle_rank = bottle_rank.merge(
+            interactions[["cruise_group_col", "bottle_group_col", "interaction_partial_r2",
+                          "interaction_p_value", "interaction_q_value"]],
+            on=["cruise_group_col", "bottle_group_col"], how="left",
+        )
+    return within, across, interactions, bottle_rank, cruise_rank
 
 
 def soft_label_missing(
@@ -420,6 +833,23 @@ def color_for_groups(order: list[str], palette: dict[str, str]) -> list[str]:
     return [palette.get(str(group), fallback[i % len(fallback)]) for i, group in enumerate(order)]
 
 
+GROUP_DISPLAY = {
+    "Depth": "Depth",
+    "o2_subcompartment_final": "Hybrid compartments",
+    "o2_compartment": "O2 compartments",
+    "gmm_component": "GMM components",
+    "Season": "Season",
+    "cruise_group": "Cruise group",
+    "renewal_phase": "Nitrate-qualified renewal phase",
+    "oxygen_intrusion_class": "Legacy O2-only anomaly",
+}
+
+
+def group_display_name(group_col: str, analysis_unit: str | None = None) -> str:
+    label = GROUP_DISPLAY.get(str(group_col), str(group_col).replace("_", " "))
+    return f"{label} (cruise)" if analysis_unit == "cruise" else label
+
+
 def save_fig(fig: plt.Figure, outbase: Path, formats: list[str]) -> None:
     outbase.parent.mkdir(parents=True, exist_ok=True)
     for fmt in formats:
@@ -431,15 +861,22 @@ def plot_metric_summary(metrics: pd.DataFrame, outdir: Path, formats: list[str])
     ok = metrics[metrics["status"].eq("ok")].copy()
     if ok.empty:
         return
+    units = ok["analysis_unit"] if "analysis_unit" in ok else pd.Series("bottle", index=ok.index)
+    ok["group_display"] = [group_display_name(group, unit) for group, unit in zip(ok["group_col"], units)]
     melted = ok.melt(
-        id_vars=["group_col", "metric"],
+        id_vars=["group_col", "group_display", "metric"],
         value_vars=["r2", "silhouette", "within_between_ratio"],
         var_name="score",
         value_name="value",
     ).dropna()
     if melted.empty:
         return
-    fig, axes = plt.subplots(1, 3, figsize=(13, max(3.5, 0.4 * ok["group_col"].nunique())), constrained_layout=True)
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(22, max(7.5, 0.9 * ok["group_display"].nunique())),
+        sharey=True,
+        constrained_layout=True,
+    )
     score_titles = {
         "r2": "PERMANOVA R2",
         "silhouette": "Silhouette",
@@ -447,33 +884,87 @@ def plot_metric_summary(metrics: pd.DataFrame, outdir: Path, formats: list[str])
     }
     for ax, score in zip(axes, score_titles):
         sub = melted[melted["score"].eq(score)]
-        sns.barplot(data=sub, y="group_col", x="value", hue="metric", ax=ax)
+        sns.barplot(data=sub, y="group_display", x="value", hue="metric", ax=ax)
         ax.set_title(score_titles[score])
         ax.set_ylabel("")
         ax.set_xlabel("")
+        if ax is not axes[0]:
+            ax.tick_params(axis="y", labelleft=False)
         if score == "within_between_ratio":
             ax.axvline(1.0, color="0.35", linestyle="--", linewidth=1)
         if ax.legend_:
-            ax.legend(title="Distance", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
+            if ok["metric"].nunique() == 1:
+                ax.legend_.remove()
+            else:
+                ax.legend(title="Distance", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
     save_fig(fig, outdir / "plots" / "grouping_metric_summary", formats)
+
+
+def plot_hierarchical_performance(
+    bottle_rank: pd.DataFrame,
+    cruise_rank: pd.DataFrame,
+    outdir: Path,
+    formats: list[str],
+) -> None:
+    if bottle_rank.empty and cruise_rank.empty:
+        return
+    fig, axes = plt.subplots(1, 2, figsize=(20, 8), constrained_layout=True)
+    if not bottle_rank.empty:
+        left = bottle_rank.copy()
+        left["cruise_group"] = left["cruise_group_col"].map(
+            lambda x: group_display_name(x, None)
+        )
+        left["bottle_group"] = left["bottle_group_col"].map(
+            lambda x: group_display_name(x, "bottle")
+        )
+        matrix = left.pivot(index="cruise_group", columns="bottle_group", values="median_adjusted_r2")
+        sns.heatmap(matrix, cmap="Greys", annot=True, fmt=".2f", linewidths=0.5,
+                    linecolor="white", ax=axes[0], cbar_kws={"label": "Median adjusted R2"})
+        axes[0].set_title("Bottle grouping within cruise states")
+        axes[0].set_xlabel("Bottle-level organization")
+        axes[0].set_ylabel("Cruise-level organization")
+        axes[0].tick_params(axis="x", rotation=25)
+        for label in axes[0].get_xticklabels():
+            label.set_horizontalalignment("right")
+    else:
+        axes[0].axis("off")
+    if not cruise_rank.empty:
+        right = cruise_rank.copy()
+        right["cruise_group"] = right["cruise_group_col"].map(
+            lambda x: group_display_name(x, None)
+        )
+        sns.barplot(data=right, y="cruise_group", x="median_adjusted_r2", color="0.35", ax=axes[1])
+        axes[1].axvline(0, color="black", linewidth=0.8)
+        axes[1].set_title("Cruise grouping across matched bottle levels")
+        axes[1].set_xlabel("Median adjusted R2")
+        axes[1].set_ylabel("")
+    else:
+        axes[1].axis("off")
+    save_fig(fig, outdir / "plots" / "grouping_hierarchical_performance", formats)
 
 
 def plot_power(power: pd.DataFrame, outdir: Path, formats: list[str]) -> None:
     ok = power[power["status"].eq("ok")].copy() if not power.empty else pd.DataFrame()
     if ok.empty:
         return
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), constrained_layout=True)
-    sns.lineplot(data=ok, x="n_per_group", y="power", hue="group_col", marker="o", ax=axes[0])
+    units = ok["analysis_unit"] if "analysis_unit" in ok else pd.Series("bottle", index=ok.index)
+    ok["group_display"] = [group_display_name(group, unit) for group, unit in zip(ok["group_col"], units)]
+    fig, axes = plt.subplots(1, 2, figsize=(21, 9), constrained_layout=True)
+    sns.lineplot(data=ok, x="n_per_group", y="power", hue="group_display", marker="o", ax=axes[0])
     axes[0].set_ylim(-0.02, 1.02)
     axes[0].set_xlabel("Samples per group")
     axes[0].set_ylabel("Estimated power")
     axes[0].axhline(0.8, color="0.4", linestyle="--", linewidth=1)
-    axes[0].legend(title="Grouping", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    if axes[0].legend_:
+        axes[0].legend_.remove()
 
-    sns.lineplot(data=ok, x="n_per_group", y="median_r2", hue="group_col", marker="o", ax=axes[1])
+    sns.lineplot(data=ok, x="n_per_group", y="median_r2", hue="group_display", marker="o", ax=axes[1])
     axes[1].set_xlabel("Samples per group")
     axes[1].set_ylabel("Median PERMANOVA R2")
-    axes[1].legend(title="Grouping", loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False)
+    if axes[1].legend_:
+        axes[1].legend_.remove()
+    fig.legend(handles, labels, title="Grouping", loc="outside lower center", ncol=2, frameon=False)
     save_fig(fig, outdir / "plots" / "grouping_power", formats)
 
 
@@ -516,20 +1007,22 @@ def plot_ordination(
         return
     cols = min(2, len(group_cols))
     rows = math.ceil(len(group_cols) / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(6.5 * cols, 5.2 * rows), squeeze=False, constrained_layout=True)
+    fig, axes = plt.subplots(rows, cols, figsize=(10 * cols, 8 * rows), squeeze=False, constrained_layout=True)
     for ax, group_col in zip(axes.flat, group_cols):
         order = grouping_order(coords[group_col], orders.get(group_col, []))
         palette = color_for_groups(order, palettes.get(group_col, {}))
         for group, color in zip(order, palette):
             sub = coords[coords[group_col].astype(str).eq(str(group))]
             ax.scatter(sub["PCo1"], sub["PCo2"], s=34, alpha=0.82, label=str(group), color=color, edgecolor="white", linewidth=0.4)
-        ax.set_title(group_col)
+        unit = "cruise" if metric.endswith("_cruise_level") else "bottle"
+        display = group_display_name(group_col, unit)
+        ax.set_title(display)
         ax.set_xlabel(f"PCo1 ({variance[0] * 100:.1f}%)")
         ax.set_ylabel(f"PCo2 ({variance[1] * 100:.1f}%)")
         ax.axhline(0, color="0.85", linewidth=0.8)
         ax.axvline(0, color="0.85", linewidth=0.8)
         ax.legend(
-            title=group_col,
+            title=display,
             frameon=False,
             fontsize=8,
             title_fontsize=9,
@@ -548,6 +1041,11 @@ def main() -> None:
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--sample-col", default="sampleid")
     parser.add_argument("--group-cols", required=True)
+    parser.add_argument("--cruise-level-group-cols", default="")
+    parser.add_argument("--require-cruise-level-groups", action="store_true")
+    parser.add_argument("--cruise-col", default="Cruise")
+    parser.add_argument("--depth-col", default="Depth")
+    parser.add_argument("--cruise-depth-min-prevalence", type=float, default=0.5)
     parser.add_argument("--baseline-group", default="")
     parser.add_argument("--primary-group", default="")
     parser.add_argument("--group-palettes-json", default="{}")
@@ -590,6 +1088,15 @@ def main() -> None:
     values = transform_counts(counts, args.transform)
 
     group_cols = [col for col in parse_csv(args.group_cols) if col]
+    cruise_group_cols = [col for col in parse_csv(args.cruise_level_group_cols) if col]
+    if args.require_cruise_level_groups and not cruise_group_cols:
+        raise SystemExit("--require-cruise-level-groups requires --cruise-level-group-cols")
+    missing_cruise_group_cols = [col for col in cruise_group_cols if col not in metadata.columns]
+    if missing_cruise_group_cols:
+        raise SystemExit(
+            "Cruise-level grouping diagnostics missing configured metadata columns: "
+            + ", ".join(missing_cruise_group_cols)
+        )
     palette_map_raw = parse_json_map(args.group_palettes_json)
     order_map_raw = parse_json_map(args.group_orders_json)
     palettes = {str(col): parse_palette(palette) for col, palette in palette_map_raw.items()}
@@ -602,6 +1109,12 @@ def main() -> None:
     metrics = parse_csv(args.metrics) or ["bray"]
 
     summary_rows: list[dict] = []
+    power_frames: list[pd.DataFrame] = []
+    hierarchical_within_frames: list[pd.DataFrame] = []
+    hierarchical_across_frames: list[pd.DataFrame] = []
+    hierarchical_interaction_frames: list[pd.DataFrame] = []
+    hierarchical_bottle_rank_frames: list[pd.DataFrame] = []
+    hierarchical_cruise_rank_frames: list[pd.DataFrame] = []
     distance_cache: dict[str, np.ndarray] = {}
     for metric in metrics:
         distance = distance_matrix(values, metric)
@@ -622,6 +1135,7 @@ def main() -> None:
             row = {
                 "group_col": group_col,
                 "metric": metric,
+                "analysis_unit": "bottle",
                 "n_samples": int(valid.sum()),
                 "n_groups": int(n_groups),
             }
@@ -649,6 +1163,85 @@ def main() -> None:
 
         if valid_for_plot:
             plot_ordination(ordination, variance, valid_for_plot, palettes, orders, metric, outdir, formats)
+
+        if cruise_group_cols:
+            missing_design = [c for c in [args.cruise_col, args.depth_col] if c not in metadata.columns]
+            if missing_design:
+                raise SystemExit(f"Cruise-level grouping diagnostics missing columns: {', '.join(missing_design)}")
+            cruise_values, cruise_audit = cruise_depth_profiles(
+                counts.loc[common], metadata, args.cruise_col, args.depth_col,
+                args.cruise_depth_min_prevalence,
+            )
+            if metric == metrics[0]:
+                cruise_audit.to_csv(outdir / "tables" / "grouping_cruise_depth_profile_coverage.tsv", sep="\t", index=False)
+            cruise_meta = metadata.copy()
+            cruise_meta["_cruise"] = cruise_meta[args.cruise_col].fillna("").astype(str).str.strip()
+            cruise_rows = []
+            for cruise in cruise_values.index:
+                part = cruise_meta.loc[cruise_meta["_cruise"].eq(cruise)]
+                record = {args.cruise_col: cruise}
+                for group_col in cruise_group_cols:
+                    values_seen = sorted({str(v).strip() for v in part.get(group_col, pd.Series(dtype=object)).dropna() if str(v).strip()})
+                    record[group_col] = values_seen[0] if len(values_seen) == 1 else np.nan
+                cruise_rows.append(record)
+            cruise_labels = pd.DataFrame(cruise_rows).set_index(args.cruise_col)
+            cruise_distance = distance_matrix(cruise_values, metric)
+            cruise_coords, cruise_variance = pcoa(cruise_distance)
+            cruise_ordination = pd.DataFrame(cruise_coords, index=cruise_values.index, columns=["PCo1", "PCo2"])
+            cruise_valid_for_plot = []
+            for group_col in cruise_group_cols:
+                if group_col not in cruise_labels.columns:
+                    summary_rows.append({"group_col": group_col, "metric": metric, "analysis_unit": "cruise", "status": "missing_column"})
+                    continue
+                labels = cruise_labels[group_col].replace({"nan": np.nan, "": np.nan})
+                valid = labels.notna()
+                labels_valid = labels.loc[valid]
+                dist_sub = cruise_distance[np.ix_(np.where(valid)[0], np.where(valid)[0])]
+                row = {"group_col": group_col, "metric": metric, "analysis_unit": "cruise",
+                       "n_samples": int(valid.sum()), "n_groups": int(labels_valid.nunique())}
+                if valid.sum() < 3 or labels_valid.nunique() < 2 or labels_valid.nunique() >= valid.sum():
+                    row["status"] = "skipped_insufficient_groups"
+                else:
+                    row.update(permanova(dist_sub, labels_valid, args.permutations, args.random_state))
+                    row.update(within_between(dist_sub, labels_valid))
+                    try:
+                        row["silhouette"] = silhouette_score(dist_sub, labels_valid.astype(str), metric="precomputed")
+                    except ValueError:
+                        row["silhouette"] = np.nan
+                summary_rows.append(row)
+                cruise_ordination[group_col] = labels.where(labels.notna(), "Missing").astype(str)
+                cruise_valid_for_plot.append(group_col)
+            if cruise_valid_for_plot:
+                plot_ordination(cruise_ordination, cruise_variance, cruise_valid_for_plot, palettes, orders,
+                                f"{metric}_cruise_level", outdir, formats)
+            if metric == metrics[0] and args.power_enabled:
+                cruise_power_sizes = [int(item) for item in parse_csv(args.power_sample_sizes) if item.isdigit()] or [3, 5, 10, 15, 20]
+                cruise_power = run_grouping_power(
+                    cruise_distance, cruise_labels, cruise_group_cols, cruise_power_sizes,
+                    args.power_simulations, args.power_permutations, args.power_alpha,
+                    args.power_min_groups, args.random_state,
+                )
+                if not cruise_power.empty:
+                    cruise_power["analysis_unit"] = "cruise"
+                    power_frames.append(cruise_power)
+
+            hierarchical = run_hierarchical_diagnostics(
+                distance=distance,
+                metadata=metadata,
+                bottle_group_cols=group_cols,
+                cruise_group_cols=cruise_group_cols,
+                cruise_col=args.cruise_col,
+                permutations=args.permutations,
+                seed=args.random_state,
+            )
+            for table, destination in zip(
+                hierarchical,
+                [hierarchical_within_frames, hierarchical_across_frames, hierarchical_interaction_frames,
+                 hierarchical_bottle_rank_frames, hierarchical_cruise_rank_frames],
+            ):
+                if not table.empty:
+                    table.insert(0, "metric", metric)
+                    destination.append(table)
 
         if metric == metrics[0] and args.soft_label_missing:
             soft_group_cols = parse_csv(args.soft_label_group_cols) or group_cols
@@ -719,27 +1312,63 @@ def main() -> None:
                 seed=args.random_state,
             )
             if not power.empty:
-                power.to_csv(outdir / "tables" / "grouping_power.tsv", sep="\t", index=False)
-                plot_power(power, outdir, formats)
+                power["analysis_unit"] = "bottle"
+                power_frames.append(power)
+
+    if power_frames:
+        power_all = pd.concat(power_frames, ignore_index=True)
+        power_all.to_csv(outdir / "tables" / "grouping_power.tsv", sep="\t", index=False)
+        plot_power(power_all, outdir, formats)
+
+    hierarchical_bottle_rank = pd.DataFrame()
+    hierarchical_cruise_rank = pd.DataFrame()
+    if hierarchical_within_frames:
+        pd.concat(hierarchical_within_frames, ignore_index=True).to_csv(
+            outdir / "tables" / "grouping_hierarchical_within_cruise_states.tsv", sep="\t", index=False
+        )
+    if hierarchical_across_frames:
+        pd.concat(hierarchical_across_frames, ignore_index=True).to_csv(
+            outdir / "tables" / "grouping_hierarchical_across_cruise_states.tsv", sep="\t", index=False
+        )
+    if hierarchical_interaction_frames:
+        pd.concat(hierarchical_interaction_frames, ignore_index=True).to_csv(
+            outdir / "tables" / "grouping_hierarchical_interactions.tsv", sep="\t", index=False
+        )
+    if hierarchical_bottle_rank_frames:
+        hierarchical_bottle_rank = pd.concat(hierarchical_bottle_rank_frames, ignore_index=True)
+        hierarchical_bottle_rank.to_csv(
+            outdir / "tables" / "grouping_hierarchical_bottle_ranking.tsv", sep="\t", index=False
+        )
+    if hierarchical_cruise_rank_frames:
+        hierarchical_cruise_rank = pd.concat(hierarchical_cruise_rank_frames, ignore_index=True)
+        hierarchical_cruise_rank.to_csv(
+            outdir / "tables" / "grouping_hierarchical_cruise_ranking.tsv", sep="\t", index=False
+        )
+    plot_hierarchical_performance(
+        hierarchical_bottle_rank[hierarchical_bottle_rank["metric"].eq(metrics[0])] if not hierarchical_bottle_rank.empty else hierarchical_bottle_rank,
+        hierarchical_cruise_rank[hierarchical_cruise_rank["metric"].eq(metrics[0])] if not hierarchical_cruise_rank.empty else hierarchical_cruise_rank,
+        outdir,
+        formats,
+    )
 
     summary = pd.DataFrame(summary_rows)
     summary.to_csv(outdir / "tables" / "grouping_diagnostics_summary.tsv", sep="\t", index=False)
     if not summary.empty:
         metric_cols = [
-            "group_col", "metric", "n_samples", "n_groups", "pseudo_f", "r2", "p_value",
+            "group_col", "metric", "analysis_unit", "n_samples", "n_groups", "pseudo_f", "r2", "p_value",
             "permutations", "status",
         ]
         summary[[col for col in metric_cols if col in summary.columns]].to_csv(
             outdir / "tables" / "grouping_permanova.tsv", sep="\t", index=False
         )
         distance_cols = [
-            "group_col", "metric", "within_median", "between_median",
+            "group_col", "metric", "analysis_unit", "within_median", "between_median",
             "within_between_ratio", "within_pairs", "between_pairs", "status",
         ]
         summary[[col for col in distance_cols if col in summary.columns]].to_csv(
             outdir / "tables" / "grouping_pairwise_distance_summary.tsv", sep="\t", index=False
         )
-        silhouette_cols = ["group_col", "metric", "silhouette", "n_samples", "n_groups", "status"]
+        silhouette_cols = ["group_col", "metric", "analysis_unit", "silhouette", "n_samples", "n_groups", "status"]
         summary[[col for col in silhouette_cols if col in summary.columns]].to_csv(
             outdir / "tables" / "grouping_silhouette.tsv", sep="\t", index=False
         )

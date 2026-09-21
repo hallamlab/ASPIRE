@@ -15,6 +15,10 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/aspire_matplotlib")
 import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -90,7 +94,10 @@ def merge_measurements(
         right = table.copy()
         right["__measurement_key__"] = right[measurement_sample_col].map(normalize_join_token)
     right = right.drop_duplicates(subset=["__measurement_key__"], keep="first")
-    return left.merge(right, on="__measurement_key__", how="left", suffixes=("", "_measurement"))
+    # The explicitly supplied measurement table is authoritative for
+    # physicochemical fields.  Preserve colliding metadata columns with a
+    # suffix instead of silently selecting a stale or empty metadata copy.
+    return left.merge(right, on="__measurement_key__", how="left", suffixes=("_metadata", ""))
 
 
 def load_counts(path: str | Path, asv_id_col: str) -> pd.DataFrame:
@@ -103,6 +110,28 @@ def load_counts(path: str | Path, asv_id_col: str) -> pd.DataFrame:
         counts.index = counts.index.astype(str).str.strip().str.split(";", n=1).str[0]
         counts = counts[~counts.index.duplicated(keep="first")]
     return counts.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+
+
+def load_spieceasi_standard_filter(path: str | Path) -> set[str]:
+    audit = read_table(path)
+    required = {"ASV_ID", "passes_standard_filter"}
+    missing = required - set(audit.columns)
+    if missing:
+        raise ValueError(
+            "SPIEC-EASI filter audit is missing required columns: "
+            + ", ".join(sorted(missing))
+        )
+    passed = audit["passes_standard_filter"].astype(str).str.strip().str.lower().isin(
+        {"true", "t", "1", "yes"}
+    )
+    return set(
+        audit.loc[passed, "ASV_ID"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.split(";", n=1)
+        .str[0]
+    ) - {""}
 
 
 def choose_measurement_columns(df: pd.DataFrame, requested: list[str], exclude: list[str]) -> list[str]:
@@ -120,6 +149,39 @@ def choose_measurement_columns(df: pd.DataFrame, requested: list[str], exclude: 
         if numeric.notna().sum() >= 3 and numeric.nunique(dropna=True) > 1:
             cols.append(col)
     return cols
+
+
+def apply_measurement_aliases(
+    table: pd.DataFrame,
+    aliases: dict[str, list[str]],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Coalesce explicitly configured synonymous columns into canonical names."""
+    out = table.copy()
+    audit_rows: list[dict[str, object]] = []
+    for canonical, candidates in aliases.items():
+        if not isinstance(candidates, list):
+            candidates = [candidates]
+        candidate_names = [str(value).strip() for value in candidates if str(value).strip()]
+        present_aliases = [name for name in candidate_names if name in out.columns]
+        canonical_present = canonical in out.columns
+        if not canonical_present:
+            out[canonical] = np.nan
+        before = int(pd.to_numeric(out[canonical], errors="coerce").notna().sum())
+        for alias in present_aliases:
+            canonical_values = pd.to_numeric(out[canonical], errors="coerce")
+            alias_values = pd.to_numeric(out[alias], errors="coerce")
+            out[canonical] = canonical_values.combine_first(alias_values)
+        after = int(pd.to_numeric(out[canonical], errors="coerce").notna().sum())
+        audit_rows.append({
+            "canonical_measurement": canonical,
+            "configured_aliases": "|".join(candidate_names),
+            "canonical_column_present": canonical_present,
+            "aliases_present": "|".join(present_aliases),
+            "measured_values_before_alias_coalescing": before,
+            "measured_values_after_alias_coalescing": after,
+            "values_filled_from_aliases": after - before,
+        })
+    return out, pd.DataFrame(audit_rows)
 
 
 def benjamini_hochberg(pvals: Iterable[float]) -> np.ndarray:
@@ -184,6 +246,193 @@ def save_clustermap(matrix: pd.DataFrame, out_base: Path, formats: list[str], ti
     for fmt in formats:
         g.fig.savefig(out_base.with_suffix("." + fmt), bbox_inches="tight")
     plt.close(g.fig)
+
+
+def load_asv_taxonomy(
+    path: str | Path,
+    asv_id_col: str,
+    rank: str = "Phylum",
+) -> pd.DataFrame:
+    """Load one taxonomy assignment per ASV from a possibly sample-expanded table."""
+    p = Path(path)
+    sep = "\t" if p.suffix.lower() in {".tsv", ".tab", ".txt"} else ","
+    columns = list(pd.read_csv(p, sep=sep, nrows=0).columns)
+    id_candidates = [asv_id_col, "ASV_ID", "Feature ID"]
+    id_col = next((col for col in id_candidates if col in columns), None)
+    rank_col = next((col for col in columns if col.casefold() == rank.casefold()), None)
+    if id_col is None or rank_col is None:
+        return pd.DataFrame(columns=["ASV_ID", rank])
+
+    taxonomy = pd.read_csv(
+        p,
+        sep=sep,
+        usecols=[id_col, rank_col],
+        dtype=str,
+        low_memory=False,
+    ).rename(columns={id_col: "ASV_ID", rank_col: rank})
+    taxonomy["ASV_ID"] = (
+        taxonomy["ASV_ID"].fillna("").astype(str).str.strip().str.split(";", n=1).str[0]
+    )
+    missing = taxonomy[rank].isna() | taxonomy[rank].astype(str).str.strip().isin(
+        {"", "NA", "NaN", "nan", "None", "Unassigned"}
+    )
+    taxonomy[rank] = taxonomy[rank].astype(str).str.strip()
+    taxonomy.loc[missing, rank] = "Unclassified"
+    taxonomy = taxonomy[taxonomy["ASV_ID"] != ""]
+    return taxonomy.drop_duplicates(subset=["ASV_ID"], keep="first")
+
+
+def summarize_taxonomic_correlations(
+    corr_long: pd.DataFrame,
+    taxonomy: pd.DataFrame,
+    rank: str = "Phylum",
+    q_threshold: float = 0.05,
+    rho_threshold: float = 0.30,
+) -> pd.DataFrame:
+    """Summarize ASV-level correlations without pooling ASV abundances."""
+    if corr_long.empty or taxonomy.empty or rank not in taxonomy.columns:
+        return pd.DataFrame()
+    merged = corr_long.merge(taxonomy[["ASV_ID", rank]], on="ASV_ID", how="inner")
+    merged["rho"] = pd.to_numeric(merged["rho"], errors="coerce")
+    merged["q_value"] = pd.to_numeric(merged["q_value"], errors="coerce")
+    merged = merged.dropna(subset=["rho"])
+    if merged.empty:
+        return pd.DataFrame()
+    merged["significant"] = merged["q_value"].le(q_threshold)
+    merged["moderate_significant"] = (
+        merged["significant"] & merged["rho"].abs().ge(rho_threshold)
+    )
+
+    summary = (
+        merged.groupby([rank, "measurement"], sort=False, observed=True)
+        .agg(
+            n_asvs=("ASV_ID", "nunique"),
+            median_rho=("rho", "median"),
+            rho_q25=("rho", lambda values: values.quantile(0.25)),
+            rho_q75=("rho", lambda values: values.quantile(0.75)),
+            n_significant=("significant", "sum"),
+            n_moderate_significant=("moderate_significant", "sum"),
+        )
+        .reset_index()
+    )
+    summary["fraction_significant"] = summary["n_significant"] / summary["n_asvs"]
+    summary["fraction_moderate_significant"] = (
+        summary["n_moderate_significant"] / summary["n_asvs"]
+    )
+    summary["q_threshold"] = q_threshold
+    summary["rho_threshold"] = rho_threshold
+    return summary
+
+
+def save_taxonomic_correlation_plot(
+    summary: pd.DataFrame,
+    out_base: Path,
+    formats: list[str],
+    rank: str = "Phylum",
+) -> None:
+    if summary.empty or rank not in summary.columns:
+        (out_base.with_suffix(".skipped.txt")).write_text(
+            f"No {rank}-level correlation summary was available\n"
+        )
+        return
+
+    rank_counts = summary.groupby(rank, observed=True)["n_asvs"].max()
+
+    measurement_order = list(dict.fromkeys(summary["measurement"].astype(str)))
+    rank_order = list(
+        rank_counts.reset_index()
+        .sort_values(["n_asvs", rank], ascending=[False, True])[rank]
+        .astype(str)
+    )
+    plot_df = summary.copy()
+    plot_df[rank] = plot_df[rank].astype(str)
+    x_lookup = {name: idx for idx, name in enumerate(measurement_order)}
+    y_lookup = {name: idx for idx, name in enumerate(rank_order)}
+    plot_df["x"] = plot_df["measurement"].astype(str).map(x_lookup)
+    plot_df["y"] = plot_df[rank].map(y_lookup)
+
+    max_abs = float(np.nanmax(np.abs(plot_df["median_rho"])))
+    max_abs = max(0.30, min(1.0, max_abs)) if np.isfinite(max_abs) else 1.0
+    sizes = 20.0 + 240.0 * plot_df["fraction_moderate_significant"].fillna(0.0)
+    width = max(9.5, len(measurement_order) * 0.70 + 4.0)
+    height = max(6.5, len(rank_order) * 0.36 + 2.7)
+    fig, ax = plt.subplots(figsize=(width, height))
+    cmap = mpl.colors.LinearSegmentedColormap.from_list(
+        "aspire_blue_red",
+        ["#3b75af", "#f7f7f7", "#d64f3c"],
+    )
+    norm = mpl.colors.Normalize(vmin=-max_abs, vmax=max_abs)
+    points = ax.scatter(
+        plot_df["x"],
+        plot_df["y"],
+        c=plot_df["median_rho"],
+        s=sizes,
+        cmap=cmap,
+        norm=norm,
+        edgecolor="white",
+        linewidth=0.45,
+    )
+    ax.set_xticks(range(len(measurement_order)))
+    ax.set_xticklabels(measurement_order, rotation=42, ha="right")
+    ax.set_yticks(range(len(rank_order)))
+    display_names = {
+        name: re.sub(r"_+", " ", name).replace("clade(", "clade (")
+        for name in rank_order
+    }
+    ax.set_yticklabels(
+        [f"{display_names[name]} (n={int(rank_counts[name])})" for name in rank_order]
+    )
+    ax.invert_yaxis()
+    ax.set_xlabel("Environmental measurement")
+    ax.set_ylabel("")
+    ax.set_title(f"{rank}-level ASV associations with environmental measurements")
+    ax.grid(color="0.91", linewidth=0.7)
+    ax.set_axisbelow(True)
+
+    color_values = np.linspace(-max_abs, max_abs, 5)
+    color_handles = [
+        ax.scatter(
+            [],
+            [],
+            s=72,
+            color=cmap(norm(value)),
+            edgecolor="white",
+            linewidth=0.45,
+            label=f"{value:.2f}",
+        )
+        for value in color_values
+    ]
+    color_legend = ax.legend(
+        handles=color_handles,
+        title="Median ASV\nSpearman ρ",
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        frameon=False,
+        labelspacing=0.8,
+    )
+    ax.add_artist(color_legend)
+    legend_handles = [
+        ax.scatter(
+            [],
+            [],
+            s=20.0 + 240.0 * fraction,
+            color="0.58",
+            edgecolor="white",
+            linewidth=0.45,
+            label=f"{int(fraction * 100)}%",
+        )
+        for fraction in (0.25, 0.50, 0.75, 1.00)
+    ]
+    ax.legend(
+        handles=legend_handles,
+        title="ASVs with q≤0.05\nand |ρ|≥0.30",
+        loc="upper left",
+        bbox_to_anchor=(1.02, 0.48),
+        frameon=False,
+        labelspacing=1.2,
+    )
+    save_fig(fig, out_base, formats)
+    plt.close(fig)
 
 
 def scale_arrows(points: pd.DataFrame, arrows: pd.DataFrame, x_col: str, y_col: str) -> float:
@@ -314,16 +563,37 @@ def main() -> None:
     ap.add_argument("--measurement-sample-col", default="sampleID")
     ap.add_argument("--metadata-join-cols", default="")
     ap.add_argument("--measurement-join-cols", default="")
+    ap.add_argument("--measurement-aliases-json", default="{}")
     ap.add_argument("--measurement-cols", default="")
     ap.add_argument("--exclude-cols", default="")
     ap.add_argument("--group-col", default="")
     ap.add_argument("--group-palette", default="")
-    ap.add_argument("--max-asvs", type=int, default=300)
+    ap.add_argument(
+        "--asv-subset-source",
+        choices=["internal_filters", "spieceasi_standard_filter"],
+        default="internal_filters",
+    )
+    ap.add_argument("--asv-subset-audit")
+    ap.add_argument(
+        "--max-asvs",
+        type=int,
+        default=0,
+        help="Optional variance-ranked cap applied after ASV subset selection; 0 disables",
+    )
     ap.add_argument("--min-total", type=float, default=0.0)
     ap.add_argument("--min-prevalence", type=float, default=0.0)
     ap.add_argument("--top-correlations", type=int, default=100)
     ap.add_argument("--correlation-direction", choices=["positive", "negative", "both"], default="both")
     ap.add_argument("--ordination-methods", default="cca,rda,dbrda")
+    ap.add_argument(
+        "--ordination-measurement-cols",
+        default="",
+        help=(
+            "Optional complete-case measurement subset used only for constrained "
+            "ordination. Pairwise ASV correlations always use every selected "
+            "measurement without imputation."
+        ),
+    )
     ap.add_argument("--permutations", type=int, default=999)
     ap.add_argument("--top-vectors", type=int, default=12)
     ap.add_argument("--formats", default="pdf,png,svg")
@@ -340,7 +610,20 @@ def main() -> None:
     metadata = read_table(args.metadata, sep="\t")
     if args.sample_col not in metadata.columns:
         raise ValueError(f"Metadata sample column not found: {args.sample_col}")
+    try:
+        measurement_aliases = json.loads(args.measurement_aliases_json)
+    except json.JSONDecodeError as error:
+        raise ValueError("--measurement-aliases-json is not valid JSON") from error
+    if not isinstance(measurement_aliases, dict):
+        raise ValueError("--measurement-aliases-json must decode to an object")
     measurement_table = read_table(args.measurement_table) if args.measurement_table else None
+    alias_source = measurement_table if measurement_table is not None else metadata
+    alias_source, alias_audit = apply_measurement_aliases(alias_source, measurement_aliases)
+    if measurement_table is not None:
+        measurement_table = alias_source
+    else:
+        metadata = alias_source
+    alias_audit.to_csv(tables_dir / "measurement_alias_resolution.tsv", sep="\t", index=False)
     merged = merge_measurements(
         metadata,
         measurement_table,
@@ -354,6 +637,10 @@ def main() -> None:
         raise ValueError("No measurement columns selected")
     for col in measurement_cols:
         merged[col] = pd.to_numeric(merged[col], errors="coerce")
+        # Study contract: zero is a measured value (including non-detect),
+        # whereas negative chemistry cannot be distinguished from sensor error
+        # and is therefore treated as unmeasured.
+        merged[col] = merged[col].where(merged[col].ge(0))
     merged = merged.drop_duplicates(subset=[args.sample_col], keep="first")
 
     counts = load_counts(args.asv_counts, args.asv_id_col)
@@ -363,23 +650,82 @@ def main() -> None:
     counts = counts.loc[:, common_samples]
     totals = counts.sum(axis=1)
     prevalence = (counts > 0).mean(axis=1)
-    counts = counts.loc[(totals >= args.min_total) & (prevalence >= args.min_prevalence)]
-    if counts.empty:
-        raise ValueError("No ASVs remain after abundance/prevalence filtering")
-    if args.max_asvs > 0 and counts.shape[0] > args.max_asvs:
-        rank = counts.var(axis=1).sort_values(ascending=False)
-        counts = counts.loc[rank.head(args.max_asvs).index]
+    variances = counts.var(axis=1)
+    if args.asv_subset_source == "spieceasi_standard_filter":
+        if not args.asv_subset_audit:
+            raise ValueError(
+                "--asv-subset-audit is required when "
+                "--asv-subset-source=spieceasi_standard_filter"
+            )
+        eligible_ids = load_spieceasi_standard_filter(args.asv_subset_audit)
+        source_eligible = counts.index.isin(eligible_ids)
+    else:
+        source_eligible = (
+            totals.ge(args.min_total) & prevalence.ge(args.min_prevalence)
+        ).to_numpy()
+
+    correlation_counts = counts.loc[source_eligible].copy()
+    if correlation_counts.empty:
+        raise ValueError(f"No ASVs remain under subset source {args.asv_subset_source}")
+    if args.max_asvs > 0 and correlation_counts.shape[0] > args.max_asvs:
+        rank = variances.loc[correlation_counts.index].sort_values(ascending=False)
+        correlation_counts = correlation_counts.loc[rank.head(args.max_asvs).index]
+
+    cohort_audit = pd.DataFrame(
+        {
+            "ASV_ID": counts.index,
+            "total_abundance": totals.reindex(counts.index).to_numpy(),
+            "prevalence": prevalence.reindex(counts.index).to_numpy(),
+            "abundance_variance": variances.reindex(counts.index).to_numpy(),
+            "subset_source": args.asv_subset_source,
+            "source_eligible": source_eligible,
+            "selected_for_correlation": counts.index.isin(correlation_counts.index),
+        }
+    )
+    cohort_audit.to_csv(
+        tables_dir / "asv_measurement_cohort_audit.tsv",
+        sep="\t",
+        index=False,
+    )
 
     meta_indexed = merged.set_index(args.sample_col).loc[common_samples].copy()
     measurement_matrix = meta_indexed[measurement_cols].copy()
+    requested_measurements = parse_csv(args.measurement_cols) or measurement_cols
+    selection_rows = []
+    for measurement in requested_measurements:
+        present = measurement in meta_indexed.columns
+        values = (
+            pd.to_numeric(meta_indexed[measurement], errors="coerce")
+            if present else pd.Series(index=meta_indexed.index, dtype=float)
+        )
+        selection_rows.append({
+            "measurement": measurement,
+            "column_present_after_join": bool(present),
+            "overlapping_samples": int(len(meta_indexed)),
+            "measured_samples": int(values.notna().sum()),
+            "unique_measured_values": int(values.nunique(dropna=True)),
+        })
     measurement_matrix = measurement_matrix.loc[:, measurement_matrix.notna().sum(axis=0) >= 3]
     measurement_matrix = measurement_matrix.loc[:, measurement_matrix.nunique(dropna=True) > 1]
     if measurement_matrix.empty:
         raise ValueError("No measurement columns remain after overlap filtering")
-    for col in measurement_matrix.columns:
-        measurement_matrix[col] = measurement_matrix[col].fillna(measurement_matrix[col].median())
-
-    asv_samples = counts.transpose()
+    selection_audit = pd.DataFrame(selection_rows)
+    selection_audit["selected_for_correlation"] = selection_audit["measurement"].isin(
+        measurement_matrix.columns
+    )
+    selection_audit["exclusion_reason"] = np.select(
+        [
+            ~selection_audit["column_present_after_join"],
+            selection_audit["measured_samples"].lt(3),
+            selection_audit["unique_measured_values"].lt(2),
+        ],
+        ["column_missing", "fewer_than_three_measured_samples", "no_measured_variation"],
+        default="retained",
+    )
+    selection_audit.to_csv(
+        tables_dir / "measurement_selection_audit.tsv", sep="\t", index=False
+    )
+    asv_samples = correlation_counts.transpose()
     asv_samples.index.name = args.sample_col
     measurement_matrix.index.name = args.sample_col
     asv_samples.to_csv(tables_dir / "asv_matrix.samples_by_asv.tsv", sep="\t")
@@ -390,6 +736,30 @@ def main() -> None:
     corr_matrix, corr_long = correlation_tables(asv_samples, measurement_matrix, args.correlation_direction)
     corr_matrix.to_csv(tables_dir / "asv_measurement_spearman.tsv", sep="\t")
     corr_long.to_csv(tables_dir / "asv_measurement_spearman_long.tsv", sep="\t", index=False)
+    taxonomy_rank = "Phylum"
+    taxonomy = load_asv_taxonomy(args.asv_meta, args.asv_id_col, taxonomy_rank)
+    taxonomy = taxonomy[taxonomy["ASV_ID"].isin(set(asv_samples.columns))].copy()
+    taxonomy.to_csv(
+        tables_dir / "asv_measurement_taxonomy.tsv",
+        sep="\t",
+        index=False,
+    )
+    taxonomic_summary = summarize_taxonomic_correlations(
+        corr_long,
+        taxonomy,
+        rank=taxonomy_rank,
+    )
+    taxonomic_summary.to_csv(
+        tables_dir / "asv_measurement_spearman_phylum_summary.tsv",
+        sep="\t",
+        index=False,
+    )
+    save_taxonomic_correlation_plot(
+        taxonomic_summary,
+        plots_dir / "asv_measurement_spearman_phylum_summary",
+        parse_csv(args.formats),
+        rank=taxonomy_rank,
+    )
     if not corr_long.empty:
         keep_asvs = corr_long.assign(abs_rho=lambda d: d["rho"].abs()).sort_values(["q_value", "abs_rho"], ascending=[True, False])["ASV_ID"].drop_duplicates().head(args.top_correlations)
         keep_measurements = corr_long[corr_long["ASV_ID"].isin(set(keep_asvs))]["measurement"].drop_duplicates()
@@ -401,18 +771,51 @@ def main() -> None:
         )
 
     run_config = vars(args).copy()
+    run_config["measurement_aliases"] = measurement_aliases
     run_config["measurement_cols_selected"] = list(measurement_matrix.columns)
     run_config["n_samples"] = len(common_samples)
-    run_config["n_asvs"] = int(counts.shape[0])
+    run_config["n_asvs"] = int(correlation_counts.shape[0])
+    run_config["n_input_asvs"] = int(counts.shape[0])
+    run_config["n_source_eligible_asvs"] = int(np.sum(source_eligible))
+    run_config["n_correlation_asvs"] = int(correlation_counts.shape[0])
+    run_config["n_ordination_asvs"] = int(correlation_counts.shape[0])
     (outdir / "run_config.json").write_text(json.dumps(run_config, indent=2))
 
     methods = [m for m in parse_csv(args.ordination_methods) if m in {"cca", "rda", "dbrda"}]
     if methods:
+        requested_ordination = parse_csv(args.ordination_measurement_cols)
+        if requested_ordination:
+            missing_ordination = [
+                column for column in requested_ordination
+                if column not in measurement_matrix.columns
+            ]
+            if missing_ordination:
+                raise ValueError(
+                    "Requested ordination measurements were unavailable: "
+                    + ", ".join(missing_ordination)
+                )
+            ordination_measurements = measurement_matrix[requested_ordination].copy()
+        else:
+            ordination_measurements = measurement_matrix.copy()
+        complete_mask = ordination_measurements.notna().all(axis=1)
+        ordination_measurements = ordination_measurements.loc[complete_mask]
+        ordination_asvs = asv_samples.loc[complete_mask]
+        if len(ordination_measurements) < 3:
+            raise ValueError(
+                "Fewer than three complete-case samples remained for constrained ordination"
+            )
+        ordination_asv_path = tables_dir / "asv_matrix.ordination_samples_by_asv.tsv"
+        ordination_measurement_path = tables_dir / "measurement_matrix.ordination_complete_cases.tsv"
+        ordination_asvs.to_csv(ordination_asv_path, sep="\t")
+        ordination_measurements.to_csv(ordination_measurement_path, sep="\t")
+        run_config["ordination_measurement_cols_selected"] = list(ordination_measurements.columns)
+        run_config["n_ordination_samples"] = int(len(ordination_measurements))
+        (outdir / "run_config.json").write_text(json.dumps(run_config, indent=2))
         cmd = [
             "Rscript",
             args.r_script,
-            "--asv-matrix", str(tables_dir / "asv_matrix.samples_by_asv.tsv"),
-            "--measurement-matrix", str(tables_dir / "measurement_matrix.samples_by_measurement.tsv"),
+            "--asv-matrix", str(ordination_asv_path),
+            "--measurement-matrix", str(ordination_measurement_path),
             "--metadata", str(tables_dir / "measurement_metadata.tsv"),
             "--outdir", str(ord_dir),
             "--methods", ",".join(methods),

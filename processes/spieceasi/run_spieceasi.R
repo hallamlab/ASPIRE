@@ -10,6 +10,10 @@ suppressPackageStartupMessages({
   library(igraph)
 })
 
+publication_family <- "Times New Roman"
+publication_pointsize <- 22
+publication_cex <- 1.0
+
 # ----------------------------- CLI -------------------------------------------
 opt_list <- list(
   make_option("--counts", type="character", default=NULL,
@@ -30,6 +34,12 @@ opt_list <- list(
               help="Keep ASVs present in at least this prevalence threshold. Accepts fraction (0-1) or percent (0-100) [default %default]."),
   make_option("--force-keep-asvs", type="character", default=NULL, dest="force_keep_asvs",
               help="Optional TSV/list of ASV IDs to retain regardless of min abundance/prevalence filters. ISA summary TSVs are supported; zero-variance filtering still applies."),
+  make_option("--force-keep-asv-mag-links", type="character", default=NULL, dest="force_keep_asv_mag_links",
+              help="Optional ASV-MAG pairing TSV whose eligible linked ASVs are retained regardless of abundance/prevalence filters."),
+  make_option("--asv-mag-min-pident", type="double", default=99.5, dest="asv_mag_min_pident",
+              help="Minimum percent identity used to select force-retained ASV-MAG links [default %default]."),
+  make_option("--asv-mag-min-qcov", type="double", default=100.0, dest="asv_mag_min_qcov",
+              help="Minimum query coverage used to select force-retained ASV-MAG links [default %default]."),
   make_option("--remove-zero-var", type="logical", default=TRUE, dest="remove_zero_var",
               help="Drop ASVs with zero variance after filtering [default %default]."),
 
@@ -56,6 +66,8 @@ opt_list <- list(
               help="Absolute partial correlation cutoff for thresholded graphs [default %default]."),
   make_option("--keep-negative", type="logical", default=TRUE, dest="keep_negative",
               help="Also write a signed (pos/neg) thresholded network [default %default]."),
+  make_option("--retain-isolates", type="logical", default=FALSE, dest="retain_isolates",
+              help="Retain degree-zero features in graph artifacts. Their absence of inferred edges remains explicit [default %default]."),
 
   # Layout + viz sizes
   make_option("--layout-iters", type="integer", default=1000, dest="layout_iters",
@@ -144,6 +156,31 @@ read_force_keep_asvs <- function(path) {
   }
 
   normalize_asv_ids(keep_tbl[[1]])
+}
+read_force_keep_asv_mag_asvs <- function(path, min_pident, min_qcov) {
+  if (is.null(path) || !nzchar(path) || basename(path) == "empty_modules.tsv") {
+    return(character(0))
+  }
+  if (!file.exists(path)) {
+    stop(sprintf("--force-keep-asv-mag-links file does not exist: %s", path), call. = FALSE)
+  }
+  links <- suppressMessages(readr::read_tsv(path, col_types = readr::cols(.default = "c"), progress = FALSE))
+  required <- c("ASV_ID", "link_pident", "link_qcov")
+  missing <- setdiff(required, names(links))
+  if (length(missing) > 0) {
+    stop(sprintf(
+      "ASV-MAG force-retention table is missing required columns: %s",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  pident <- suppressWarnings(as.numeric(links$link_pident))
+  qcov <- suppressWarnings(as.numeric(links$link_qcov))
+  eligible <- is.finite(pident) & is.finite(qcov) &
+    pident >= min_pident & qcov >= min_qcov
+  if ("pairing_status" %in% names(links)) {
+    eligible <- eligible & grepl("unique|ambiguous", links$pairing_status, ignore.case = TRUE)
+  }
+  normalize_asv_ids(links$ASV_ID[eligible])
 }
 safe_write_graph <- function(graph, path, format, required = TRUE) {
   tryCatch(
@@ -336,13 +373,34 @@ if (nrow(mat) < 2 || ncol(mat) < 2) {
   stop(sprintf("Input matrix is too small after loading/transposition: samples=%d, ASVs=%d", nrow(mat), ncol(mat)), call. = FALSE)
 }
 
-force_keep_asvs <- read_force_keep_asvs(opt$force_keep_asvs)
+force_keep_general <- read_force_keep_asvs(opt$force_keep_asvs)
+force_keep_asv_mag <- read_force_keep_asv_mag_asvs(
+  opt$force_keep_asv_mag_links,
+  opt$asv_mag_min_pident,
+  opt$asv_mag_min_qcov
+)
+force_keep_asvs <- union(force_keep_general, force_keep_asv_mag)
 force_keep_present <- intersect(force_keep_asvs, colnames(mat))
+if (length(force_keep_asv_mag) > 0) {
+  msg(
+    "Selected %d ASV-MAG-linked ASVs at pident >= %.3f and qcov >= %.3f.",
+    length(force_keep_asv_mag),
+    opt$asv_mag_min_pident,
+    opt$asv_mag_min_qcov
+  )
+}
 if (length(force_keep_asvs) > 0) {
+  force_keep_sources <- c()
+  if (length(force_keep_general) > 0) {
+    force_keep_sources <- c(force_keep_sources, opt$force_keep_asvs)
+  }
+  if (length(force_keep_asv_mag) > 0) {
+    force_keep_sources <- c(force_keep_sources, opt$force_keep_asv_mag_links)
+  }
   msg(
     "Loaded %d force-keep ASVs from %s; %d are present in the count table.",
     length(force_keep_asvs),
-    opt$force_keep_asvs,
+    paste(force_keep_sources, collapse = ", "),
     length(force_keep_present)
   )
   missing_force_keep <- setdiff(force_keep_asvs, colnames(mat))
@@ -390,6 +448,39 @@ if (identical(count_data_filtered, FALSE)) {
     }
     mat_f <- mat_f[, v > 0, drop = FALSE]
   }
+
+  filter_audit <- tibble(
+    ASV_ID = colnames(mat),
+    prevalence = colSums(mat > 0, na.rm = TRUE) / nrow(mat),
+    max_relative_abundance = apply(
+      mat / {
+        totals <- rowSums(mat, na.rm = TRUE)
+        totals[totals == 0] <- 1
+        totals
+      },
+      2,
+      max,
+      na.rm = TRUE
+    ),
+    passes_standard_filter = FALSE,
+    retained_for_asv_mag_link = colnames(mat) %in% force_keep_asv_mag,
+    retained_for_other_reason = colnames(mat) %in% setdiff(force_keep_general, force_keep_asv_mag)
+  )
+  filter_audit$passes_standard_filter <- (
+    (opt$min_rel_abund <= 0 | filter_audit$max_relative_abundance >= opt$min_rel_abund) &
+    (opt$min_prevalence <= 0 | filter_audit$prevalence >= opt$min_prevalence)
+  )
+  filter_audit$retained_final <- colnames(mat) %in% colnames(mat_f)
+  filter_audit$retention_reason <- ifelse(
+    filter_audit$passes_standard_filter,
+    "standard_filter",
+    ifelse(
+      filter_audit$retained_for_asv_mag_link,
+      "ASV_MAG_link",
+      ifelse(filter_audit$retained_for_other_reason, "other_force_keep", "filtered_out")
+    )
+  )
+  save_csv(filter_audit, paste0(prefix, "_filtering_audit.csv"))
   if (nrow(mat_f) < 2 || ncol(mat_f) < 2) {
     stop(
       sprintf(
@@ -491,6 +582,27 @@ if (identical(ig_main, FALSE) || identical(am_coord, FALSE)) {
     E(ig_signed)$color <- ifelse(E(ig_signed)$weight > 0, "red", "blue")
   }
 
+  # Degree-zero vertices carry no inferred association and add visual and
+  # module-detection clutter. Retain them in the filtered abundance and
+  # adjacency tables for auditing, but exclude them from network artifacts.
+  drop_isolates <- function(graph, label) {
+    isolated <- which(igraph::degree(graph) == 0)
+    if (length(isolated) > 0) {
+      msg("Removing %d unconnected ASVs from %s graph artifacts.", length(isolated), label)
+      graph <- delete_vertices(graph, isolated)
+    }
+    graph
+  }
+  if (!isTRUE(opt$retain_isolates)) {
+    ig_main <- drop_isolates(ig_main, "positive-thresholded")
+    ig_pos_all <- drop_isolates(ig_pos_all, "positive-all")
+    if (!is.null(ig_signed)) {
+      ig_signed <- drop_isolates(ig_signed, "signed-thresholded")
+    }
+  } else {
+    msg("Retaining degree-zero features in graph artifacts by request.")
+  }
+
   # --- Vertex sizes from CLR means (always per-ASV), robust to orientation ---
   # Expected: count_data_filtered has rows=samples, cols=ASVs. But we guard anyway.
   asv_names <- colnames(count_data_filtered)
@@ -543,12 +655,28 @@ if (identical(ig_main, FALSE) || identical(am_coord, FALSE)) {
   saveRDS(layout_nicely_coords, cache_layout); msg("Saved layout: %s", cache_layout)
 
   # Multipage PDF of layouts
-  pdf(file = paste0(prefix, "_multipage_layouts.pdf"), width = opt$pdf_width, height = opt$pdf_height)
-  plot(ig_main, layout = layout_nicely_coords, vertex.size = vsize, vertex.label = NA, main = "layout_nicely")
-  plot(ig_main, layout = layout_fr_coords,     vertex.size = vsize, vertex.label = NA, main = sprintf("Fruchterman-Reingold (niter=%d)", opt$layout_iters))
-  plot(ig_main, layout = layout_kk_coords,     vertex.size = vsize, vertex.label = NA, main = "Kamada-Kawai")
-  plot(ig_main, layout = layout_drl_coords,    vertex.size = vsize, vertex.label = NA, main = "DRL")
+  layouts <- list(
+    list(label = "A", name = "layout_nicely", coords = layout_nicely_coords),
+    list(label = "B", name = sprintf("Fruchterman-Reingold (niter=%d)", opt$layout_iters), coords = layout_fr_coords),
+    list(label = "C", name = "Kamada-Kawai", coords = layout_kk_coords),
+    list(label = "D", name = "DRL", coords = layout_drl_coords)
+  )
+  draw_layout <- function(item) {
+    par(family = publication_family, cex = publication_cex, cex.main = publication_cex)
+    plot(ig_main, layout = item$coords, vertex.size = vsize, vertex.label = NA, main = item$name)
+    mtext(item$label, side = 3, adj = 0, line = 0.2, font = 2, cex = 1.3, family = publication_family)
+  }
+  grDevices::cairo_pdf(file = paste0(prefix, "_multipage_layouts.pdf"), width = opt$pdf_width, height = opt$pdf_height,
+                       family = publication_family, pointsize = publication_pointsize)
+  for (item in layouts) draw_layout(item)
   dev.off()
+  for (index in seq_along(layouts)) {
+    grDevices::png(filename = sprintf("%s_layout_%s.png", prefix, tolower(layouts[[index]]$label)),
+                   width = opt$pdf_width, height = opt$pdf_height, units = "in", res = 300,
+                   type = "cairo", pointsize = publication_pointsize)
+    draw_layout(layouts[[index]])
+    dev.off()
+  }
   msg("Wrote %s_multipage_layouts.pdf", prefix)
 
   # GraphML is required downstream. GML is best-effort only because some

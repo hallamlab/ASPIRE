@@ -44,6 +44,10 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 from itertools import combinations
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
@@ -263,7 +267,7 @@ except Exception:
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 12, 'font.family': 'Source Sans Pro'})
+plt.rcParams.update({'font.size': 22, 'font.family': 'Times New Roman'})
 sns.set_theme()
 sns.set_style("white")
 
@@ -494,6 +498,19 @@ def _tune_upset_layout(fig: plt.Figure, labels: Sequence[str]) -> None:
         for txt in ax.texts:
             txt.set_clip_on(False)
 
+
+def display_group_label(value: str) -> str:
+    """Convert machine-safe hybrid labels to compact publication labels."""
+    label = str(value).strip()
+    if "__" in label:
+        oxygen, component = label.split("__", 1)
+        return f"{oxygen.capitalize()}–{component.upper()}"
+    return label.replace("_", " ").title()
+
+
+def display_group_column(value: str) -> str:
+    return "Hybrid compartment" if value == "o2_subcompartment_final" else str(value).replace("_", " ").title()
+
 def plot_upset_unique(
     group_sets: Mapping[str, set],
     colors: Mapping[str, str],
@@ -502,8 +519,11 @@ def plot_upset_unique(
     formats: Sequence[str],
     group_col: str,
     font_size: float,
+    max_intersections: int,
 ) -> None:
-    rev_grp_sets = {g: s for g, s in reversed(list(group_sets.items()))}
+    display_sets = {display_group_label(g): s for g, s in group_sets.items()}
+    display_colors = {display_group_label(g): colors[g] for g in group_sets}
+    rev_grp_sets = {g: s for g, s in reversed(list(display_sets.items()))}
     data = build_upset_unique(rev_grp_sets)
     upset = UpSet(
         data,
@@ -511,28 +531,21 @@ def plot_upset_unique(
         element_size=None,
         show_counts=True,
         sort_categories_by='input',
-        min_subset_size=0
+        sort_by='cardinality',
+        max_subset_rank=max_intersections,
+        min_subset_size=1,
+        intersection_plot_elements=5,
+        totals_plot_elements=2,
     )
-    for g, c in colors.items():
+    for g, c in display_colors.items():
         upset.style_categories([g], bar_facecolor=c, bar_edgecolor="black")
-    max_len = max((len(str(g)) for g in group_sets.keys()), default=0)
-    fig_w = max(14, 12 + 0.28 * max_len)
-    fig = plt.figure(figsize=(fig_w, 9))
+    fig = plt.figure(figsize=(13, 8))
+    fig._aspire_compact_publication_typography = True
+    fig._aspire_disable_panel_labels = True
     with mpl.rc_context({"font.size": float(font_size)}):
         upset.plot(fig=fig)
-    _tune_upset_layout(fig, list(group_sets.keys()))
-    fig.suptitle(title, y=0.98, fontsize=float(font_size) + 1)
-    # legend
-    handles = [Patch(facecolor=colors[g], edgecolor="black", label=g) for g in group_sets.keys()]
-    fig.legend(
-        handles=handles,
-        title=group_col,
-        bbox_to_anchor=(1.02, 1),
-        loc='upper left',
-        borderaxespad=0,
-        fontsize=float(font_size),
-        title_fontsize=float(font_size),
-    )
+    _tune_upset_layout(fig, list(display_sets.keys()))
+    fig.suptitle("ASV membership among hybrid compartments", y=0.99, fontsize=float(font_size) + 3)
     savefig_multi(fig, out_base, "upset", formats)
 
 def plot_upset_weighted(
@@ -545,50 +558,110 @@ def plot_upset_weighted(
     formats: Sequence[str],
     group_col: str,
     font_size: float,
+    max_intersections: int,
 ) -> None:
-    rev_grp_sets = {g: s for g, s in reversed(list(group_sets.items()))}
-    df = build_upset_weighted_rows(rev_grp_sets, per_group_values, group_order)
-    contents = {c: set(df.loc[df[c].astype(bool), 'ASV_ID']) for c in group_order[::-1]}
+    display_sets = {display_group_label(g): s for g, s in group_sets.items()}
+    display_order = [display_group_label(g) for g in group_order if g in group_sets]
+    display_colors = {display_group_label(g): colors[g] for g in group_sets}
+    display_values = {(display_group_label(g), asv): value for (g, asv), value in per_group_values.items() if g in group_sets}
+    rev_grp_sets = {g: s for g, s in reversed(list(display_sets.items()))}
+    df = build_upset_weighted_rows(rev_grp_sets, display_values, display_order)
+    contents = {c: set(df.loc[df[c].astype(bool), 'ASV_ID']) for c in display_order[::-1]}
     weights = df.groupby(['ASV_ID', 'group'])['count'].sum().reset_index().set_index('ASV_ID')
     # Force custom stacking order here
     weights['group'] = pd.Categorical(weights['group'],
-                                      categories=list(group_order),
+                                      categories=list(display_order),
                                       ordered=True)
     ser = from_contents(contents, data=weights)
     upset = UpSet(
         ser, sum_over='count', subset_size='sum',
-        element_size=None, show_counts=True,
-        sort_categories_by='input', min_subset_size=0,
-        intersection_plot_elements=0
+        element_size=None, show_counts=False,
+        sort_categories_by='input', sort_by='cardinality',
+        max_subset_rank=max_intersections, min_subset_size=1,
+        intersection_plot_elements=5,
+        totals_plot_elements=2,
     )
-    for g, c in colors.items():
+    for g, c in display_colors.items():
         upset.style_categories([g], bar_facecolor=c, bar_edgecolor="black")
-    upset.add_stacked_bars(by="group", sum_over="count", colors=colors, title=f"Abundance by {group_col}", elements=10)
-    max_len = max((len(str(g)) for g in group_order), default=0)
-    fig_w = max(14, 12 + 0.28 * max_len)
-    fig = plt.figure(figsize=(fig_w, 9))
+    fig = plt.figure(figsize=(13, 8))
+    fig._aspire_compact_publication_typography = True
+    fig._aspire_disable_panel_labels = True
     with mpl.rc_context({"font.size": float(font_size)}):
         axes = upset.plot(fig=fig)
-    _tune_upset_layout(fig, list(group_order))
-    # fix legend ordering
-    ax_extra = axes.get('extra0', None)
-    if ax_extra is not None:
-        handles, labels = ax_extra.get_legend_handles_labels()
-        order = list(group_order)
-        handles = [handles[labels.index(o)] for o in order if o in labels]
-        labels = [o for o in order if o in labels]
-        ax_extra.legend(
-            handles,
-            labels,
-            title=group_col,
-            bbox_to_anchor=(1.05, 1),
-            loc='upper left',
-            borderaxespad=0,
-            fontsize=float(font_size),
-            title_fontsize=float(font_size),
-        )
-    fig.suptitle(title, y=1.02, fontsize=float(font_size) + 1)
+    _tune_upset_layout(fig, list(display_order))
+    intersection_ax = axes.get('intersections')
+    if intersection_ax is not None:
+        intersection_ax.set_yscale('log')
+        intersection_ax.set_ylabel("Summed ASV reads (log scale)")
+        intersection_ax.grid(axis='y', which='major', color='0.82', linewidth=0.7)
+    fig.suptitle("Abundance-weighted ASV intersections", y=0.99, fontsize=float(font_size) + 3)
     savefig_multi(fig, out_base, "upset_weighted", formats)
+
+def _style_venn_labels(diagram, font_size: float) -> None:
+    for text in list(diagram.set_labels or []) + list(diagram.subset_labels or []):
+        if text is not None:
+            text.set_fontsize(font_size)
+            text.set_fontfamily("Times New Roman")
+
+
+def plot_hybrid_venn(
+    group_sets: Mapping[str, set],
+    colors: Mapping[str, str],
+    out_base: Path,
+    formats: Sequence[str],
+) -> None:
+    """Render nested hybrid overlaps as readable 2–3-set Venn panels."""
+    families: Dict[str, Dict[str, set]] = {}
+    for label, members in group_sets.items():
+        oxygen, component = str(label).split("__", 1)
+        families.setdefault(oxygen, {})[component] = members
+
+    family_order = [name for name in ("oxic", "dysoxic", "suboxic", "anoxic") if name in families]
+    parent_sets = {
+        family.capitalize(): set().union(*families[family].values())
+        for family in family_order
+    }
+    parent_colors = {
+        family.capitalize(): colors[next(label for label in group_sets if label.startswith(f"{family}__"))]
+        for family in family_order
+    }
+    panels: List[Tuple[str, Dict[str, set], Dict[str, str]]] = []
+    if 2 <= len(parent_sets) <= 3:
+        panels.append(("Oxygen regimes", parent_sets, parent_colors))
+    for family in family_order:
+        states = families[family]
+        if 2 <= len(states) <= 3:
+            state_sets = {
+                f"{family.capitalize()}–{component.upper()}": members
+                for component, members in states.items()
+            }
+            state_colors = {
+                f"{family.capitalize()}–{component.upper()}": colors[f"{family}__{component}"]
+                for component in states
+            }
+            panels.append((f"{family.capitalize()} GMM states", state_sets, state_colors))
+    if not panels:
+        raise ValueError("No two- or three-set hybrid Venn panels could be constructed.")
+
+    fig, axes = plt.subplots(1, len(panels), figsize=(6.2 * len(panels), 6.2), squeeze=False)
+    fig._aspire_compact_publication_typography = True
+    for ax, (panel_title, panel_sets, panel_colors) in zip(axes.ravel(), panels):
+        names = list(panel_sets)
+        values = [panel_sets[name] for name in names]
+        palette = [panel_colors[name] for name in names]
+        if len(names) == 2:
+            diagram = venn2(values, set_labels=names, set_colors=palette, alpha=0.55, ax=ax)
+        else:
+            diagram = venn3(values, set_labels=names, set_colors=palette, alpha=0.55, ax=ax)
+        _style_venn_labels(diagram, 12)
+        for patch in diagram.patches:
+            if patch is not None:
+                patch.set_edgecolor("0.25")
+                patch.set_linewidth(0.8)
+        ax.set_title(panel_title, fontsize=15, pad=14)
+    fig.subplots_adjust(left=0.04, right=0.98, bottom=0.06, top=0.90, wspace=0.30)
+    savefig_multi(fig, out_base, "venn", formats)
+
 
 def plot_venn(
     group_sets: Mapping[str, set],
@@ -604,6 +677,10 @@ def plot_venn(
     """
     names = list(group_sets.keys())
     sets = [group_sets[n] for n in names]
+
+    if names and all("__" in name for name in names) and _HAVE_MPL_VENN:
+        plot_hybrid_venn(group_sets, colors, out_base, formats)
+        return
     
     if len(names) == 2 and _HAVE_MPL_VENN:
         fig = plt.figure(figsize=(6, 6))
@@ -643,7 +720,7 @@ def plot_venn(
     if 4 <= len(names) <= 6 and _HAVE_VENN:
         labels2sets = {n: set(s) for n, s in zip(names, sets)}
         if not any(len(s) for s in labels2sets.values()):
-            print("All Venn sets are empty; skipping Venn plot.")
+            raise ValueError("All requested Venn sets are empty; no Venn plot can be generated.")
         else:
             fig, ax = plt.subplots(figsize=(6, 6), constrained_layout=True)
             ax = venn(
@@ -658,8 +735,15 @@ def plot_venn(
             plt.close(fig)
             return
     
-    # Fallback: skip venn if no backend or too many groups
-    print(f"[WARN] Venn plotting not available for {len(names)} sets (matplotlib-venn or venn not installed, or >6 sets). Skipping.")
+    if len(names) < 2 or len(names) > 6:
+        raise ValueError(
+            f"Venn plotting requires 2–6 represented groups; received {len(names)}. "
+            "Configure --venn-subset-groups without changing the UpSet cohort."
+        )
+    raise RuntimeError(
+        f"The required Venn plotting backend is unavailable for {len(names)} groups. "
+        "Install matplotlib-venn for 2–3 groups or venn for 4–6 groups."
+    )
 
 def write_presence_and_sums(
     name_to_set: Mapping[str, set],
@@ -693,11 +777,13 @@ def run_domain(
     color_col: str,
     group_order: Optional[Sequence[str]],
     subset_groups: Optional[Sequence[str]],
+    venn_subset_groups: Optional[Sequence[str]],
     use_raw: bool,
     use_final: bool,
     skip_venn: bool,
     formats: Sequence[str],
     font_size: float,
+    max_intersections: int,
     group_palette: Optional[Mapping[str, str]] = None,
     output_tag: str = "",
 ) -> None:
@@ -765,16 +851,20 @@ def run_domain(
             
             # UpSet unique
             plot_upset_unique(group_sets, {g: palette[g] for g in groups_present},
-                            f"ASV Membership by {group_col} (Raw)", base, formats, group_col, font_size)
+                            f"ASV Membership by {group_col} (Raw)", base, formats, group_col,
+                            font_size, max_intersections)
             
             # UpSet weighted
             plot_upset_weighted(group_sets, raw_group_asv_total, groups_present,
                               {g: palette[g] for g in groups_present},
-                              f"ASV Abundance by {group_col} (Raw)", base, formats, group_col, font_size)
+                              f"ASV Abundance by {group_col} (Raw)", base, formats, group_col,
+                              font_size, max_intersections)
             
             # Venn (optional)
             if not skip_venn:
-                plot_venn(group_sets, {g: palette[g] for g in groups_present},
+                venn_groups = [g for g in groups_present if not venn_subset_groups or g in venn_subset_groups]
+                venn_sets = {g: group_sets[g] for g in venn_groups}
+                plot_venn(venn_sets, {g: palette[g] for g in venn_groups},
                          f"Venn: ASV Membership (Raw)", base, formats)
             
             # Tables
@@ -802,16 +892,20 @@ def run_domain(
             
             # UpSet unique
             plot_upset_unique(group_sets, {g: palette[g] for g in groups_present},
-                            f"ASV Membership by {group_col} (Final)", base, formats, group_col, font_size)
+                            f"ASV Membership by {group_col} (Final)", base, formats, group_col,
+                            font_size, max_intersections)
             
             # UpSet weighted
             plot_upset_weighted(group_sets, fin_group_asv_total, groups_present,
                               {g: palette[g] for g in groups_present},
-                              f"ASV Abundance by {group_col} (Final)", base, formats, group_col, font_size)
+                              f"ASV Abundance by {group_col} (Final)", base, formats, group_col,
+                              font_size, max_intersections)
             
             # Venn (optional)
             if not skip_venn:
-                plot_venn(group_sets, {g: palette[g] for g in groups_present},
+                venn_groups = [g for g in groups_present if not venn_subset_groups or g in venn_subset_groups]
+                venn_sets = {g: group_sets[g] for g in venn_groups}
+                plot_venn(venn_sets, {g: palette[g] for g in venn_groups},
                          f"Venn: ASV Membership (Final)", base, formats)
             
             # Tables
@@ -843,6 +937,8 @@ def parse_args() -> argparse.Namespace:
                     help="Explicit group color mapping, e.g. GroupA=#1f77b4,GroupB=#ff7f0e. Overrides --color-col values.")
     ap.add_argument("--subset-groups", default=None,
                     help="Optional comma-separated list of groups to include (subset of all groups)")
+    ap.add_argument("--venn-subset-groups", default=None,
+                    help="Optional comma-separated Venn-only subset; UpSet plots retain --subset-groups")
     ap.add_argument("--group-order", default=None,
                     help="Optional comma-separated explicit group order (e.g., 'Oral Rinse,BAL,Bronchial Brush')")
     
@@ -859,6 +955,8 @@ def parse_args() -> argparse.Namespace:
                     help="Comma-separated figure formats: e.g., svg,pdf,png")
     ap.add_argument("--font-size", type=float, default=12.0,
                     help="Base font size used in UpSet plots")
+    ap.add_argument("--max-intersections", type=int, default=20,
+                    help="Maximum largest intersections displayed in each UpSet plot")
     ap.add_argument("--output-tag", default="",
                     help="Optional suffix tag added to output stems, e.g. 'raw' -> raw_micro_raw_*.svg")
     
@@ -872,11 +970,16 @@ def main() -> None:
     asv_raw_path = Path(args.asv_raw_path) if args.asv_raw_path else None
     asv_final_path = Path(args.asv_final_path) if args.asv_final_path else None
     formats = [f.strip().lstrip(".") for f in args.formats.split(",") if f.strip()]
+    if args.max_intersections < 1:
+        raise ValueError("--max-intersections must be at least 1")
     
     # Parse subset groups if provided
     subset_groups = None
     if args.subset_groups:
         subset_groups = [g.strip() for g in args.subset_groups.split(",") if g.strip()]
+    venn_subset_groups = None
+    if args.venn_subset_groups:
+        venn_subset_groups = [g.strip() for g in args.venn_subset_groups.split(",") if g.strip()]
     group_order = None
     if args.group_order:
         group_order = [g.strip() for g in args.group_order.split(",") if g.strip()]
@@ -912,11 +1015,13 @@ def main() -> None:
             color_col=args.color_col,
             group_order=group_order,
             subset_groups=subset_groups,
+            venn_subset_groups=venn_subset_groups,
             use_raw=use_raw,
             use_final=use_final,
             skip_venn=args.skip_venn,
             formats=formats,
             font_size=args.font_size,
+            max_intersections=args.max_intersections,
             group_palette=group_palette,
             output_tag=args.output_tag,
         )

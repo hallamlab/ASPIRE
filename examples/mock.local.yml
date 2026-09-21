@@ -12,7 +12,9 @@ paths:
   # manifest: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/fastq_manifest.tsv
 
 resources:
-  threads: 4
+  sample_threads: 1
+  analysis_threads: 25
+  max_parallel_sample_tasks: 32
   single_end: false
 
 filename_patterns:
@@ -68,7 +70,7 @@ sina:
   trim_to: V4
   batch_size: 1000000
   keep_gaps: false
-  threads: 4
+  threads: 25
   verbose: false
 
 taxonomy:
@@ -83,7 +85,7 @@ taxonomy:
   output_tsv: ASV_SILVA_tax.full-length.vsearch.tsv
   stats_tsv: ASV_SILVA_stats.full-length.vsearch.tsv
   uppercase_fasta: ASVs.upper.fasta
-  threads: 4
+  threads: 25
 
 mito:
   enabled: true
@@ -141,7 +143,7 @@ batch_correction:
   biological_color_col: Type_Group
   color_palette_col: Color
   conqur_mode: standard
-  conqur_num_core: 4
+  conqur_num_core: 25
   conqur_auto_install: true
   random_state: 42
 
@@ -339,7 +341,7 @@ spieceasi:
   nlambda: 20
   rep_num: 50
   thresh: 0.2
-  ncores: 4
+  ncores: 25
   seed: 42
   edge_threshold: 0.02
   keep_negative: true
@@ -349,6 +351,15 @@ spieceasi:
   module_seed: 42
 
 asv_mag_link:
+  enabled: false
+
+titan:
+  enabled: false
+
+microbial_compartments:
+  enabled: false
+
+community_turnover:
   enabled: false
 
 master_summary:
@@ -372,6 +383,10 @@ environments:
   umap_clustering: processes/umap_clustering/env.yml
   diversity: processes/diversity_analysis/env.yml
   indicspecies: processes/indicspecies/env.yml
+  measurement_association: processes/measurement_association/env.yml
+  titan: processes/titan/env.yml
+  microbial_compartments: processes/microbial_compartments/env.yml
+  community_turnover: processes/community_turnover/env.yml
   voc_correlation: processes/voc_correlation/env.yml
   clustermaps: processes/clustermaps/env.yml
   power_analysis: processes/power_analysis_pipeline/env.yml

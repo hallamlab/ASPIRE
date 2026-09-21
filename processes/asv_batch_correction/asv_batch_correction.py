@@ -30,6 +30,11 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import sys as _sys
+from pathlib import Path as _StylePath
+_sys.path.insert(0, str(_StylePath(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import warnings
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict
@@ -60,8 +65,8 @@ warnings.filterwarnings('ignore')
 
 # Plotting aesthetics
 plt.rcParams.update({
-    'font.size': 11,
-    'font.family': 'sans-serif',
+    'font.size': 22,
+    'font.family': 'Times New Roman',
     'axes.linewidth': 1.2,
     'figure.dpi': 150,
 })

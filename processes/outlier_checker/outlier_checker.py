@@ -42,6 +42,10 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 from typing import List, Optional, Tuple
 
 import numpy as np

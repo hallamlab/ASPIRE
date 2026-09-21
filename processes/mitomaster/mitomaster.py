@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import json
+import re
+import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
@@ -97,6 +100,55 @@ def post_one(
         return resp.text
 
 
+def validate_response(payload: str) -> None:
+    """Reject service/error pages; a recognized TSV header with no hits is valid.
+
+    MITOMASTER may omit non-aligning sequences, so response row count must not
+    be required to equal input sequence count.
+    """
+    lines = [line for line in payload.splitlines() if line.strip()]
+    if not lines:
+        raise ValueError("Empty API response; cannot distinguish service failure from no matches")
+    if re.search(r"<(?:!doctype|html|body|head)\b", payload, re.I):
+        raise ValueError("API returned an HTML page instead of a result table")
+    header = lines[0].split("\t")
+    first = re.sub(r"[^a-z0-9]", "", header[0].lower())
+    if len(header) < 2 or first not in {
+        "id", "sample", "sampleid", "samplename", "sequence", "sequenceid",
+        "sequencename", "seqid", "seqname", "seq", "name",
+    }:
+        raise ValueError("Unrecognized API result header; expected tab-delimited sequence results")
+    if any(len(line.split("\t")) < 2 for line in lines[1:]):
+        raise ValueError("Malformed API result row; expected tab-delimited sequence results")
+
+
+def report_failure(args, statuses, message: str) -> int:
+    """Quarantine incomplete data and stop without an application traceback."""
+    partial = Path(str(args.output_file) + ".partial")
+    if args.output_file.exists():
+        args.output_file.replace(partial)
+    status_path = Path(str(args.output_file) + ".status.json")
+    status_path.write_text(json.dumps({
+        "status": "failed", "endpoint": args.endpoint, "message": message,
+        "chunks": statuses, "partial_output": str(partial) if partial.exists() else None,
+    }, indent=2) + "\n")
+    print("\n[MITOMASTER STOPPED] Remote screening is incomplete.", file=sys.stderr, flush=True)
+    print(message, file=sys.stderr, flush=True)
+    failures = [row for row in statuses if row["status"] == "failed"]
+    for row in failures[:5]:
+        print(f"  {row['file']}: {row['error_type']}: {row['error']}", file=sys.stderr, flush=True)
+    print(f"Details: {status_path.resolve()}", file=sys.stderr, flush=True)
+    print("No complete MITOMASTER result was produced; downstream screening must not use the partial result.", file=sys.stderr, flush=True)
+    print("What to try: check internet/DNS/proxy access to the endpoint; for connection refusal or HTTP 5xx, wait and retry. "
+          "For HTTP 429, reduce mito.mitomaster_workers or wait; for timeouts, increase mito.mitomaster_timeout. "
+          "For HTTP 403, check service access restrictions; repeated retries may not help. "
+          "For malformed responses, inspect service availability and report a possible API-format change.", file=sys.stderr, flush=True)
+    print("After resolving the issue, rerun the same ASPIRE command with resume enabled. "
+          "If you intentionally want local BLAST/taxonomy screening only, explicitly set mito.run_mitomaster: false in the YAML. "
+          "That skips remote evidence; it does not repair the API result.", file=sys.stderr, flush=True)
+    return 2
+
+
 def append_output(
     out_path: Path,
     payload: str,
@@ -132,6 +184,7 @@ def process_first_then_pool(
     lock: Lock,
     header_mode: str,
     log_prefix: str = "",
+    statuses: Optional[list] = None,
 ) -> Tuple[int, int]:
     """
     Ensures the header is written first when header_mode='first'.
@@ -139,6 +192,7 @@ def process_first_then_pool(
     """
     ok = 0
     err = 0
+    statuses = statuses if statuses is not None else []
 
     if not files:
         return ok, err
@@ -147,18 +201,25 @@ def process_first_then_pool(
         nonlocal ok, err
         try:
             txt = post_one(session, endpoint, fasta, file_type, output_format)
+            validate_response(txt)
             append_output(out_path, txt, mode, lock)
             write_checkpoint(chk_path, fasta.name, lock)
-            ok += 1
-            print(f"{log_prefix}✅ Done: {fasta.name}")
+            with lock:
+                ok += 1
+                statuses.append({"file": fasta.name, "status": "success", "result_rows": max(0, len([x for x in txt.splitlines() if x.strip()]) - 1)})
+            print(f"{log_prefix}[MITOMASTER OK] {fasta.name}", flush=True)
         except Exception as e:
-            err += 1
-            print(f"{log_prefix}❌ Error: {fasta.name}: {e}")
+            with lock:
+                err += 1
+                statuses.append({"file": fasta.name, "status": "failed", "error_type": type(e).__name__, "error": str(e)})
+            print(f"{log_prefix}[MITOMASTER FAILED] {fasta.name}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
 
     if header_mode == "first":
         # Process first file synchronously to guarantee header at top
         head = files[0]
         _submit(head, "full")
+        if err:
+            return ok, err  # Do not submit the remaining chunks after the initial probe fails.
         rest = files[1:]
         if rest:
             with ThreadPoolExecutor(max_workers=max_workers) as ex:
@@ -212,7 +273,15 @@ def parse_args() -> argparse.Namespace:
     net.add_argument("--timeout", type=int, default=60, help="Per-request timeout (seconds)")
     net.add_argument("--retries", type=int, default=3, help="Total retries (includes connect/read/status)")
     net.add_argument("--backoff", type=float, default=1.0, help="Exponential backoff factor for retries")
-    net.add_argument("--user-agent", default="mitomaster-batch/1.0 (+https://example.org)", help="HTTP User-Agent")
+    net.add_argument(
+        "--user-agent",
+        default=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        help="HTTP User-Agent (browser-compatible default follows MITOMAP guidance)",
+    )
 
     run = p.add_argument_group("Run")
     run.add_argument("--max-workers", type=int, default=8, help="Thread pool size")
@@ -240,10 +309,14 @@ def main():
         if args.checkpoint_file.exists():
             args.checkpoint_file.unlink()
 
+    statuses = []
+
     all_fastas = iter_fastas(args.data_dir, args.glob_pattern, args.recursive)
     if not all_fastas:
-        print("No FASTA files found.")
-        return
+        if args.dry_run:
+            print("No FASTA files found.")
+            return 0
+        return report_failure(args, statuses, "No FASTA chunks found; check the input directory and glob pattern.")
 
     done: Set[str] = load_done(args.checkpoint_file) if args.respect_checkpoint else set()
     remaining = [fp for fp in all_fastas if fp.name not in done]
@@ -257,6 +330,8 @@ def main():
     print(f"Found {len(remaining)} unprocessed FASTA files")
 
     if not remaining:
+        if not args.output_file.exists() or args.output_file.stat().st_size == 0:
+            return report_failure(args, statuses, "Checkpoint marks chunks complete but the result file is missing or empty; rerun with --overwrite.")
         print("✅ All files already processed.")
         print(f"📝 Results at {args.output_file}")
         return
@@ -281,12 +356,19 @@ def main():
         lock=lock,
         header_mode=args.header_mode,
         log_prefix=args.log_prefix,
+        statuses=statuses,
     )
 
-    print(f"✅ Success: {ok}  ❌ Failed: {err}")
-    print(f"📝 Results saved to {args.output_file}")
-    print(f"⏭️  Checkpoint at {args.checkpoint_file}  ({'respected' if args.respect_checkpoint else 'ignored'})")
+    session.close()
+    if err:
+        return report_failure(args, statuses, f"{ok} chunks succeeded; {err} failed after configured retries; "
+                              f"{len(remaining) - ok - err} were not submitted. See the errors below.")
+    status_path = Path(str(args.output_file) + ".status.json")
+    status_path.write_text(json.dumps({"status": "success", "endpoint": args.endpoint,
+                                      "chunks": statuses, "checkpoint_skipped": len(all_fastas) - len(remaining)}, indent=2) + "\n")
+    print(f"[MITOMASTER COMPLETE] {ok} chunks succeeded; 0 failed. Results: {args.output_file}", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

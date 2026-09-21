@@ -1,0 +1,3 @@
+sample_id	fastq_r1	fastq_r2
+sample_001	/abs/path/full_length_16s_fastqs/sample_001.ccs.fastq.gz	
+sample_002	/abs/path/full_length_16s_fastqs/sample_002.ccs.fastq.gz	

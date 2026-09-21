@@ -30,6 +30,11 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+_sys_style = str(Path(__file__).resolve().parents[1])
+if _sys_style not in sys.path:
+    sys.path.insert(0, _sys_style)
+from shared_plot_style import install_publication_style
+install_publication_style()
 from typing import Iterator
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/aspire_matplotlib")
@@ -49,6 +54,18 @@ FASTA_SUFFIXES = (
     ".fas",
     ".ffn",
     ".faa",
+    ".fa.gz",
+    ".fna.gz",
+    ".fasta.gz",
+    ".fas.gz",
+    ".ffn.gz",
+)
+NUCLEOTIDE_FASTA_SUFFIXES = (
+    ".fa",
+    ".fna",
+    ".fasta",
+    ".fas",
+    ".ffn",
     ".fa.gz",
     ".fna.gz",
     ".fasta.gz",
@@ -295,13 +312,19 @@ def index_genome_fastas(genome_dir: Path | None) -> dict[str, Path]:
     index: dict[str, Path] = {}
     if genome_dir is None:
         return index
-    for path in iter_paths(genome_dir, FASTA_SUFFIXES):
+    # GFF coordinates can only be resolved against nucleotide assemblies.
+    # Do not index colocated protein ``.faa`` files as genome FASTAs.
+    for path in iter_paths(genome_dir, NUCLEOTIDE_FASTA_SUFFIXES):
         index[derive_native_genome_id(path)] = path
     return index
 
 
 def match_genome_fasta(gff_path: Path, genome_index: dict[str, Path], token_index: int | None = None) -> Path | None:
-    stem = derive_native_genome_id(gff_path, token_index)
+    # Generated files use ``<genome>.barrnap.gff``.  Strip both suffixes before
+    # matching rather than leaving ``.barrnap`` attached to the genome ID.
+    stem = derive_native_genome_id_from_stem(
+        barrnap_stem(gff_path), token_index, warn_label=gff_path.name
+    )
     if stem in genome_index:
         return genome_index[stem]
     for key, value in genome_index.items():
@@ -315,11 +338,70 @@ def autodetect_genome_fasta_dir(genome_qc_dir: Path) -> Path | None:
         genome_qc_dir / "genome_atlas" / "rep_fastas",
         genome_qc_dir / "dedupe" / "fasta",
         genome_qc_dir / "genomes_subset",
+        genome_qc_dir,
     ]
     for candidate in candidates:
-        if candidate.exists() and candidate.is_dir():
+        if candidate.exists() and candidate.is_dir() and any(
+            path.is_file() and path.name.lower().endswith(
+                (".fa", ".fna", ".fasta", ".fa.gz", ".fna.gz", ".fasta.gz")
+            )
+            for path in candidate.iterdir()
+        ):
             return candidate
     return None
+
+
+def generate_barrnap_gffs(
+    genome_dir: Path,
+    genome_qc_dir: Path,
+    output_dir: Path,
+) -> Path:
+    """Generate auditable barrnap GFFs for top-level genome FASTAs."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = genome_qc_dir / "genome_quality_annotated.tsv"
+    domains: dict[str, str] = {}
+    if metadata_path.exists():
+        metadata = pd.read_csv(metadata_path, sep="\t", dtype=str)
+        if {"Genome_Id", "Domain"}.issubset(metadata.columns):
+            domains = dict(zip(metadata["Genome_Id"], metadata["Domain"]))
+    genome_fastas = sorted(
+        path for path in genome_dir.iterdir()
+        if path.is_file() and path.name.lower().endswith(
+            (".fa", ".fna", ".fasta", ".fa.gz", ".fna.gz", ".fasta.gz")
+        )
+    )
+    if not genome_fastas:
+        die(f"No top-level nucleotide genome FASTAs found for barrnap: {genome_dir}")
+    executable = shutil.which("barrnap")
+    if not executable:
+        die("Automatic rRNA extraction requested but barrnap is not available")
+    audit_rows: list[dict[str, object]] = []
+    for genome_path in genome_fastas:
+        genome_id = re.sub(r"(?i)\.(?:fa|fna|fasta)(?:\.gz)?$", "", genome_path.name)
+        domain = str(domains.get(genome_id, "Bacteria"))
+        kingdom = "arc" if domain.strip().lower() == "archaea" else "bac"
+        gff_path = output_dir / f"{genome_id}.barrnap.gff"
+        log_path = output_dir / f"{genome_id}.barrnap.log"
+        with gff_path.open("w") as gff_handle, log_path.open("w") as log_handle:
+            completed = subprocess.run(
+                [executable, "--kingdom", kingdom, "--threads", "1", str(genome_path)],
+                stdout=gff_handle, stderr=log_handle, text=True, check=False,
+            )
+        if completed.returncode != 0:
+            die(f"barrnap failed for {genome_id}; see {log_path}")
+        audit_rows.append({
+            "genome_id": genome_id,
+            "domain": domain,
+            "barrnap_kingdom": kingdom,
+            "genome_fasta": str(genome_path.resolve()),
+            "gff": str(gff_path.resolve()),
+            "gff_nonempty": gff_path.stat().st_size > 0,
+        })
+    pd.DataFrame(audit_rows).to_csv(
+        output_dir / "barrnap_generation_audit.tsv", sep="\t", index=False
+    )
+    info(f"Generated barrnap GFFs for {len(audit_rows)} genome records.")
+    return output_dir
 
 
 def extract_rrna_from_gff(source: GenomeQcSource, skip_genomes: set[str] | None = None) -> list[ReferenceRecord]:
@@ -336,10 +418,18 @@ def extract_rrna_from_gff(source: GenomeQcSource, skip_genomes: set[str] | None 
     genome_index = index_genome_fastas(genome_dir)
     gff_paths: list[Path] = []
     for gff_path in iter_paths(barrnap_dir, GFF_SUFFIXES):
-        native_genome_id = derive_native_genome_id(gff_path, source.id_token_index)
+        exact_key = exact_match_key(gff_path)
+        matched_genome_id = source.exact_barrnap_map.get(exact_key)
+        if source.exact_barrnap_map and matched_genome_id is None:
+            continue
+        if matched_genome_id is not None:
+            genome_id = matched_genome_id
+            native_genome_id = genome_id.split("::", 1)[1] if "::" in genome_id else genome_id
+        else:
+            native_genome_id = derive_native_genome_id(gff_path, source.id_token_index)
+            genome_id = compose_genome_id(native_genome_id, source.source_label, source.multi_source)
         if allowed_genomes is not None and native_genome_id not in allowed_genomes:
             continue
-        genome_id = compose_genome_id(native_genome_id, source.source_label, source.multi_source)
         if genome_id in skip_genomes:
             continue
         gff_paths.append(gff_path)
@@ -354,6 +444,11 @@ def extract_rrna_from_gff(source: GenomeQcSource, skip_genomes: set[str] | None 
             continue
         if matched_genome_id is not None:
             genome_fasta = source.exact_genome_fasta_map.get(matched_genome_id)
+            if genome_fasta is None:
+                native_key = matched_genome_id.split("::", 1)[-1]
+                genome_fasta = genome_index.get(normalize_join_id(native_key))
+            if genome_fasta is None:
+                genome_fasta = match_genome_fasta(gff_path, genome_index, source.id_token_index)
         else:
             genome_fasta = match_genome_fasta(gff_path, genome_index, source.id_token_index)
         if genome_fasta is None:
@@ -452,9 +547,11 @@ def collect_rrna_fastas(source: GenomeQcSource) -> list[ReferenceRecord]:
             native_genome_id = genome_id.split("::", 1)[1] if "::" in genome_id else genome_id
         else:
             native_genome_id = derive_native_genome_id(fasta_path, source.id_token_index)
-            if allowed_genomes is not None and native_genome_id not in allowed_genomes:
-                continue
             genome_id = compose_genome_id(native_genome_id, source.source_label, source.multi_source)
+        # Exact metadata matches must obey the same hard inclusion gate as
+        # filename-derived matches.
+        if allowed_genomes is not None and native_genome_id not in allowed_genomes:
+            continue
         try:
             with open_fasta(fasta_path) as handle:
                 records = list(SeqIO.parse(handle, "fasta"))
@@ -543,6 +640,78 @@ def read_asv_ids(asv_fasta: Path) -> list[str]:
         for record in SeqIO.parse(handle, "fasta"):
             ids.append(record.id)
     return ids
+
+
+def filter_asvs_by_taxonomy_confidence(
+    asv_ids: list[str],
+    taxonomy_path: Path,
+    min_confidence: float,
+    outdir: Path,
+) -> tuple[list[str], set[str]]:
+    """Apply an inclusive ASV taxonomy-confidence gate before link summaries."""
+    taxonomy = pd.read_csv(taxonomy_path, sep="\t", low_memory=False)
+    if taxonomy.empty:
+        die(f"ASV taxonomy table is empty: {taxonomy_path}")
+    id_col = next(
+        (
+            col for col in taxonomy.columns
+            if str(col).strip().lower() in {
+                "feature id", "feature_id", "asv_id", "asv", "id"
+            }
+        ),
+        None,
+    )
+    confidence_col = next(
+        (
+            col for col in taxonomy.columns
+            if str(col).strip().lower() in {
+                "confidence", "consensus", "taxonomy_confidence",
+                "taxonomic_confidence", "confidence_score",
+            }
+        ),
+        None,
+    )
+    if id_col is None or confidence_col is None:
+        die(
+            "ASV taxonomy confidence filtering requires an ASV identifier column "
+            "and one of: Confidence, Consensus, taxonomy_confidence, "
+            f"taxonomic_confidence, confidence_score. Table: {taxonomy_path}"
+        )
+
+    def canonical(value: object) -> str:
+        return re.sub(r";size=[0-9]+.*$", "", str(value).strip())
+
+    confidence = pd.to_numeric(taxonomy[confidence_col], errors="coerce")
+    confidence_by_asv = dict(zip(taxonomy[id_col].map(canonical), confidence))
+    audit_rows = []
+    retained = []
+    retained_canonical = set()
+    for asv_id in asv_ids:
+        canonical_id = canonical(asv_id)
+        value = confidence_by_asv.get(canonical_id, float("nan"))
+        keep = bool(pd.notna(value) and float(value) >= min_confidence)
+        audit_rows.append({
+            "ASV_ID": asv_id,
+            "ASV_ID_canonical": canonical_id,
+            "taxonomy_confidence": value,
+            "min_taxonomy_confidence": min_confidence,
+            "passes_taxonomy_confidence": keep,
+        })
+        if keep:
+            retained.append(asv_id)
+            retained_canonical.add(canonical_id)
+    tables_dir = outdir / "tables"
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(audit_rows).to_csv(
+        tables_dir / "asv_taxonomy_confidence_filter.tsv",
+        sep="\t",
+        index=False,
+    )
+    info(
+        f"ASV taxonomy confidence >= {min_confidence} retained "
+        f"{len(retained)} of {len(asv_ids)} ASVs."
+    )
+    return retained, retained_canonical
 
 
 def require_tool(name: str) -> str:
@@ -640,6 +809,7 @@ def discover_mag_metadata_path(genome_qc_dir: Path | None, barrnap_dir: Path) ->
     if genome_qc_dir is not None:
         candidates.extend(
             [
+                genome_qc_dir / "genome_quality_annotated.tsv",
                 genome_qc_dir / "genome_quality_atlas" / "genome_quality_annotated.tsv",
                 genome_qc_dir / "Master_genome_QC.atlas.tsv",
                 genome_qc_dir / "Master_genome_QC.tsv",
@@ -648,6 +818,7 @@ def discover_mag_metadata_path(genome_qc_dir: Path | None, barrnap_dir: Path) ->
     inferred_root = barrnap_dir.parent if barrnap_dir.name.lower() == "barrnap" else barrnap_dir
     candidates.extend(
         [
+            inferred_root / "genome_quality_annotated.tsv",
             inferred_root / "genome_quality_atlas" / "genome_quality_annotated.tsv",
             inferred_root / "Master_genome_QC.atlas.tsv",
             inferred_root / "Master_genome_QC.tsv",
@@ -711,6 +882,8 @@ def load_mag_metadata(
         "contains_16S",
         "has_16S",
         "16S_rRNA",
+        "23S_rRNA",
+        "5S_rRNA",
         "rrna_16S_score",
         "mimag_tier",
         "integrity_score",
@@ -718,6 +891,8 @@ def load_mag_metadata(
         "mimag_quality_index",
         "recovered_feature_count",
         "recovery_pattern_label",
+        "gunc_assessment",
+        "gunc_strict_assessment",
         "Domain",
         "Phylum",
         "Class",
@@ -771,9 +946,11 @@ def prepare_mag_metadata_frame(
     preferred = [
         "Genome_Id", "Bin Id", "Completeness", "Contamination", "Strain heterogeneity",
         "num_seqs", "sum_len", "N50", "qscore", "pass_BARRNAP", "contains_16S",
-        "has_16S", "16S_rRNA", "rrna_16S_score", "mimag_tier", "integrity_score",
+        "has_16S", "16S_rRNA", "23S_rRNA", "5S_rRNA", "rrna_16S_score",
+        "mimag_tier", "integrity_score",
         "recoverability_score", "mimag_quality_index", "recovered_feature_count",
         "recovery_pattern_label", "Domain", "Phylum", "Class", "Order", "Family",
+        "gunc_assessment", "gunc_strict_assessment",
         "Genus", "Species", "sample", "category", "fasta_path", "fasta_path_normalized",
         "copied_fasta_path", "copied_fasta_path_normalized", "ani_fasta_path",
         "ani_fasta_path_normalized", "source_dir", "source_dir_normalized",
@@ -874,12 +1051,138 @@ def truthy_series(series: pd.Series) -> pd.Series:
     return numeric_truth | text_truth
 
 
+def apply_mag_quality_gates(
+    sources: list[GenomeQcSource],
+    min_completeness: float | None,
+    max_contamination: float | None,
+    gunc_assessment_value: str | None = None,
+    require_species_assignment: bool = False,
+    min_rrna_marker_count: float | None = None,
+) -> pd.DataFrame:
+    """Restrict reference recovery to MAGs satisfying configured hard QC gates."""
+    if (
+        min_completeness is None
+        and max_contamination is None
+        and not gunc_assessment_value
+        and not require_species_assignment
+        and min_rrna_marker_count is None
+    ):
+        return pd.DataFrame()
+    audit_frames: list[pd.DataFrame] = []
+    for source in sources:
+        metadata = source.mag_metadata
+        if metadata.empty:
+            die(
+                f"[{source.source_label}] MAG quality gates require genome metadata, "
+                "but no metadata table was available."
+            )
+        required = []
+        if min_completeness is not None and "mag_completeness" not in metadata.columns:
+            required.append("mag_completeness")
+        if max_contamination is not None and "mag_contamination" not in metadata.columns:
+            required.append("mag_contamination")
+        if gunc_assessment_value:
+            required.extend(
+                col
+                for col in ("mag_gunc_assessment", "mag_gunc_strict_assessment")
+                if col not in metadata.columns
+            )
+        if require_species_assignment and "mag_species" not in metadata.columns:
+            required.append("mag_species")
+        if min_rrna_marker_count is not None:
+            required.extend(
+                col
+                for col in ("mag_16s_rrna", "mag_23s_rrna", "mag_5s_rrna")
+                if col not in metadata.columns
+            )
+        if required:
+            die(
+                f"[{source.source_label}] MAG quality gates require missing columns: "
+                f"{', '.join(required)}"
+            )
+        quality = pd.Series(True, index=metadata.index)
+        if min_completeness is not None:
+            quality &= pd.to_numeric(
+                metadata["mag_completeness"], errors="coerce"
+            ).ge(min_completeness)
+        if max_contamination is not None:
+            quality &= pd.to_numeric(
+                metadata["mag_contamination"], errors="coerce"
+            ).lt(max_contamination)
+        if gunc_assessment_value:
+            expected = gunc_assessment_value.strip().lower()
+            quality &= (
+                metadata["mag_gunc_assessment"].astype(str).str.strip().str.lower().eq(expected)
+                & metadata["mag_gunc_strict_assessment"].astype(str).str.strip().str.lower().eq(expected)
+            )
+        if require_species_assignment:
+            species = metadata["mag_species"].fillna("").astype(str).str.strip()
+            quality &= species.ne("") & ~species.str.lower().isin(
+                {"nan", "none", "na", "n/a", "unknown", "unclassified", "uncultured"}
+            )
+        if min_rrna_marker_count is not None:
+            quality &= (
+                pd.to_numeric(metadata["mag_16s_rrna"], errors="coerce").ge(min_rrna_marker_count)
+                & pd.to_numeric(metadata["mag_23s_rrna"], errors="coerce").ge(min_rrna_marker_count)
+                & pd.to_numeric(metadata["mag_5s_rrna"], errors="coerce").ge(min_rrna_marker_count)
+            )
+        existing = (
+            truthy_series(metadata["mag_eligible_for_linking"])
+            if "mag_eligible_for_linking" in metadata.columns
+            else pd.Series(True, index=metadata.index)
+        )
+        metadata["mag_pass_quality_gates"] = quality
+        metadata["mag_eligible_for_linking"] = existing & quality
+        audit = metadata.copy()
+        audit["exclusion_reason"] = ""
+        if require_species_assignment:
+            species = metadata["mag_species"].fillna("").astype(str).str.strip()
+            missing_species = species.eq("") | species.str.lower().isin(
+                {"nan", "none", "na", "n/a", "unknown", "unclassified", "uncultured"}
+            )
+            audit.loc[missing_species, "exclusion_reason"] = "missing_species_assignment"
+        audit.loc[
+            ~audit["mag_eligible_for_linking"] & audit["exclusion_reason"].eq(""),
+            "exclusion_reason",
+        ] = "other_configured_quality_gate"
+        audit_frames.append(audit)
+        eligible_native_ids = set(
+            metadata.loc[
+                metadata["mag_eligible_for_linking"], "mag_native_genome_id"
+            ]
+            .dropna()
+            .astype(str)
+        )
+        source.allowed_genomes = (
+            eligible_native_ids
+            if source.allowed_genomes is None
+            else source.allowed_genomes & eligible_native_ids
+        )
+        # These are hard inclusion criteria, not audit-only annotations.
+        # Failed MAGs must not propagate into linker tables or downstream
+        # ASPIRE analyses.
+        source.mag_metadata = metadata.loc[
+            metadata["mag_eligible_for_linking"]
+        ].copy()
+        info(
+            f"[{source.source_label}] Quality gates retained {len(eligible_native_ids)} MAGs "
+            f"(completeness >= {min_completeness if min_completeness is not None else '-inf'}; "
+            f"contamination < {max_contamination if max_contamination is not None else 'inf'}; "
+            f"GUNC assessment = {gunc_assessment_value if gunc_assessment_value else 'not filtered'}; "
+            f"species assignment required = {require_species_assignment}; "
+            f"minimum count for each 16S/23S/5S marker = "
+            f"{min_rrna_marker_count if min_rrna_marker_count is not None else 'not filtered'})."
+        )
+    return pd.concat(audit_frames, ignore_index=True) if audit_frames else pd.DataFrame()
+
+
 def build_sources(
     barrnap_dirs: list[Path],
     genome_fasta_dirs: list[Path] | None,
     genome_qc_dirs: list[Path] | None,
     id_token_indexes: list[int] | None,
     master_tsv: Path | None = None,
+    auto_barrnap_root: Path | None = None,
 ) -> list[GenomeQcSource]:
     barrnap_dirs = [p.resolve() for p in barrnap_dirs]
     genome_qc_dirs = [p.resolve() for p in (genome_qc_dirs or [])]
@@ -968,9 +1271,21 @@ def build_sources(
         source_labels = make_source_labels(genome_qc_dirs)
         for idx, qc_dir in enumerate(genome_qc_dirs):
             barrnap_dir = qc_dir / "barrnap"
+            genome_dir = (
+                genome_fasta_dirs[0]
+                if len(genome_fasta_dirs) == 1
+                else genome_fasta_dirs[idx]
+                if len(genome_fasta_dirs) == len(genome_qc_dirs)
+                else autodetect_genome_fasta_dir(qc_dir)
+            )
+            if not barrnap_dir.exists() and auto_barrnap_root is not None:
+                if genome_dir is None:
+                    die(f"No genome FASTA directory available for automatic barrnap: {qc_dir}")
+                barrnap_dir = generate_barrnap_gffs(
+                    genome_dir, qc_dir, auto_barrnap_root / f"source_{idx + 1}"
+                )
             if not barrnap_dir.exists() or not barrnap_dir.is_dir():
                 die(f"Genome QC directory is missing barrnap/: {qc_dir}")
-            genome_dir = autodetect_genome_fasta_dir(qc_dir)
             if genome_dir is None:
                 warn(f"No genome FASTA directory autodetected under {qc_dir}; GFF fallback will be skipped.")
             source_label = source_labels[qc_dir]
@@ -1353,16 +1668,59 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Selected-set master.tsv with source_dir and copied_fasta_path columns. Mutually exclusive with --barrnap-dir, --genome-fasta-dir, and --genome-qc-dir.",
     )
+    p.add_argument(
+        "--auto-barrnap",
+        action="store_true",
+        help="Run barrnap when the configured genome-QC directory has no barrnap outputs.",
+    )
     p.add_argument("--outdir", required=True, type=Path, help="Output directory.")
     p.add_argument("--threads", type=int, default=1, help="Threads for blastn.")
     p.add_argument("--min-pident", type=float, default=97.0, help="Minimum percent identity.")
-    p.add_argument("--min-qcov", type=float, default=90.0, help="Minimum query coverage (%).")
+    p.add_argument("--min-qcov", type=float, default=90.0, help="Minimum query coverage in percent.")
+    p.add_argument("--asv-taxonomy", type=Path, help="ASV taxonomy TSV containing assignment confidence.")
+    p.add_argument(
+        "--asv-taxonomy-min-confidence",
+        type=float,
+        help="Minimum inclusive ASV taxonomy confidence on a 0-1 scale.",
+    )
+    p.add_argument("--min-completeness", type=float, help="Optional inclusive MAG completeness threshold.")
+    p.add_argument("--max-contamination", type=float, help="Optional exclusive MAG contamination threshold.")
+    p.add_argument(
+        "--gunc-assessment-value",
+        help=(
+            "Require both gunc_assessment and gunc_strict_assessment to equal "
+            "this value (case-insensitive)."
+        ),
+    )
+    p.add_argument(
+        "--require-species-assignment",
+        action="store_true",
+        help="Retain only MAGs with a nonempty classified Species value.",
+    )
+    p.add_argument(
+        "--min-rrna-marker-count",
+        type=float,
+        help="Require each of 16S_rRNA, 23S_rRNA, and 5S_rRNA to meet this minimum count.",
+    )
     p.add_argument("--top-n", type=int, default=5, help="Top hits per ASV to retain in the all-hits table.")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.min_completeness is not None and not 0 <= args.min_completeness <= 100:
+        die("--min-completeness must be between 0 and 100.")
+    if args.max_contamination is not None and args.max_contamination < 0:
+        die("--max-contamination must be >= 0.")
+    if args.min_rrna_marker_count is not None and args.min_rrna_marker_count < 0:
+        die("--min-rrna-marker-count must be >= 0.")
+    if (
+        args.asv_taxonomy_min_confidence is not None
+        and not 0 <= args.asv_taxonomy_min_confidence <= 1
+    ):
+        die("--asv-taxonomy-min-confidence must be between 0 and 1.")
+    if args.asv_taxonomy_min_confidence is not None and args.asv_taxonomy is None:
+        die("--asv-taxonomy is required with --asv-taxonomy-min-confidence.")
     args.outdir.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
 
@@ -1372,7 +1730,22 @@ def main() -> None:
         genome_qc_dirs=args.genome_qc_dirs or [],
         id_token_indexes=args.id_token_indexes or [],
         master_tsv=args.master_tsv,
+        auto_barrnap_root=(args.outdir / "audit" / "generated_barrnap") if args.auto_barrnap else None,
     )
+    quality_gate_audit = apply_mag_quality_gates(
+        sources,
+        min_completeness=args.min_completeness,
+        max_contamination=args.max_contamination,
+        gunc_assessment_value=args.gunc_assessment_value,
+        require_species_assignment=args.require_species_assignment,
+        min_rrna_marker_count=args.min_rrna_marker_count,
+    )
+    if not quality_gate_audit.empty:
+        qc_dir = args.outdir / "qc"
+        qc_dir.mkdir(parents=True, exist_ok=True)
+        quality_gate_audit.to_csv(
+            qc_dir / "genome_quality_gate_audit.tsv", sep="\t", index=False
+        )
     mag_metadata_frames = [src.mag_metadata for src in sources if not src.mag_metadata.empty]
     mag_metadata = pd.concat(mag_metadata_frames, ignore_index=True) if mag_metadata_frames else pd.DataFrame()
 
@@ -1381,8 +1754,21 @@ def main() -> None:
         fasta_refs = collect_rrna_fastas(source)
         seen_genomes = {ref.genome_id for ref in fasta_refs}
         gff_refs = extract_rrna_from_gff(source, skip_genomes=seen_genomes)
-        refs.extend(fasta_refs)
-        refs.extend(gff_refs)
+        source_refs = fasta_refs + gff_refs
+        if source.allowed_genomes is not None:
+            leaked = sorted(
+                {
+                    ref.native_genome_id
+                    for ref in source_refs
+                    if ref.native_genome_id not in source.allowed_genomes
+                }
+            )
+            if leaked:
+                die(
+                    f"[{source.source_label}] Internal error: {len(leaked)} MAGs "
+                    "bypassed the configured eligibility/quality gates."
+                )
+        refs.extend(source_refs)
     if not refs:
         die(
             "No barrnap reference sequences were recovered. Provide barrnap FASTA outputs or "
@@ -1391,8 +1777,20 @@ def main() -> None:
 
     ref_fasta, catalog_path = write_reference_outputs(refs, args.outdir)
     blast_path = run_blast(args.asv_fasta, ref_fasta, args.outdir, args.threads)
-    hits = load_blast_hits(blast_path, catalog_path)
     asv_ids = read_asv_ids(args.asv_fasta)
+    hits = load_blast_hits(blast_path, catalog_path)
+    if args.asv_taxonomy_min_confidence is not None:
+        asv_ids, retained_asv_ids = filter_asvs_by_taxonomy_confidence(
+            asv_ids,
+            args.asv_taxonomy,
+            args.asv_taxonomy_min_confidence,
+            args.outdir,
+        )
+        hits = hits.loc[
+            hits["ASV_ID"].astype(str).map(
+                lambda value: re.sub(r";size=[0-9]+.*$", "", value.strip())
+            ).isin(retained_asv_ids)
+        ].copy()
     summarize_pairings(
         asv_ids=asv_ids,
         hits=hits,

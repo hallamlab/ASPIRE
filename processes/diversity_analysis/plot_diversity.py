@@ -30,6 +30,10 @@ python diversity_analytics.py \
 from __future__ import annotations
 import argparse
 import sys
+from pathlib import Path as _StylePath
+sys.path.insert(0, str(_StylePath(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
@@ -51,8 +55,8 @@ from statannotations.Annotator import Annotator
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['font.family'] = 'Source Sans Pro'
+plt.rcParams.update({'font.size': 22})
+plt.rcParams['font.family'] = 'Times New Roman'
 sns.set_theme()
 sns.set_style("white")
 
@@ -706,6 +710,42 @@ def plot_umap_scatter(df: pd.DataFrame, x_col: str, y_col: str,
 
 # ==================== Main Analysis Pipeline ====================
 
+def restrict_analysis_cohort(metadata, sample_col, group_col, cohort_ids,
+                             alpha_table, distance_matrices, block_col=None):
+    """Select an exact cohort; fail instead of silently losing requested samples."""
+    ids = pd.Index([normalize_sample_id_value(v) for v in cohort_ids])
+    if ids.empty or ids.has_duplicates or ids.isin(["", "nan"]).any():
+        raise ValueError("Cohort sample IDs must be nonempty and unique")
+    selected = metadata[metadata[sample_col].isin(ids)].copy()
+    if selected[sample_col].duplicated().any():
+        raise ValueError("Duplicate metadata rows for cohort samples")
+    missing = ids.difference(selected[sample_col])
+    if len(missing):
+        raise ValueError(f"Cohort samples absent from filtered metadata: {missing.tolist()}")
+    required = [group_col] + ([block_col] if block_col else [])
+    for col in required:
+        if col not in selected or selected[col].isna().any() or selected[col].astype(str).str.strip().isin(["", "nan"]).any():
+            raise ValueError(f"Cohort requires complete metadata for {col}")
+    selected = selected.set_index(sample_col).loc[ids].reset_index(names=sample_col)
+    alpha = None
+    if alpha_table is not None:
+        missing = ids.difference(alpha_table.index)
+        if alpha_table.index.has_duplicates or len(missing):
+            raise ValueError(f"Alpha table has duplicate IDs or missing cohort samples: {missing.tolist()}")
+        alpha = alpha_table.loc[ids].copy()
+        if not np.isfinite(alpha.to_numpy(dtype=float)).all():
+            raise ValueError("Alpha table contains nonfinite cohort measurements")
+    distances = {}
+    for name, matrix in distance_matrices.items():
+        missing = ids.difference(matrix.index).union(ids.difference(matrix.columns))
+        if matrix.index.has_duplicates or matrix.columns.has_duplicates or len(missing):
+            raise ValueError(f"{name} matrix has duplicate IDs or missing cohort samples: {missing.tolist()}")
+        distances[name] = matrix.loc[ids, ids].copy()
+        if not np.isfinite(distances[name].to_numpy(dtype=float)).all():
+            raise ValueError(f"{name} matrix contains nonfinite cohort distances")
+    return selected, alpha, distances
+
+
 def run_analysis_pipeline(
     metadata: pd.DataFrame,
     sample_col: str,
@@ -727,7 +767,8 @@ def run_analysis_pipeline(
     block_col: Optional[str] = None,
     random_state: int = 42,
     output_prefix: str = "",
-    verbose: bool = False
+    verbose: bool = False,
+    cohort_ids: Optional[List[str]] = None,
 ) -> None:
     """
     Run complete diversity analysis pipeline.
@@ -786,6 +827,19 @@ def run_analysis_pipeline(
         if verbose:
             print(f"[FILTER] Excluded {group_col} values: {exclude_groups}")
     
+    stats_df = df
+    stats_distances = distance_matrices
+    if cohort_ids is not None:
+        stats_df, _, stats_distances = restrict_analysis_cohort(
+            df, sample_col, group_col, cohort_ids, alpha_table,
+            distance_matrices, block_col,
+        )
+        stats_df.to_csv(output_dir / f"{output_prefix}sample_analysis_cohort.tsv", sep="\t", index=False)
+        stats_df.groupby(group_col).size().rename("n_samples").to_csv(
+            output_dir / f"{output_prefix}cohort_group_counts.tsv", sep="\t"
+        )
+        print(f"[COHORT] Statistics only: {len(stats_df)} samples, {stats_df[group_col].nunique()} groups; descriptive plots retain normal eligibility", flush=True)
+
     # Determine group order
     if not group_order:
         group_order = sort_groups_numeric_aware(df[group_col].dropna().unique().tolist())
@@ -815,6 +869,7 @@ def run_analysis_pipeline(
         alpha_df[sample_col] = normalize_sample_id_series(alpha_df[sample_col])
 
         df = safe_merge(df, alpha_df, on=sample_col)
+        stats_alpha_df = df[df[sample_col].isin(stats_df[sample_col])].copy()
         
         alpha_cols = [c for c in alpha_df.columns if c != sample_col]
         
@@ -825,16 +880,16 @@ def run_analysis_pipeline(
             # Pairwise alpha statistics: block-aware when requested.
             if block_col and block_col in df.columns:
                 ttest_results = pairwise_blocked_alpha_fdr(
-                    df, group_col, alpha_metric, block_col, random_state=random_state
+                    stats_alpha_df, group_col, alpha_metric, block_col, random_state=random_state
                 )
             elif block_col and block_col not in df.columns:
                 warnings.warn(
                     f"Requested block_col '{block_col}' not found in metadata; "
                     "falling back to unpaired t-tests for alpha diversity."
                 )
-                ttest_results = pairwise_ttests_fdr(df, group_col, alpha_metric)
+                ttest_results = pairwise_ttests_fdr(stats_alpha_df, group_col, alpha_metric)
             else:
-                ttest_results = pairwise_ttests_fdr(df, group_col, alpha_metric)
+                ttest_results = pairwise_ttests_fdr(stats_alpha_df, group_col, alpha_metric)
             ttest_path = output_dir / f"{output_prefix}alpha_ttest_{alpha_metric}.tsv"
             ttest_results.to_csv(ttest_path, sep='\t', index=False)
             if verbose:
@@ -862,7 +917,7 @@ def run_analysis_pipeline(
                 )
     
     # ========== Beta Diversity (PERMANOVA) ==========
-    for dist_name, dist_matrix in distance_matrices.items():
+    for dist_name, dist_matrix in stats_distances.items():
         if dist_matrix is None or dist_matrix.empty:
             continue
         
@@ -870,13 +925,13 @@ def run_analysis_pipeline(
             print(f"\n[BETA] Running PERMANOVA on {dist_name}...")
         
         # Align groups to distance matrix samples
-        common_samples = dist_matrix.index.intersection(df[sample_col])
-        groups_series = df.drop_duplicates(subset=[sample_col]).set_index(sample_col).loc[common_samples, group_col]
+        common_samples = dist_matrix.index.intersection(stats_df[sample_col])
+        groups_series = stats_df.drop_duplicates(subset=[sample_col]).set_index(sample_col).loc[common_samples, group_col]
         
         # Compute PERMANOVA
         block_series = None
-        if block_col and block_col in df.columns:
-            block_series = df.drop_duplicates(subset=[sample_col]).set_index(sample_col).loc[common_samples, block_col]
+        if block_col and block_col in stats_df.columns:
+            block_series = stats_df.drop_duplicates(subset=[sample_col]).set_index(sample_col).loc[common_samples, block_col]
 
         global_perm, pairwise_perm = compute_permanova(
             dist_matrix,
@@ -894,7 +949,7 @@ def run_analysis_pipeline(
         pairwise_perm.to_csv(pairwise_path, sep='\t', index=False)
         
         if verbose:
-            print(f"  Global R²: {global_perm['test statistic'].iloc[0]:.4f}, p={global_perm['p-value'].iloc[0]:.4f}")
+            print(f"  Global pseudo-F: {global_perm['test statistic'].iloc[0]:.4f}, p={global_perm['p-value'].iloc[0]:.4f}")
             print(f"  Saved: {global_path.name}, {pairwise_path.name}")
         
         # Heatmap
@@ -998,6 +1053,10 @@ def parse_args() -> argparse.Namespace:
     )
     
     # Column specifications
+    parser.add_argument(
+        "--cohort-table", type=Path,
+        help="Optional exact microbial sample cohort TSV (uses --sample-col). Applies only to microbial statistical tests; descriptive plots, ordination, and mitochondrial analysis retain normal eligibility. Missing cohort samples are errors.",
+    )
     cols = parser.add_argument_group("Column Names")
     cols.add_argument(
         "--sample-col", default="sample",
@@ -1135,6 +1194,9 @@ def main():
         sys.exit(1)
     
     # Parse lists
+    cohort_ids = None
+    if args.cohort_table:
+        cohort_ids = read_tsv(args.cohort_table)[args.sample_col].tolist()
     exclude_groups = parse_list_arg(args.exclude_groups)
     group_order = parse_list_arg(args.group_order) if args.group_order else None
     filter_exclude = parse_list_arg(args.filter_exclude)
@@ -1186,6 +1248,12 @@ def main():
             warnings.warn(f"Could not read Jaccard matrix: {e}")
     
     # UMAP parameters
+    if cohort_ids is not None:
+        if args.alpha_table and alpha_table is None:
+            raise ValueError("Cannot validate exact cohort: requested alpha table failed to load")
+        for name, path in [("bray", args.distance_bray), ("jaccard", args.distance_jaccard)]:
+            if path and name not in distance_matrices:
+                raise ValueError(f"Cannot validate exact cohort: requested {name} matrix failed to load")
     umap_params = {
         'n_neighbors': args.umap_neighbors,
         'min_dist': args.umap_min_dist,
@@ -1216,6 +1284,7 @@ def main():
         block_col=args.block_col,
         random_state=args.random_state,
         output_prefix="",
+        cohort_ids=cohort_ids,
         verbose=args.verbose
     )
     

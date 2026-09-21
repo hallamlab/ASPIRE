@@ -25,6 +25,10 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -35,8 +39,8 @@ from matplotlib.patches import Patch
 mpl.rcParams["pdf.fonttype"] = 42      # Keep text as text in PDF
 mpl.rcParams["svg.fonttype"] = "none"  # Keep text as text in SVG
 mpl.rcParams["savefig.dpi"] = 600
-plt.rcParams.update({"font.size": 12})
-plt.rcParams["font.family"] = "Source Sans Pro"
+plt.rcParams.update({"font.size": 22})
+plt.rcParams["font.family"] = "Times New Roman"
 sns.set_theme()
 sns.set_style("white")
 
@@ -520,6 +524,8 @@ def main():
                     help="Comma-separated rank columns to plot.")
     ap.add_argument("--topN", type=str, default="Phylum=30,Class=30,Order=30,Family=30,Genus=30,Species=30,ASV_ID=6000",
                     help="Per-rank top-N mapping, e.g. 'Phylum=30,...,ASV_ID=6000'.")
+    ap.add_argument("--skip-asv-plot", action="store_true",
+                    help="Write the ASV-level pivot table but skip its expensive clustermap figures.")
     ap.add_argument("--count-col", type=str, default="corr_count", help="Abundance/count column in ASV meta.")
 
     # ISA gate
@@ -661,20 +667,32 @@ def main():
             color_specs=color_specs,
         )
 
-        prefix = outdir / f"clustermap_{colname}_code"
-        draw_clustermap(
-            pivot=pivot,
-            col_colors_df=col_colors_df,
-            color_specs=color_specs,
-            outfile_prefix=prefix,
-            tick_vals_orig=tick_vals_orig,
-            vmax_display=vmax_display,
-            figsize_w=args.figwidth,
-            row_height=args.row_height,
-            min_fig_h=args.min_height,
-            max_fig_h=args.max_height,
-            formats=formats,
-        )
+        if args.skip_asv_plot and rank == args.asv_id_col:
+            # Remove obsolete ASV-resolution figures from a previous run while
+            # retaining the complete pivot table written below.
+            for stem in (
+                f"clustermap_{colname}_code",
+                f"clustermap_{colname}_clustered",
+            ):
+                for suffix in ("pdf", "png", "svg"):
+                    stale = outdir / f"{stem}.{suffix}"
+                    if stale.is_file() or stale.is_symlink():
+                        stale.unlink()
+        else:
+            prefix = outdir / f"clustermap_{colname}_code"
+            draw_clustermap(
+                pivot=pivot,
+                col_colors_df=col_colors_df,
+                color_specs=color_specs,
+                outfile_prefix=prefix,
+                tick_vals_orig=tick_vals_orig,
+                vmax_display=vmax_display,
+                figsize_w=args.figwidth,
+                row_height=args.row_height,
+                min_fig_h=args.min_height,
+                max_fig_h=args.max_height,
+                formats=formats,
+            )
         pivot.to_csv(outdir / f"clustermap_{colname}.tsv", sep="\t")
 
     # ------------------------- Mitochondrial (optional) -------------------------
