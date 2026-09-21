@@ -70,12 +70,23 @@ inputs. Disable a branch when its conditional inputs are absent.
 - `merge.max_diffs`: maximum overlap mismatches; `min_overlap`: minimum overlap
   bases; `trunc_quality`: quality truncation threshold; `allow_stagger`: permit
   staggered pairs.
-- `table_filter.min_sample_sum`, `min_asv_sum`: non-negative total-count gates.
+- `table_filter.min_sample_sum`: minimum total mapped reads per sample.
+- `table_filter.min_asv_sum`: minimum within-sample relative abundance in percent,
+  reached in at least one retained sample (despite the historical key name).
+  Explicit zero disables this abundance cutoff; all-zero ASVs are still removed.
   `table_filter.script` is an optional developer script override.
 - `filter.max_ee`: maximum expected errors; `min_len` and `max_len`: retained
   sequence length bounds in bases.
 - `concat.relabel`: relabel sequences; `concat.label_sep`: label separator.
-- `unoise.min_size`: minimum UNOISE abundance.
+- `unoise.min_size`: minimum pooled input-sequence abundance for UNOISE;
+  workflow fallback is 8, while the full template explicitly specifies 3.
+  The SI example specifies 8. These are alternative study configurations.
+- `read_mapping.min_identity`: VSEARCH identity fraction in `(0, 1]`; fallback
+  is 0.999. The SI example uses 0.995. At 253 ungapped aligned bases these
+  permit zero and one substitutions, respectively. This is not a fixed edit-distance
+  cap and terminal gaps are excluded by the default identity definition.
+  Mapping currently accepts the first qualifying candidate; it does not exclude
+  tied best matches. See the expert guide before relaxing this threshold.
 - `swarm.distance`: Swarm clustering distance.
 
 ## Alignment, taxonomy, and non-target filtering

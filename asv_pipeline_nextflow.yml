@@ -59,6 +59,10 @@ concat:
 unoise:
   min_size: 3
 
+read_mapping:
+  # Identity fraction; first qualifying candidate, not unique-best assignment.
+  min_identity: 0.999
+
 swarm:
   distance: 1
 

@@ -13,6 +13,52 @@ assembles these sources into a temporary same-directory Nextflow launch script,
 preserving the single resolved configuration binding, `projectDir`, and standard
 Nextflow task hashing without duplicating YAML parsing across modules.
 
+## Choose your route
+
+| Goal | Start here |
+|---|---|
+| First successful run with supplied test data | [Requirements](#requirements) → [Mock quickstart](#mock-dataset-quick-start) |
+| Run your own paired-end samples | [General quickstart](#general-quick-start) → [Input contracts](#inputs) |
+| Understand the data flow and interpretation | [Workflow overview](#workflow-overview) → [Analysis branches](#optional-analysis-branches) |
+| Change parameters, rerun stages, or manage storage | [Expert guide](docs/EXPERT_GUIDE.md) |
+| Look up a YAML field | [Configuration reference](docs/CONFIGURATION.md) |
+| Use single-end/full-length 16S reads | [Full-length 16S guide](examples/FULL_LENGTH_16S.md) |
+| Identify and trim primers before ASPIRE | [Standalone primer tool](scripts/PRIMER_TRIMMING.md) |
+| Diagnose a failed run | [Troubleshooting](#troubleshooting) |
+
+There is no separate `--expert` flag. Advanced use combines documented YAML
+settings, execution phases, targeted reruns, and Nextflow overrides. Study-local
+examples contain machine-specific paths; they are not portable quickstart files.
+This documentation describes the development workflow on `aspire_dev_v2`;
+record the checked-out commit rather than assuming another branch behaves identically.
+
+## Workflow overview
+
+```mermaid
+flowchart TD
+    A[FASTQs and sample manifest] --> B[fastp, merge, quality filter]
+    B --> C[Dereplicate, denoise, remove chimeras]
+    C --> D[Map reads to ASVs and filter count table]
+    D --> E[SINA and taxonomy; optional non-target screens]
+    E --> F[Canonical preprocessing dataset]
+    F --> G[Metadata, diversity, indicators and measurements]
+    F --> H[Networks and ecological modules]
+    H --> I[Microbial compartments, turnover and module interpretation]
+    G --> J[Published tables, plots and run report]
+    I --> J
+```
+
+The diagram summarizes data flow, not a serial execution schedule. Nextflow
+runs independent tasks concurrently. Enabling a branch also requires its input
+files and upstream dependencies. The analysis phase reads the canonical dataset
+and does not recreate raw-read processing.
+
+ASPIRE distinguishes observed counts, filtered communities, inferred networks,
+and statistical comparisons. Read recovery is not proof of assignment accuracy;
+network edges are associations, not demonstrated interactions; taxonomic labels
+do not establish metabolic activity. Review cohort and filtering audits alongside
+p/q values, effect sizes, and held-out comparisons where available.
+
 ## Key Files
 
 - `run_asv_pipeline.sh`: main wrapper for routine runs.
@@ -43,15 +89,20 @@ dependencies into one environment. ASPIRE isolates the run's package cache and
 serializes Conda environment creation to prevent concurrent repodata-lock
 failures. Environment solves use strict channel priority to avoid pathological
 cross-channel backtracking, and module-specific environments avoid the legacy
-all-in-one dependency search space. Builds are terminated after 30 minutes by
+all-in-one dependency search space. Builds are terminated after 15 minutes by
 default rather than hanging indefinitely; set `ASPIRE_MAMBA_BUILD_TIMEOUT` only
 when a slower package source is expected. Analysis tasks remain parallel.
 
 Resource needs depend on sample count and sequencing depth. For the complete
 mock benchmark, provision at least 8 CPU cores, 32 GB RAM, and 50 GB of free
 storage for input data, Conda environments, Nextflow work files, downloaded
-references, and final outputs. `resources.threads` controls per-task CPU use; it
-does not limit the total storage used by cached tasks.
+references, and final outputs. `resources.sample_threads`, `resources.analysis_threads`, and
+`resources.max_parallel_sample_tasks` control task CPU requests and sample-task
+concurrency. These do not cap disk usage. See the expert guide for resource planning.
+
+Plotting also requires Times New Roman under the current shared figure-style
+contract. Verify an exact font match with `fc-match "Times New Roman"`; a returned
+substitute font is not sufficient. See [figure requirements](#publication-figure-contract).
 
 Verify the entrypoint prerequisites:
 
@@ -200,12 +251,14 @@ Force a rerun from one stage onward using the retained default runtime cache:
 `--rerun-from` is the single stage-aware restart control. It runs the normal
 Nextflow DAG with `-resume`, so any missing or stale upstream work is completed
 first. The controller advances a persistent cache generation for the selected
-stage and every later stage while leaving upstream generations unchanged. The
-generation participates in each task hash, so the requested tasks execute once
+stage only. Changed task outputs invalidate true dependency descendants;
+independent branches remain cacheable. The generation participates in its task
+hash, so the requested task executes once
 and their new results remain ordinary reusable Nextflow cache entries. Cached
 work directories are never deleted to force a rerun.
-The controller automatically chooses the prior run with the most successfully
-recorded tasks, avoiding a newer but shallow interrupted attempt. Use
+The controller first uses the last successful run pointer for the requested
+phase. For an all-phase run without a valid pointer, it falls back to managed
+history and prefers the run with the most recorded successful tasks. Use
 `--resume-run RUN_NAME` only to override that selection explicitly.
 
 Inspect and manage retained execution state with the cache subcommands:
@@ -231,12 +284,10 @@ Pass extra Nextflow options after `--`:
 ./run_asv_pipeline.sh my_run.yml -- -with-report report.html -with-trace trace.tsv
 ```
 
-Direct Nextflow invocation is intended only for debugging because public-output
-finalization is performed by the wrapper:
-
-```bash
-nextflow run asv_pipeline.nf --params-file my_run.yml --pipeline_config my_run.yml
-```
+Use the wrapper even for advanced runs: it assembles the modular workflow and
+finalizes the published output tree. A bare `nextflow run asv_pipeline.nf` is not
+a supported replacement. See the [expert guide](docs/EXPERT_GUIDE.md) for custom
+Nextflow settings, fresh runs, targeted reruns, and cache cleanup.
 
 **Review the outputs:** After a successful wrapper run, open
 `<output_dir>/summary/report/ASPIRE_run_report.html` in a web browser. This is
@@ -352,7 +403,9 @@ reference while constructing or reviewing a production YAML.
 
 ## Workflow Stages
 
-The wrapper's current stage order is:
+The wrapper's current stage registry is listed below. It is not a strict serial
+execution order; actual scheduling follows data dependencies. Obtain this list
+from your checkout with `./run_asv_pipeline.sh --list-stages`:
 
 1. `FASTP_QC`
 2. `MERGE_READS`
@@ -371,50 +424,57 @@ The wrapper's current stage order is:
 15. `MITO_DECONTAM`
 16. `FILTER_COUNTS`
 17. `GENERAL_STATS`
-18. `PLOT_METADATA`
-19. `ASV_TIME_DEPTH_CURTAIN`
-20. `GROUPING_DIAGNOSTICS`
-21. `GROUP_LABEL_AUGMENTATION`
-22. `PLOT_UPSET`
-23. `ASV_BATCH_CORRECTION`
-24. `ASV_META_FROM_CORRECTED`
-25. `BUBBLEPLOTTER`
-26. `UMAP_CLUSTERING`
-27. `OUTLIER_CHECKER`
-28. `COLLECTORS_CURVE`
-29. `DIVERSITY_ANALYSIS`
-30. `INDICSPECIES`
-31. `INDICSPECIES_PLOTS`
-32. `INDICSPECIES_ALIGNED_PLOTS`
-33. `VOC_CORRELATION`
-34. `COMMUNITY_PREDICTOR_COMPARISON`
-35. `CLUSTERMAPS`
-36. `GROUP_POWER_ANALYSIS`
-37. `TAXONOMY_GROUP_ASSOCIATION`
-38. `PAIRED_GROUP_CONTRAST`
-39. `ASV_MAG_LINK`
-40. `SPIECEASI`
-41. `MEASUREMENT_ASSOCIATION`
-42. `TITAN_PREPARE`
-43. `TITAN_ANALYSIS`
-44. `TITAN_COLLECT`
-45. `TITAN_PLOTS`
-46. `MICROBIAL_COMPARTMENT_PREPARE`
-47. `MICROBIAL_COMPARTMENT_INFERENCE`
-48. `MICROBIAL_COMPARTMENT_POSTHOC`
-49. `MICROBIAL_COMPARTMENT_PLOTS`
-50. `COMMUNITY_TURNOVER_PREPARE`
-51. `COMMUNITY_TURNOVER_ANALYSIS`
-52. `COMMUNITY_TURNOVER_LCBD`
-53. `COMMUNITY_TURNOVER_PLOTS`
-54. `NETWORK_MODULES`
-55. `GRAPH_NETWORK`
-56. `MODULE_MEASUREMENT_ASSOCIATION`
-57. `ASV_MAG_NETWORK`
-58. `MODULE_MAG_ANCHORS`
-59. `GROUP_GUILD_FUNCTION`
-60. `SANKEY`
-61. `MASTER_SUMMARY`
+18. `PREPROCESS_DATASET`
+19. `VALIDATE_PREPROCESS_DATASET`
+20. `PLOT_METADATA`
+21. `ASV_TIME_DEPTH_CURTAIN`
+22. `GROUPING_DIAGNOSTICS`
+23. `GROUP_LABEL_AUGMENTATION`
+24. `PLOT_UPSET`
+25. `ASV_BATCH_CORRECTION`
+26. `ASV_META_FROM_CORRECTED`
+27. `BUBBLEPLOTTER`
+28. `UMAP_CLUSTERING`
+29. `OUTLIER_CHECKER`
+30. `COLLECTORS_CURVE`
+31. `DIVERSITY_ANALYSIS`
+32. `INDICSPECIES`
+33. `INDICSPECIES_PLOTS`
+34. `INDICSPECIES_ALIGNED_PLOTS`
+35. `VOC_CORRELATION`
+36. `COMMUNITY_PREDICTOR_COMPARISON`
+37. `CLUSTERMAPS`
+38. `GROUP_POWER_ANALYSIS`
+39. `TAXONOMY_GROUP_ASSOCIATION`
+40. `PAIRED_GROUP_CONTRAST`
+41. `ASV_MAG_LINK`
+42. `SPIECEASI`
+43. `MEASUREMENT_ASSOCIATION`
+44. `TITAN_INSTALL`
+45. `TITAN_PREPARE`
+46. `TITAN_ANALYSIS`
+47. `TITAN_COLLECT`
+48. `TITAN_PLOTS`
+49. `MICROBIAL_COMPARTMENT_PREPARE`
+50. `MICROBIAL_COMPARTMENT_INFERENCE`
+51. `MICROBIAL_COMPARTMENT_POSTHOC`
+52. `MICROBIAL_COMPARTMENT_PLOTS`
+53. `COMMUNITY_TURNOVER_PREPARE`
+54. `COMMUNITY_TURNOVER_ANALYSIS`
+55. `COMMUNITY_TURNOVER_LCBD`
+56. `COMMUNITY_TURNOVER_PLOTS`
+57. `NETWORK_MODULES`
+58. `MICROBIAL_STATE_INTERPRETATION`
+59. `GRAPH_NETWORK`
+60. `MODULE_MEASUREMENT_ASSOCIATION`
+61. `ASV_MAG_NETWORK`
+62. `GENOME_COOCCURRENCE`
+63. `ASV_MAG_CURTAINS`
+64. `MODULE_MAG_ANCHORS`
+65. `GROUP_GUILD_FUNCTION`
+66. `ECOLOGICAL_CONTEXT_ATLAS`
+67. `SANKEY`
+68. `MASTER_SUMMARY`
 
 Disabled optional branches are skipped based on the YAML config.
 
@@ -862,24 +922,26 @@ those within-group compartment differences.
 
 ## Optional Analysis Branches
 
-Major optional modules are controlled by YAML `enabled` flags:
+Major optional branches are configured through the YAML sections below. Some
+subbranches use additional flags; consult the configuration reference rather
+than assuming a published directory name is also a YAML key:
 
 - `mito`: BLAST-based mitochondrial and contaminant screening.
-- `non_target_filtering`: mitochondrial/contaminant screening, count filtering, audit tables, and explicit taxon exclusions.
+- `filter_counts`: non-target count filtering, audit tables, and explicit taxon exclusions.
 - `general_stats`: run-level ASV and sample summaries.
 - `metadata_plots`: metadata-linked ASV summary tables and plots.
 - `plot_upset`, `bubbleplotter`, `umap_clustering`: metadata visualization branches.
 - `batch_correction` and `outlier_detection`: corrected ASV tables and outlier checks.
 - `collectors_curve`: rarefaction/collector curve summaries.
 - `diversity`: Shannon, Bray-Curtis, Jaccard, and optional patient-aware diversity workflows.
-- `indicator_analysis`: indicator species tables, standard plots, and aligned indicator plots.
+- `indicspecies`: indicator species tables, with separately configured plotting branches.
 - `titan`: continuous-gradient taxon and community change points using the
   SPIEC-EASI-retained ASV cohort and cleaned measurement matrix.
 - `voc_correlation`: VOC-ASV association analysis and VOC abundance visualizations.
 - `measurement_association`: generalized sample-measurement associations, clustermaps, and CCA/RDA/dbRDA biplots.
 - `clustermaps`: ASV and metadata heatmaps.
-- `network_analysis`: SPIEC-EASI inference, module detection, network visualization, and optional module/MAG anchor tables.
-- `genome_network_analysis`: signed proportionality co-occurrence networks inferred independently from species-level metagenomic and metatranscriptomic recruitment counts.
+- `spieceasi`: SPIEC-EASI inference, module detection, network visualization, and optional module/MAG anchor tables.
+- `genome_cooccurrence`: signed proportionality co-occurrence networks inferred independently from species-level metagenomic and metatranscriptomic recruitment counts.
 - `power_analysis`: patient-aware power analysis using metadata-linked ASV tables.
 - `taxonomy`: taxonomic assignment and patient-aware taxonomic comparisons.
 - `lung_status_analysis`: patient-aware lung-status comparisons.
@@ -950,17 +1012,17 @@ successful workflow, it atomically replaces only `modules/`, `intermediates/`,
 `references/`, `summary/`, and `logs/`; `.aspire/` is never replaced during
 publication. Set `paths.runtime_dir` to relocate the runtime tree. Runtime state
 is retained by default so normal `-resume` execution remains
-available after successful, failed, and interrupted runs. Set
-`paths.keep_runtime_dir: false` only when the cache should be discarded after a
-successful run. Explicit
+available after successful, failed, and interrupted runs. Use the explicit cache commands for cleanup; do not rely on
+`paths.keep_runtime_dir: false` in this revision because the launcher's YAML
+default expression can resolve false to true. Explicit
 `paths.work_dir` and `paths.conda_cache_dir` values override their respective
 derived paths.
 
 Rerunning the same phase resumes from the retained Nextflow cache. For routine
 downstream development, use `--phase analysis`; this structurally excludes the
 raw-read workflow regardless of cache state. If a branch does not rerun because
-cached outputs are valid, the legacy `--rerun-from STAGE_NAME` control remains
-available for compatibility.
+cached outputs are valid, `--rerun-from STAGE_NAME` forces the selected process and lets dependency
+invalidation determine downstream reruns.
 The current per-stage generations are recorded in
 `.aspire/cache_generations.tsv`; this is controller state and should remain with
 the retained work directory. A failed targeted rerun resumes within the same
