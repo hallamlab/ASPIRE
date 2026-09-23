@@ -34,14 +34,19 @@ class MockTestConfigTest(unittest.TestCase):
             config = MODULE.build_config(
                 project / "examples/mock.local.yml", dataset, output, runtime, project
             )
-            self.assertEqual(config["paths"]["input_dir"], str(dataset / "fastq"))
-            self.assertEqual(config["paths"]["manifest"], str(dataset / "fastq_manifest.tsv"))
-            self.assertEqual(config["metadata_plots"]["metadata"], str(dataset / "sample_metadata.tsv"))
-            self.assertEqual(config["voc_correlation"]["voc_table"], str(dataset / "chemistry.tsv"))
-            self.assertEqual(config["paths"]["output_dir"], str(output))
-            self.assertEqual(config["paths"]["runtime_dir"], str(runtime))
-            self.assertTrue(config["paths"]["keep_runtime_dir"])
-            self.assertTrue(Path(config["table_filter"]["script"]).is_absolute())
+            paths = MODULE.config_section(config, "paths")
+            self.assertEqual(paths["input_dir"], str(dataset / "fastq"))
+            self.assertEqual(paths["manifest"], str(dataset / "fastq_manifest.tsv"))
+            self.assertEqual(MODULE.config_section(config, "metadata_plots")["metadata"], str(dataset / "sample_metadata.tsv"))
+            self.assertEqual(MODULE.config_section(config, "voc_correlation")["voc_table"], str(dataset / "chemistry.tsv"))
+            voc_config = MODULE.config_section(config, "voc_correlation")
+            self.assertTrue(voc_config["patient_inference"])
+            self.assertEqual(voc_config["patient_permutations"], 999)
+            self.assertEqual(voc_config["clr_pseudocount"], 0.5)
+            self.assertEqual(paths["output_dir"], str(output))
+            self.assertEqual(paths["runtime_dir"], str(runtime))
+            self.assertTrue(paths["keep_runtime_dir"])
+            self.assertTrue(Path(MODULE.config_section(config, "table_filter")["script"]).is_absolute())
             self.assertTrue(all(Path(path).is_absolute() for path in config["environments"].values()))
 
     def test_checksum_validation(self) -> None:
@@ -70,8 +75,8 @@ class MockTestConfigTest(unittest.TestCase):
                 project,
             )
             reparsed = yaml.safe_load(yaml.safe_dump(config, sort_keys=False))
-            self.assertEqual(reparsed["indicspecies"]["perms"], 999)
-            self.assertEqual(reparsed["power_analysis"]["sample_sizes_cancer"], "4,6,8,10")
+            self.assertEqual(MODULE.config_section(reparsed, "indicspecies")["perms"], 999)
+            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["sample_sizes_cancer"], "4,6,8,10")
 
     def test_truth_mapping_accepts_trimmed_inferred_sequences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

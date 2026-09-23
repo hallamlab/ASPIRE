@@ -50,6 +50,11 @@ reports/
 mock_run*.yml
 mock_run*.manifest.tsv
 
+# Private study/provenance configurations. Keep local copies, but do not
+# publish machine-specific paths or protected-study settings.
+examples/SPARK_*.yml
+examples/set1-2*.yml
+
 # -----------------------------
 # OS/editor noise
 # -----------------------------

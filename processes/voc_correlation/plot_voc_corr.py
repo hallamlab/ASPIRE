@@ -6,6 +6,8 @@ import argparse
 import glob
 import math
 import re
+import json
+import itertools
 from pathlib import Path
 
 import matplotlib as mpl
@@ -15,7 +17,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.patches import Patch
-from scipy.stats import mannwhitneyu, spearmanr
+from scipy.stats import mannwhitneyu, spearmanr, rankdata
 
 mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["svg.fonttype"] = "none"
@@ -101,6 +103,10 @@ LEGACY_VOC_SUBSET = [
 GREY_CORR_CMAP = mcolors.LinearSegmentedColormap.from_list(
     "voc_corr_greys",
     ["#1A1A1A", "#FAFAFA", "#1A1A1A"],
+)
+BIDIRECTIONAL_CORR_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "voc_corr_blue_white_orange",
+    ["#2166AC", "#FAFAFA", "#D95F02"],
 )
 POSITIVE_CORR_CMAP = mcolors.LinearSegmentedColormap.from_list(
     "voc_corr_positive_greys",
@@ -193,15 +199,15 @@ def ordered_group_type_labels(labels: list[str], *, include_all_known: bool = Fa
 
 def normalize_case_status(value: object) -> str:
     text = str(value).strip().lower()
-    if not text:
-        return "Control"
+    if not text or text in {"nan", "none", "na", "unknown"}:
+        return "Unknown"
     if "non-cancer" in text or "non cancer" in text:
         return "Control"
     if text in {"control", "healthy", "benign", "noncancer", "non_cancer"}:
         return "Control"
     if "cancer" in text or text in {"case", "tumor", "tumour"}:
         return "Cancer"
-    return "Control"
+    return "Unknown"
 
 
 def split_taxa_string(taxa_str: str, delimiter: str = ";") -> dict[str, str | None]:
@@ -328,11 +334,24 @@ def isa_source_category(source: object) -> str:
     return "other"
 
 
-def isa_group_contains_bronchial(label: object) -> bool:
+def isa_group_is_brush_specific(
+    label: object,
+    brush_groups: set[str],
+    all_type_groups: set[str],
+    exclude_all_types: bool,
+) -> bool:
+    """Keep brush-containing singleton/mixed ISA groups, but not universal groups."""
     for grouped_label in parse_csv_list(str(label)):
-        parts = [canonicalize_sample_type(part) for part in str(grouped_label).split("+")]
-        if "Bronchial Brush" in parts:
-            return True
+        parts = {
+            canonicalize_sample_type(part)
+            for part in str(grouped_label).split("+")
+            if str(part).strip()
+        }
+        if not parts.intersection(brush_groups):
+            continue
+        if exclude_all_types and all_type_groups and parts.issuperset(all_type_groups):
+            continue
+        return True
     return False
 
 
@@ -490,6 +509,7 @@ def correlation_results(
     left_label: str,
     right_label: str,
     direction: str,
+    retain_all_left: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows: list[dict[str, object]] = []
     out = pd.DataFrame(index=left.columns, columns=right.columns, dtype=float)
@@ -515,6 +535,11 @@ def correlation_results(
             })
     matrix = out.where(correlation_direction_mask(out, direction))
     matrix = matrix.dropna(how="all").dropna(axis=1, how="all").fillna(0.0)
+    if retain_all_left:
+        # ISA membership, not correlation direction, defines these plot rows.
+        # A retained all-zero row means no correlation survived the requested
+        # direction mask (or the ASV was invariant in the VOC-matched samples).
+        matrix = matrix.reindex(left.columns, fill_value=0.0).fillna(0.0)
     long_df = pd.DataFrame(rows)
     if not long_df.empty:
         long_df["q_value"] = bh_adjust(long_df["p_value"])
@@ -522,6 +547,18 @@ def correlation_results(
         long_df = long_df.loc[correlation_direction_mask(long_df["rho"], direction)].copy()
         long_df = long_df.sort_values(["q_value", "p_value", "rho"], ascending=[True, True, False]).reset_index(drop=True)
     return matrix, long_df
+
+
+def filter_matrix_by_abs_threshold(matrix: pd.DataFrame, threshold: float) -> pd.DataFrame:
+    """Keep rows and columns participating in at least one threshold-passing cell."""
+    if matrix.empty or threshold <= 0:
+        return matrix
+    keep_rows = matrix.abs().max(axis=1).ge(threshold)
+    filtered = matrix.loc[keep_rows]
+    if filtered.empty:
+        return filtered
+    keep_cols = filtered.abs().max(axis=0).ge(threshold)
+    return filtered.loc[:, keep_cols]
 
 
 def build_asv_group_colors(
@@ -667,7 +704,7 @@ def clustermap_scale(df: pd.DataFrame, correlation_direction: str) -> tuple[mcol
         if max_abs == 0:
             max_abs = 1.0
         return VOC_ZSCORE_CMAP, mpl.colors.Normalize(vmin=-max_abs, vmax=max_abs), 0, -max_abs, max_abs
-    return GREY_CORR_CMAP, mpl.colors.Normalize(vmin=-1, vmax=1), 0, -1, 1
+    return BIDIRECTIONAL_CORR_CMAP, mpl.colors.Normalize(vmin=-1, vmax=1), 0, -1, 1
 
 
 def save_clustermap(
@@ -704,17 +741,24 @@ def save_clustermap(
     plot_col_colors = col_colors.to_frame() if isinstance(col_colors, pd.Series) else col_colors
     row_cluster = df.shape[0] > 1
     col_cluster = df.shape[1] > 1
+    numeric_df = df.astype(float)
+    # Correlation distance is undefined for an all-zero/constant vector. ISA
+    # plots intentionally retain such ASVs for membership completeness, so use
+    # Euclidean distance when either clustering axis contains a constant vector.
+    has_constant_rows = row_cluster and numeric_df.var(axis=1).fillna(0).eq(0).any()
+    has_constant_cols = col_cluster and numeric_df.var(axis=0).fillna(0).eq(0).any()
+    cluster_metric = "euclidean" if has_constant_rows or has_constant_cols else "correlation"
     cmap, norm, center, vmin, vmax = clustermap_scale(df, correlation_direction)
     n_row_annotations = 0 if plot_row_colors is None else plot_row_colors.shape[1]
     n_col_annotations = 0 if plot_col_colors is None else plot_col_colors.shape[1]
     annotation_ratio = min(0.12, max(0.045, 0.035 * max(n_row_annotations, n_col_annotations, 1)))
     grid = sns.clustermap(
-        df.astype(float),
+        numeric_df,
         cmap=cmap,
         center=center,
         vmin=vmin,
         vmax=vmax,
-        metric="correlation",
+        metric=cluster_metric,
         method="average",
         figsize=(fig_width, fig_height),
         dendrogram_ratio=(0.12, 0.12),
@@ -787,7 +831,7 @@ def build_patient_voc_matrix(voc_df: pd.DataFrame, sample_meta: pd.DataFrame) ->
     patient_df["case_status"] = patient_df["case_status"].map(normalize_case_status)
     patient_case = (
         patient_df.groupby("patient_id")["case_status"]
-        .agg(lambda values: "Cancer" if (values.astype(str) == "Cancer").any() else "Control")
+        .agg(lambda values: values.iloc[0] if values.nunique() == 1 else "Unknown")
         .rename("case_status")
         .reset_index()
     )
@@ -806,14 +850,36 @@ def build_patient_voc_matrix(voc_df: pd.DataFrame, sample_meta: pd.DataFrame) ->
     return patient_matrix, patient_case_series, patient_case.drop(columns=["case_rank"])
 
 
-def patient_case_voc_tests(patient_matrix: pd.DataFrame, patient_case: pd.Series) -> pd.DataFrame:
+def permutation_mann_whitney(a, b, n_permutations=9999, seed=42):
+    """Two-sided rank-sum randomization, retaining ties; exact when affordable."""
+    values = np.concatenate([a, b])
+    ranks = rankdata(values)
+    na, n = len(a), len(values)
+    center = na * (n + 1) / 2
+    observed = abs(ranks[:na].sum() - center)
+    total = math.comb(n, na)
+    exact = total <= n_permutations
+    rng = np.random.default_rng(seed)
+    selections = (itertools.combinations(range(n), na) if exact else
+                  (rng.permutation(n)[:na] for _ in range(n_permutations)))
+    extreme = sum(abs(ranks[list(selection)].sum() - center) >= observed - 1e-12
+                  for selection in selections)
+    draws = total if exact else n_permutations
+    p = extreme / draws if exact else (extreme + 1) / (draws + 1)
+    u = ranks[:na].sum() - na * (na + 1) / 2
+    return float(u), float(p), draws, "exact_permutation" if exact else "monte_carlo_permutation"
+
+
+def patient_case_voc_tests(patient_matrix: pd.DataFrame, patient_case: pd.Series,
+                           n_permutations: int = 9999, seed: int = 42) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for voc in patient_matrix.columns:
         cancer = patient_matrix.loc[patient_case == "Cancer", voc].dropna().to_numpy(dtype=float)
         control = patient_matrix.loc[patient_case == "Control", voc].dropna().to_numpy(dtype=float)
         if len(cancer) < 3 or len(control) < 3:
             continue
-        stat, pval = mannwhitneyu(cancer, control, alternative="two-sided")
+        stat, pval, draws, method = permutation_mann_whitney(
+            cancer, control, n_permutations=n_permutations, seed=seed)
         rows.append({
             "voc": voc,
             "n_cancer_patients": int(len(cancer)),
@@ -825,6 +891,8 @@ def patient_case_voc_tests(patient_matrix: pd.DataFrame, patient_case: pd.Series
             "effect_median_diff": float(np.median(cancer) - np.median(control)),
             "u_statistic": float(stat),
             "p_value": float(pval),
+            "test_method": method,
+            "n_permutations": draws,
         })
     out = pd.DataFrame(rows)
     if out.empty:
@@ -832,6 +900,97 @@ def patient_case_voc_tests(patient_matrix: pd.DataFrame, patient_case: pd.Series
     out["q_value"] = bh_adjust(out["p_value"])
     out["significant"] = out["q_value"] <= 0.05
     return out.sort_values(["q_value", "p_value", "effect_median_diff"], ascending=[True, True, False]).reset_index(drop=True)
+
+
+def patient_correlation_results(counts, voc, metadata, candidates, *,
+                                n_permutations=9999, seed=42, min_patients=6,
+                                min_nonzero_patients=3, clr_pseudocount=0.5):
+    """Patient-level between-person associations; not within-person or causal effects.
+
+    Normalize across ALL supplied ASVs before selecting candidates. For each VOC,
+    average only cognate samples with an observed measurement; permute patients,
+    never individual repeated samples. Test the union once, then subset for plots.
+    """
+    if n_permutations < 1 or min_patients < 3 or min_nonzero_patients < 1:
+        raise ValueError("Require positive permutations/nonzero minimum and at least 3 patients.")
+    if not np.isfinite(clr_pseudocount) or clr_pseudocount <= 0:
+        raise ValueError("CLR pseudocount must be finite and positive.")
+    if not np.isfinite(counts.to_numpy()).all() or (counts < 0).any().any():
+        raise ValueError("Patient inference requires finite, nonnegative ASV counts.")
+    meta = metadata.set_index("normalized_sample_id").reindex(counts.index)
+    ids = meta.patient_id.astype(str).str.strip()
+    if ids.str.lower().isin(["", "nan", "none", "na"]).any():
+        raise ValueError("Patient inference requires a valid patient ID for every matched sample.")
+    if meta.assign(patient_id=ids).groupby("patient_id").case_status.nunique().gt(1).any():
+        raise ValueError("Conflicting case status within a patient; fix metadata before VOC inference.")
+    depth = counts.sum(axis=1)
+    good = depth > 0
+    counts, voc, ids = counts.loc[good], voc.loc[good], ids.loc[good]
+    relative = counts.div(counts.sum(axis=1), axis=0)
+    log_counts = np.log(counts + clr_pseudocount)
+    clr = log_counts.sub(log_counts.mean(axis=1), axis=0)
+    candidates = sorted(set(candidates).intersection(counts.columns))
+    records = []
+    for normalization, normalized in [("relative_abundance", relative), ("clr", clr)]:
+        for voc_name in voc.columns:
+            valid = np.isfinite(voc[voc_name])
+            groups = ids.loc[valid]
+            x = normalized.loc[valid, candidates].groupby(groups).mean().round(14)
+            y = voc.loc[valid, voc_name].groupby(groups).mean().reindex(x.index).round(14)
+            detected = counts.loc[valid, candidates].gt(0).groupby(groups).any().sum()
+            n = len(y)
+            eligible = []
+            for asv in candidates:
+                reason = ("too_few_patients" if n < min_patients else
+                          "too_few_detected_patients" if detected[asv] < min_nonzero_patients else
+                          "constant_asv" if x[asv].nunique() < 2 else
+                          "constant_voc" if y.nunique() < 2 else "tested")
+                record = dict(asv=asv, voc=voc_name, normalization=normalization,
+                              n_patients=n, n_nonzero_patients=int(detected[asv]),
+                              rho=np.nan, p_value=np.nan, status=reason,
+                              n_permutations=n_permutations if reason == "tested" else 0)
+                records.append(record)
+                if reason == "tested":
+                    eligible.append((asv, record))
+            if not eligible:
+                continue
+            # Stabilize numerical ties introduced by averaging identical replicates.
+            xr = rankdata(x[[a for a, _ in eligible]].to_numpy().round(14), axis=0)
+            yr = rankdata(y.to_numpy().round(14))
+            xr -= xr.mean(axis=0)
+            yr -= yr.mean()
+            xr /= np.linalg.norm(xr, axis=0)
+            yr /= np.linalg.norm(yr)
+            rho = yr @ xr
+            exceed = np.zeros(len(eligible), dtype=int)
+            # Shared permutations across ASVs; fixed seed also pairs normalizations.
+            rng = np.random.default_rng(seed)
+            for start in range(0, n_permutations, 256):
+                size = min(256, n_permutations - start)
+                permuted = np.array([rng.permutation(yr) for _ in range(size)])
+                null = permuted @ xr
+                exceed += (np.abs(null) >= np.abs(rho)[None, :] - 1e-12).sum(axis=0)
+            for j, (_, record) in enumerate(eligible):
+                record["rho"] = float(rho[j])
+                record["p_value"] = float((exceed[j] + 1) / (n_permutations + 1))
+    columns = ["asv", "voc", "normalization", "n_patients", "n_nonzero_patients",
+               "rho", "p_value", "status", "n_permutations"]
+    result = pd.DataFrame(records, columns=columns)
+    result["q_value"] = np.nan
+    for normalization in ["relative_abundance", "clr"]:
+        mask = result.normalization.eq(normalization)
+        result.loc[mask, "q_value"] = bh_adjust(result.loc[mask, "p_value"])
+    result["significant"] = result.q_value.le(0.05)
+    return result, relative.groupby(ids).mean(), clr.groupby(ids).mean(), {
+        "matched_samples": len(good), "zero_depth_samples_excluded": int((~good).sum()),
+        "patients": int(ids.nunique()), "candidate_asvs": len(candidates),
+        "normalization_denominator_asvs": counts.shape[1], "voc_columns": voc.shape[1],
+        "permutations": n_permutations, "seed": seed, "min_patients": min_patients,
+        "min_nonzero_patients": min_nonzero_patients, "clr_pseudocount": clr_pseudocount,
+        "fdr_family": "union of global-eligible and Type_Group ISA ASV-VOC tests, separately per normalization",
+        "interpretation": "unadjusted between-patient association; exploratory, not causal or within-patient",
+        "missing_voc": "per-VOC cognate complete samples before patient averaging; no zero imputation",
+    }
 
 
 def q_to_stars(q_value: float) -> str:
@@ -858,6 +1017,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
     plot_df["voc"] = pd.Categorical(plot_df["voc"], categories=voc_order, ordered=True)
     n_cols = 4
     n_panels = max(1, len(voc_order))
+    bar_palette = {**CASE_STATUS_PALETTE, "Control": "#FFFFFF"}
     g = sns.catplot(
         data=plot_df,
         x="case_status",
@@ -868,12 +1028,14 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
         kind="bar",
         order=["Control", "Cancer"],
         hue_order=["Control", "Cancer"],
-        palette=CASE_STATUS_PALETTE,
+        palette=bar_palette,
         sharey=True,
         legend=False,
         height=3.2,
         aspect=1.0,
         errorbar="sd",
+        edgecolor="#404040",
+        linewidth=0.8,
     )
     axes = list(g.axes.flat)
     for ax, voc in zip(axes, voc_order):
@@ -906,7 +1068,7 @@ def save_case_voc_barplots(patient_matrix: pd.DataFrame, patient_case: pd.Series
     g.set_axis_labels("", "VOC abundance z-score")
     for ax in axes[len(voc_order):]:
         ax.set_visible(False)
-    handles = [Patch(facecolor=CASE_STATUS_PALETTE[label], edgecolor="#404040", linewidth=0.4, label=label) for label in ["Control", "Cancer"]]
+    handles = [Patch(facecolor=bar_palette[label], edgecolor="#404040", linewidth=0.8, label=label) for label in ["Control", "Cancer"]]
     g.fig.legend(
         handles=handles,
         title="Case status",
@@ -947,14 +1109,53 @@ def main() -> None:
     parser.add_argument("--spieceasi-min-prevalence", type=float, default=0.0)
     parser.add_argument("--spieceasi-remove-zero-var", type=str, default="true")
     parser.add_argument("--correlation-direction", choices=["positive", "negative", "both"], default="positive")
+    parser.add_argument(
+        "--isa-correlation-direction",
+        choices=["positive", "negative", "both"],
+        default=None,
+        help="Direction shown in ISA-specific plots; defaults to --correlation-direction.",
+    )
     parser.add_argument("--indicspecies-glob", default="*_indicator_species*.tsv")
     parser.add_argument("--isa-q-threshold", type=float, default=0.05)
+    parser.add_argument("--isa-brush-groups", default="Bronchial Brush,Lung Brush")
+    parser.add_argument("--isa-all-type-groups", default="")
+    parser.add_argument("--isa-exclude-all-types-from-brush", default="true")
+    parser.add_argument(
+        "--isa-min-abs-rho",
+        type=float,
+        default=0.0,
+        help="Keep an ISA plot row only if at least one displayed VOC has |rho| at or above this value.",
+    )
+    parser.add_argument(
+        "--sample-min-abs-z",
+        type=float,
+        default=0.0,
+        help="Write a sample-VOC subset retaining rows/columns with at least one |z| at or above this value.",
+    )
     parser.add_argument("--case-palette", default="", help="Comma-separated label=#hex mapping.")
     parser.add_argument("--isa-palette", default="", help="Comma-separated ISA-group=#hex mapping.")
+    parser.add_argument("--patient-inference", choices=["true", "false"], default="true")
+    parser.add_argument("--patient-permutations", type=int, default=9999)
+    parser.add_argument("--patient-seed", type=int, default=42)
+    parser.add_argument("--patient-min-patients", type=int, default=6)
+    parser.add_argument("--patient-min-nonzero", type=int, default=3)
+    parser.add_argument("--clr-pseudocount", type=float, default=0.5)
     args = parser.parse_args()
+    if args.patient_permutations < 1:
+        parser.error("--patient-permutations must be positive")
 
     CASE_STATUS_PALETTE.update(parse_mapping(args.case_palette))
     GROUP_TYPE_PALETTE.update(parse_mapping(args.isa_palette))
+    isa_brush_groups = {
+        canonicalize_sample_type(item) for item in parse_csv_list(args.isa_brush_groups)
+    }
+    isa_all_type_groups = {
+        canonicalize_sample_type(item) for item in parse_csv_list(args.isa_all_type_groups)
+    }
+    isa_exclude_all_types = str(args.isa_exclude_all_types_from_brush).strip().lower() in {
+        "true", "1", "yes", "y"
+    }
+    isa_correlation_direction = args.isa_correlation_direction or args.correlation_direction
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -999,7 +1200,7 @@ def main() -> None:
     if len(common_samples) < 3:
         raise ValueError(f"Only {len(common_samples)} overlapping brush samples between ASV, ASV_meta, and VOC tables.")
 
-    sample_meta = sample_meta.set_index("normalized_sample_id").loc[common_samples].reset_index()
+    sample_meta = sample_meta.set_index("normalized_sample_id").loc[common_samples].rename_axis("normalized_sample_id").reset_index()
     asv_counts_t = asv_counts_t.loc[common_samples]
     asv_counts_t_unfiltered = asv_counts_t_unfiltered.loc[common_samples]
     voc_df = voc_df.loc[common_samples]
@@ -1008,7 +1209,14 @@ def main() -> None:
     isa_group_annotations = isa_annotations.loc[isa_annotations["source_category"] == "group"].copy()
     if not isa_group_annotations.empty:
         isa_group_annotations.to_csv(outdir / "isa_annotations_group.tsv", sep="\t", index=False)
-        bronchial_mask = isa_group_annotations["isa_groups"].map(isa_group_contains_bronchial)
+        bronchial_mask = isa_group_annotations["isa_groups"].map(
+            lambda label: isa_group_is_brush_specific(
+                label,
+                brush_groups=isa_brush_groups,
+                all_type_groups=isa_all_type_groups,
+                exclude_all_types=isa_exclude_all_types,
+            )
+        )
         bronchial_asv_set = set(isa_group_annotations.loc[bronchial_mask, "ASV"].astype(str))
         brush_isa_annotations = isa_group_annotations.loc[
             isa_group_annotations["ASV"].astype(str).isin(bronchial_asv_set)
@@ -1036,6 +1244,43 @@ def main() -> None:
         cbar_label=f"Spearman rho ({args.correlation_direction} only)" if args.correlation_direction != "both" else "Spearman rho",
     )
 
+    sample_type_isa_asv_ids = [
+        asv
+        for asv in sorted(set(isa_group_annotations["ASV"].astype(str)))
+        if asv in asv_counts_t_unfiltered.columns
+    ]
+    if sample_type_isa_asv_ids:
+        sample_type_isa_counts_t = asv_counts_t_unfiltered[sample_type_isa_asv_ids]
+        sample_type_isa_corr, sample_type_isa_long = correlation_results(
+            sample_type_isa_counts_t, voc_df, "asv", "voc",
+            direction=isa_correlation_direction, retain_all_left=True
+        )
+        sample_type_isa_corr = filter_matrix_by_abs_threshold(
+            sample_type_isa_corr, args.isa_min_abs_rho
+        )
+        sample_type_isa_corr_display = relabel_asv_matrix(sample_type_isa_corr, taxonomy_df)
+        sample_type_isa_row_colors, sample_type_isa_color_key = build_asv_group_colors(
+            list(sample_type_isa_corr.index.astype(str)), isa_group_annotations, taxonomy_df
+        )
+        sample_type_isa_color_key.to_csv(
+            outdir / "isa_all_sample_types_asv_group_colors.tsv", sep="\t", index=False
+        )
+        sample_type_isa_corr_display.to_csv(
+            outdir / "isa_all_sample_types_asv_voc_spearman.tsv", sep="\t"
+        )
+        if not sample_type_isa_long.empty:
+            add_asv_labels(sample_type_isa_long, taxonomy_df).to_csv(
+                outdir / "isa_all_sample_types_asv_voc_spearman_long.tsv", sep="\t", index=False
+            )
+        save_clustermap(
+            sample_type_isa_corr_display,
+            outdir / "isa_all_sample_types_asv_voc_clustermap",
+            row_colors=sample_type_isa_row_colors,
+            row_color_legend=legend_items_from_color_key(sample_type_isa_color_key),
+            correlation_direction=isa_correlation_direction,
+            cbar_label=f"Spearman rho ({isa_correlation_direction} only)" if isa_correlation_direction != "both" else "Spearman rho",
+        )
+
     brush_asv_ids = [
         asv
         for asv in sorted(set(brush_isa_annotations["ASV"].astype(str)))
@@ -1044,7 +1289,11 @@ def main() -> None:
     if brush_asv_ids:
         brush_asv_counts_t = asv_counts_t_unfiltered[brush_asv_ids]
         brush_asv_corr, brush_asv_long = correlation_results(
-            brush_asv_counts_t, voc_df, "asv", "voc", direction=args.correlation_direction
+            brush_asv_counts_t, voc_df, "asv", "voc",
+            direction=isa_correlation_direction, retain_all_left=True
+        )
+        brush_asv_corr = filter_matrix_by_abs_threshold(
+            brush_asv_corr, args.isa_min_abs_rho
         )
         brush_asv_corr_display = relabel_asv_matrix(brush_asv_corr, taxonomy_df)
         brush_row_colors, brush_color_key = build_asv_group_colors(list(brush_asv_corr.index.astype(str)), brush_isa_annotations, taxonomy_df)
@@ -1057,8 +1306,8 @@ def main() -> None:
             outdir / "isa_bronchial_brush_asv_voc_clustermap",
             row_colors=brush_row_colors,
             row_color_legend=legend_items_from_color_key(brush_color_key),
-            correlation_direction=args.correlation_direction,
-            cbar_label=f"Spearman rho ({args.correlation_direction} only)" if args.correlation_direction != "both" else "Spearman rho",
+            correlation_direction=isa_correlation_direction,
+            cbar_label=f"Spearman rho ({isa_correlation_direction} only)" if isa_correlation_direction != "both" else "Spearman rho",
         )
 
     sample_voc_matrix, sample_voc_meta, sample_row_colors = build_sample_voc_matrix(voc_df, sample_meta, voc_meta)
@@ -1072,15 +1321,82 @@ def main() -> None:
         correlation_direction="data",
         cbar_label="VOC abundance z-score",
     )
+    sample_voc_z = zscore_columns(sample_voc_matrix)
+    sample_voc_subset = filter_matrix_by_abs_threshold(sample_voc_z, args.sample_min_abs_z)
+    if args.sample_min_abs_z > 0 and not sample_voc_subset.empty:
+        sample_voc_subset.to_csv(outdir / "sample_voc_matrix_brush_extreme_zscore.tsv", sep="\t")
+        subset_meta = sample_voc_meta.set_index("sample_label").reindex(sample_voc_subset.index).reset_index()
+        subset_row_colors = sample_row_colors.reindex(sample_voc_subset.index)
+        save_clustermap(
+            sample_voc_subset,
+            outdir / "sample_voc_brush_extreme_clustermap",
+            row_colors=subset_row_colors,
+            row_color_legends=sample_voc_legend_blocks(subset_meta),
+            correlation_direction="data",
+            cbar_label="VOC abundance z-score",
+        )
 
     patient_matrix, patient_case, patient_case_table = build_patient_voc_matrix(voc_df, sample_meta)
     patient_matrix.to_csv(outdir / "patient_voc_matrix_brush.tsv", sep="\t")
     zscore_columns(patient_matrix).to_csv(outdir / "patient_voc_matrix_brush_zscore.tsv", sep="\t")
     patient_case_table.to_csv(outdir / "patient_voc_case_status_brush.tsv", sep="\t", index=False)
-    patient_tests = patient_case_voc_tests(patient_matrix, patient_case)
+    patient_tests = patient_case_voc_tests(patient_matrix, patient_case,
+                                        args.patient_permutations, args.patient_seed)
     if not patient_tests.empty:
         patient_tests.to_csv(outdir / "patient_voc_case_tests_brush.tsv", sep="\t", index=False)
     save_case_voc_barplots(patient_matrix, patient_case, patient_tests, outdir / "patient_case_voc_barplots_brush")
+
+    if args.patient_inference == "true":
+        families = {"all_asv": set(asv_counts_t.columns),
+                    "isa_all_sample_types": set(sample_type_isa_asv_ids),
+                    "isa_bronchial_brush": set(brush_asv_ids)}
+        candidates = set().union(*families.values())
+        inference, relative, clr, summary = patient_correlation_results(
+            asv_counts_t_unfiltered, voc_df, sample_meta, candidates,
+            n_permutations=args.patient_permutations, seed=args.patient_seed,
+            min_patients=args.patient_min_patients,
+            min_nonzero_patients=args.patient_min_nonzero,
+            clr_pseudocount=args.clr_pseudocount)
+        for name, members in families.items():
+            inference[f"in_{name}"] = inference.asv.isin(members)
+        add_asv_labels(inference, taxonomy_df).to_csv(
+            outdir / "patient_asv_voc_permutation_long.tsv", sep="\t", index=False)
+        relative.to_csv(outdir / "patient_asv_relative_abundance.tsv", sep="\t")
+        clr.to_csv(outdir / "patient_asv_clr.tsv", sep="\t")
+        primary = inference.loc[inference.normalization.eq("relative_abundance")].copy()
+        sensitivity = inference.loc[inference.normalization.eq("clr")].copy()
+        comparison = primary.merge(sensitivity[["asv", "voc", "rho", "q_value", "status"]],
+                                   on=["asv", "voc"], suffixes=("", "_clr"))
+        comparison["same_direction"] = (np.sign(comparison.rho) == np.sign(comparison.rho_clr))
+        comparison["support"] = np.select(
+            [comparison.status.ne("tested") | comparison.status_clr.ne("tested"),
+             comparison.q_value.le(.05) & comparison.q_value_clr.le(.05) & comparison.same_direction,
+             comparison.q_value.le(.05) | comparison.q_value_clr.le(.05)],
+            ["insufficiently_observed", "both_normalizations", "normalization_sensitive"],
+            default="neither_normalization_fdr_supported")
+        add_asv_labels(comparison, taxonomy_df).to_csv(
+            outdir / "patient_asv_voc_normalization_comparison.tsv", sep="\t", index=False)
+        for name, members in families.items():
+            subset = primary.loc[primary.asv.isin(members) & primary.status.eq("tested")]
+            if subset.empty:
+                continue
+            matrix = subset.pivot(index="asv", columns="voc", values="rho")
+            matrix = filter_matrix_by_abs_threshold(matrix, args.isa_min_abs_rho)
+            # Untested cells remain missing in the TSV; do not invent zero effects.
+            matrix.to_csv(outdir / f"patient_{name}_asv_voc_spearman.tsv", sep="\t")
+            if matrix.empty or matrix.isna().any().any():
+                continue
+            colors, key = build_asv_group_colors(list(matrix.index), isa_group_annotations, taxonomy_df)
+            save_clustermap(relabel_asv_matrix(matrix, taxonomy_df),
+                            outdir / f"patient_{name}_asv_voc_clustermap",
+                            row_colors=colors, row_color_legend=legend_items_from_color_key(key),
+                            correlation_direction="both", cbar_label="Patient-level Spearman rho (relative abundance)")
+        summary["tested_pairs"] = {n: int(inference.normalization.eq(n).mul(inference.status.eq("tested")).sum())
+                                   for n in ["relative_abundance", "clr"]}
+        summary["significant_pairs"] = {n: int(inference.normalization.eq(n).mul(inference.significant).sum())
+                                        for n in ["relative_abundance", "clr"]}
+        summary["exploratory_sample_correlations"] = "Legacy sample-level raw-count p/q values do not account for repeated patients; not inferential evidence."
+        (outdir / "patient_inference_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 
 
 if __name__ == "__main__":

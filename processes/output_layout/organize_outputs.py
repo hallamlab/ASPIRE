@@ -27,6 +27,7 @@ MODULE_DIRS = {
     "lung_status_analysis": "lung_status_analysis",
     "clustermaps": "clustermaps",
     "spieceasi": "network_analysis",
+    "three_tier_decontam": "contamination_filtering",
     "asv_mag_link": "asv_mag_link",
     "mito": "non_target_filtering",
     "taxonomy": "taxonomy",

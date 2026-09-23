@@ -9,6 +9,8 @@ import numpy as np
 
 # The helper under test has no SciPy dependency; stub heavy analysis imports so
 # this regression test also runs in lightweight controller environments.
+_stub_names = ("scipy", "scipy.stats", "statsmodels", "statsmodels.stats", "statsmodels.stats.multitest")
+_original_modules = {name: sys.modules.get(name) for name in _stub_names}
 scipy = types.ModuleType("scipy")
 scipy.stats = types.ModuleType("scipy.stats")
 scipy.stats.mannwhitneyu = lambda *args, **kwargs: None
@@ -27,6 +29,12 @@ SCRIPT = Path(__file__).parents[1] / "processes" / "power_analysis_pipeline" / "
 SPEC = importlib.util.spec_from_file_location("power_taxonomic_abundance", SCRIPT)
 POWER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POWER)
+# Do not leak lightweight stubs into other statistical tests during collection.
+for _name, _original in _original_modules.items():
+    if _original is None:
+        sys.modules.pop(_name, None)
+    else:
+        sys.modules[_name] = _original
 
 
 class TaxonomicPowerTests(unittest.TestCase):

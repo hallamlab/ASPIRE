@@ -647,6 +647,8 @@ def compute_and_save_block(
     include_rank_filters: Optional[Dict[str, set[str]]] = None,
     subtraction_col: Optional[str] = None,
     subtraction_groups: Optional[Sequence[str]] = None,
+    min_pre_correction_sample_sum: float = 0.0,
+    drop_zero_asvs: bool = False,
 ) -> None:
     ensure_dir(out_root)
     ensure_dir(asv_out_root)
@@ -764,6 +766,24 @@ def compute_and_save_block(
     )
     if keep_types:
         corr_meta = corr_meta[corr_meta[type_col].isin(keep_types)].copy()
+
+    # Optional paper-compatibility filter: SPARK selected the analysis cohort
+    # from microbial counts before control subtraction.
+    if min_pre_correction_sample_sum > 0:
+        candidate_samples = set(corr_meta[meta_sample_col].unique())
+        pre_correction_totals = asv_meta.groupby(meta_sample_col)['count'].sum()
+        qualified_samples = set(
+            pre_correction_totals[
+                (pre_correction_totals >= min_pre_correction_sample_sum)
+                & pre_correction_totals.index.isin(candidate_samples)
+            ].index
+        )
+        corr_meta = corr_meta[corr_meta[meta_sample_col].isin(qualified_samples)].copy()
+        meta_out = meta_out[meta_out[meta_sample_col].isin(qualified_samples)].copy()
+        print(
+            f"[i] {mode_name} pre-correction count cutoff >= {min_pre_correction_sample_sum:g} "
+            f"kept {len(qualified_samples)} samples"
+        )
     
     # Stats per sample for raw reads
     reads_df = fastq_stats_df.copy()
@@ -818,6 +838,8 @@ def compute_and_save_block(
     kept_samples_all = metastat_all[metastat_all['pass_filter'] != 'Failed-QC'][meta_sample_col].unique().tolist()
     final_mat = cleaned.reindex(index=keep_asvs).dropna(how='all')
     final_mat = final_mat[[c for c in final_mat.columns if c in kept_samples]].fillna(0).astype(int)
+    if drop_zero_asvs:
+        final_mat = final_mat.loc[final_mat.sum(axis=1) > 0]
     final_mat_all = cleaned_all.reindex(index=keep_asvs_all).dropna(how='all')
     final_mat_all = final_mat_all[[c for c in final_mat_all.columns if c in kept_samples_all]].fillna(0).astype(int)
 
@@ -977,6 +999,17 @@ def get_parser() -> argparse.ArgumentParser:
     asv = p.add_argument_group("ASV Matrices")
     asv.add_argument("--asv-micro", type=Path, required=True, help="ASV_target.micro.tsv")
     asv.add_argument("--asv-mito", type=Path, required=True, help="ASV_target.mito.tsv")
+    asv.add_argument(
+        "--min-pre-correction-sample-sum",
+        type=float,
+        default=0.0,
+        help="Minimum microbial count sum before control subtraction required to retain a sample; 0 disables the filter",
+    )
+    asv.add_argument(
+        "--drop-zero-asvs",
+        action="store_true",
+        help="Drop ASVs whose corrected counts are zero across all retained samples",
+    )
 
     tax = p.add_argument_group("Taxonomy Filters")
     tax.add_argument(
@@ -1015,7 +1048,12 @@ def main():
     # Resolve canonical paths
     def resolve(rel_or_abs: str | Path) -> Path:
         p = Path(rel_or_abs)
-        return p if p.is_absolute() else (data_dir / sub_dir / p)
+        # Nextflow stages path inputs into the task working directory and may
+        # render them as relative filenames. Prefer that existing staged path;
+        # only interpret a missing relative path against --data-dir/--sub-dir.
+        if p.is_absolute() or p.exists():
+            return p
+        return data_dir / sub_dir / p
 
     fastq_stats_path = resolve(args.fastq_stats)
     asv_micro_path = resolve(args.asv_micro)
@@ -1123,6 +1161,8 @@ def main():
             include_rank_filters=include_rank_filters,
             subtraction_col=subtraction_col,
             subtraction_groups=subtraction_groups,
+            min_pre_correction_sample_sum=args.min_pre_correction_sample_sum,
+            drop_zero_asvs=args.drop_zero_asvs,
         )
 
     # MITO

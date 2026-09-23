@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -115,8 +116,14 @@ def main() -> None:
         "modules/non_target_filtering/tables/mitomap/nontarget.master.tsv",
         "modules/taxonomy/tables/ASV_SILVA_tax.full-length.vsearch.tsv",
         "modules/voc_correlation/tables/asv_voc_spearman_long.tsv",
+        "modules/voc_correlation/tables/patient_asv_voc_permutation_long.tsv",
+        "modules/voc_correlation/tables/patient_inference_summary.json",
         "modules/network_analysis/tables/spieceasi_edge_list.csv",
         "modules/network_analysis/tables/spieceasi_modules_all.tsv",
+        "modules/network_analysis/tables/network_topology_summary.tsv",
+        "modules/network_analysis/tables/network_topology_null_draws.tsv",
+        "modules/contamination_filtering/tables/ASV_final_three_tier.tsv",
+        "modules/contamination_filtering/tables/three_tier_results/filtered/filter_summary.txt",
         "modules/non_target_filtering/plots/mitomap/nontarget_non_target_cumulative.svg",
         "modules/outlier_detection/plots/outliers_Case_summary.svg",
         "modules/umap_clustering/plots/umap_clustering_type_group.svg",
@@ -136,7 +143,7 @@ def main() -> None:
         raise SystemExit("Completed output is missing required files:\n  " + "\n  ".join(missing_files))
 
     required_modules = {
-        "batch_correction", "bubbleplotter", "clustermaps", "collectors_curve",
+        "batch_correction", "bubbleplotter", "clustermaps", "collectors_curve", "contamination_filtering",
         "diversity", "general_stats", "indicator_analysis", "lung_status_analysis",
         "metadata_plots", "network_analysis", "non_target_filtering",
         "outlier_detection", "power_analysis", "sankey", "taxonomy",
@@ -219,6 +226,21 @@ def main() -> None:
     )
 
     edge_path = modules / "network_analysis/tables/spieceasi_edge_list.csv"
+    patient_voc = read_table(modules / "voc_correlation/tables/patient_asv_voc_permutation_long.tsv")
+    patient_summary = json.loads((modules / "voc_correlation/tables/patient_inference_summary.json").read_text())
+    tested = patient_voc.loc[patient_voc.status.eq("tested")]
+    untested = patient_voc.loc[patient_voc.status.ne("tested")]
+    audit.check(
+        set(patient_voc.normalization) == {"relative_abundance", "clr"}
+        and patient_voc.n_patients.le(patient_summary["patients"]).all()
+        and tested.p_value.between(0, 1, inclusive="right").all()
+        and tested.q_value.between(0, 1).all()
+        and tested.rho.abs().le(1 + 1e-12).all()
+        and untested.p_value.isna().all(),
+        "voc_patient_inference",
+        f"patients={patient_summary['patients']}, tested={len(tested)}, insufficient={len(untested)}; significance is not required",
+    )
+
     edges = pd.read_csv(edge_path) if edge_path.is_file() else pd.DataFrame()
     module_path = modules / "network_analysis/tables/spieceasi_modules_all.tsv"
     assignments = read_table(module_path) if module_path.is_file() else pd.DataFrame()
@@ -235,6 +257,24 @@ def main() -> None:
         len(edges) >= 10 and max_module >= 2 and within_truth >= 3,
         "network_analysis",
         f"edges={len(edges)}, largest_module={max_module}, implanted_within_module_edges={within_truth}",
+    )
+
+    topology = read_table(
+        modules / "network_analysis/tables/network_topology_summary.tsv"
+    ).set_index("metric")["value"]
+    null_draws = read_table(
+        modules / "network_analysis/tables/network_topology_null_draws.tsv"
+    )
+    topology_nodes = int(float(topology["n_nodes"]))
+    topology_edges = int(float(topology["n_edges"]))
+    null_completed = int(float(topology["n_null_completed"]))
+    audit.check(
+        topology_nodes > 0
+        and topology_edges > 0
+        and null_completed == len(null_draws)
+        and null_completed > 0,
+        "network_topology",
+        f"nodes={topology_nodes}, thresholded_positive_edges={topology_edges}, null_draws={null_completed}",
     )
 
     plot_modules = (

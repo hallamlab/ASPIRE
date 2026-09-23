@@ -22,9 +22,46 @@ try {
 def inlineKeys = [
     'paths','resources','fastp','merge','filter','unoise',
     'table_filter','filename_patterns','environments','config_root',
-    'pipeline_config'
+    'pipeline_config','core','standard','optional'
 ]
 def hasInlineConfig = inlineKeys.any { paramsMap.containsKey(it) }
+
+/*
+ * Human-facing YAML may group sections by execution tier.  Flatten those
+ * namespaces once at the configuration boundary so existing process code and
+ * legacy flat study configurations remain compatible.  A section may occur
+ * either at top level or in exactly one tier, never both.
+ */
+def flattenTieredConfig = { rawConfig ->
+    if( !(rawConfig instanceof Map) ) {
+        throw new IllegalArgumentException('ASPIRE configuration must be a YAML mapping')
+    }
+    def tiers = ['core', 'standard', 'optional']
+    def normalized = new LinkedHashMap()
+    rawConfig.each { key, value ->
+        if( !tiers.contains(key as String) ) {
+            normalized[key] = value
+        }
+    }
+    tiers.each { tier ->
+        def tierConfig = rawConfig[tier]
+        if( tierConfig == null ) {
+            return
+        }
+        if( !(tierConfig instanceof Map) ) {
+            throw new IllegalArgumentException("Configuration tier '${tier}' must be a mapping")
+        }
+        tierConfig.each { section, value ->
+            if( normalized.containsKey(section) ) {
+                throw new IllegalArgumentException(
+                    "Configuration section '${section}' is defined more than once (top level or tiered)"
+                )
+            }
+            normalized[section] = value
+        }
+    }
+    return normalized
+}
 
 def config
 File configFile = null
@@ -46,11 +83,11 @@ if( providedConfigPath ) {
     if( !configFile.exists() ) {
         exit 1, "Config file not found: ${configFile}"
     }
-    config = new YamlSlurper().parse(configFile)
+    config = flattenTieredConfig(new YamlSlurper().parse(configFile))
     configRoot = configFile.parentFile ?: projectRootDir
     log.info "Loaded config from ${configFile}"
 } else if( hasInlineConfig ) {
-    config = paramsMap
+    config = flattenTieredConfig(paramsMap)
     if( paramsMap.containsKey('config_root') ) {
         def rootPath = file(paramsMap.config_root)
         configRoot = rootPath.toFile()
@@ -62,7 +99,7 @@ if( providedConfigPath ) {
     if( !configFile.exists() ) {
         exit 1, "Config file not found: ${defaultConfigPath}"
     }
-    config = new YamlSlurper().parse(configFile)
+    config = flattenTieredConfig(new YamlSlurper().parse(configFile))
     configRoot = configFile.parentFile ?: projectRootDir
     log.info "Loaded default config from ${configFile}"
 }
@@ -225,6 +262,15 @@ if( !filterCountsEnvFile.exists() ) {
 }
 log.info "Using filter_counts Conda/Mamba env definition: ${filterCountsCondaEnvPath}"
 
+def threeTierEnvConfigPath = config.environments?.three_tier_decontam
+def resolvedThreeTierEnvPath = threeTierEnvConfigPath ? resolveOptionalPath(threeTierEnvConfigPath, configRoot) : null
+def defaultThreeTierEnvPath = new File("${projectDir}/processes/three_tier_decontam/env.yml").canonicalPath
+def threeTierCondaEnvPath = resolvedThreeTierEnvPath ?: defaultThreeTierEnvPath
+if( !file(threeTierCondaEnvPath).exists() ) {
+    exit 1, "three-tier decontamination conda environment YAML not found: ${threeTierCondaEnvPath}"
+}
+log.info "Using three-tier decontamination Conda/Mamba env definition: ${threeTierCondaEnvPath}"
+
 def generalStatsEnvConfigPath = config.environments?.general_stats
 def resolvedGeneralStatsEnvPath = generalStatsEnvConfigPath ? resolveOptionalPath(generalStatsEnvConfigPath, configRoot) : null
 def defaultGeneralStatsEnvPath = new File("${projectDir}/processes/shared_envs/general_stats.yml").canonicalPath
@@ -329,6 +375,15 @@ if( !networkEnvFile.exists() ) {
     exit 1, "Network conda environment YAML not found: ${networkCondaEnvPath}"
 }
 log.info "Using network Conda/Mamba env definition: ${networkCondaEnvPath}"
+
+def networkTopologyEnvConfigPath = config.environments?.network_topology
+def resolvedNetworkTopologyEnvPath = networkTopologyEnvConfigPath ? resolveOptionalPath(networkTopologyEnvConfigPath, configRoot) : null
+def networkTopologyCondaEnvPath = resolvedNetworkTopologyEnvPath ?: new File("${projectDir}/processes/network_topology/env.yml").canonicalPath
+def networkTopologyEnvFile = file(networkTopologyCondaEnvPath)
+if( !networkTopologyEnvFile.exists() ) {
+    exit 1, "Network topology conda environment YAML not found: ${networkTopologyCondaEnvPath}"
+}
+log.info "Using network topology Conda/Mamba env definition: ${networkTopologyCondaEnvPath}"
 
 def networkModulesEnvConfigPath = config.environments?.network_modules
 def resolvedNetworkModulesEnvPath = networkModulesEnvConfigPath ? resolveOptionalPath(networkModulesEnvConfigPath, configRoot) : null
@@ -510,6 +565,14 @@ if( !filterCountsScriptFile.exists() ) {
 }
 def filterCountsScriptPath = filterCountsScriptFile.canonicalPath
 def filterCountsScriptHash = fileMd5(filterCountsScriptFile)
+def threeTierScriptDir = new File("${projectDir}/processes/three_tier_decontam/pipeline")
+def threeTierMetadataScriptPath = new File(threeTierScriptDir, 'build_decontam_metadata.py').canonicalPath
+def threeTierPooledScriptPath = new File(threeTierScriptDir, 'run_decontam.R').canonicalPath
+def threeTierWithinScriptPath = new File(threeTierScriptDir, 'run_decontam_by_sample_type.R').canonicalPath
+def threeTierApplyScriptPath = new File(threeTierScriptDir, 'apply_three_tier_decontam_filter.py').canonicalPath
+for( p in [threeTierMetadataScriptPath, threeTierPooledScriptPath, threeTierWithinScriptPath, threeTierApplyScriptPath] ) {
+    if( !new File(p).exists() ) exit 1, "Three-tier decontamination script not found: ${p}"
+}
 def calcDivScriptFile = new File("${projectDir}/processes/diversity_analysis/calc_div.py")
 if( !calcDivScriptFile.exists() ) {
     exit 1, "calc_div.py not found in project directory"
@@ -570,6 +633,11 @@ if( !graphNetworkScriptFile.exists() ) {
     exit 1, "graph_network.py not found in project directory"
 }
 def graphNetworkScriptPath = graphNetworkScriptFile.canonicalPath
+def networkTopologyScriptFile = new File("${projectDir}/processes/network_topology/network_topology_stats.py")
+if( !networkTopologyScriptFile.exists() ) {
+    exit 1, "network_topology_stats.py not found in project directory"
+}
+def networkTopologyScriptPath = networkTopologyScriptFile.canonicalPath
 def masterSummaryScriptFile = new File("${projectDir}/processes/master_summary/build_master_asv_summary.py")
 if( !masterSummaryScriptFile.exists() ) {
     exit 1, "summary/build_master_asv_summary.py not found in project directory"
@@ -841,6 +909,48 @@ if( filterCountsExcludeTaxaRaw instanceof List ) {
 def filterCountsSaveIntermediates = (filterCountsConfig.save_intermediates ?: false) as boolean
 def defaultFilterMitoDir = new File(dirMap.mito, "ASVs").canonicalPath
 def filterCountsMitoDir = filterCountsConfig.mito_output_dir ? resolveOutputRelative(filterCountsConfig.mito_output_dir.toString(), outputDir) : defaultFilterMitoDir
+def threeTierConfig = config.three_tier_decontam ?: [:]
+def threeTierEnabled = threeTierConfig.containsKey('enabled') ? (threeTierConfig.enabled as boolean) : false
+def threeTierMetadataPath = threeTierConfig.metadata ? resolveOptionalPath(threeTierConfig.metadata.toString(), configRoot) : filterCountsMetadataPath
+if( threeTierEnabled && (!threeTierMetadataPath || !new File(threeTierMetadataPath).exists()) ) {
+    exit 1, "three_tier_decontam.enabled requires an existing three_tier_decontam.metadata (or filter_counts.metadata) file"
+}
+def threeTierOutputDir = threeTierConfig.output_dir ?: 'three_tier_decontam'
+def threeTierOutputDirAbs = resolveOutputRelative(threeTierOutputDir.toString(), outputDir)
+def threeTierMetadataSampleCol = threeTierConfig.metadata_sample_col ?: filterCountsSampleCol
+def threeTierSampleCol = threeTierConfig.sample_col ?: 'Sample'
+def threeTierNegativeControlCol = threeTierConfig.negative_control_col ?: 'is_negative_control'
+def threeTierPositiveControlCol = threeTierConfig.positive_control_col ?: 'is_positive_control'
+def threeTierNegativeControlLabelsRaw = threeTierConfig.containsKey('negative_control_labels') ?
+    threeTierConfig.negative_control_labels : ['PBS', 'PBS_twz', 'Negative_96', 'Negative_man']
+def threeTierPositiveControlLabelsRaw = threeTierConfig.containsKey('positive_control_labels') ?
+    threeTierConfig.positive_control_labels : ['Positive_96', 'Positive_man']
+List<String> threeTierNegativeControlLabels = threeTierNegativeControlLabelsRaw instanceof List ? threeTierNegativeControlLabelsRaw.collect { it.toString().trim() }.findAll { it } : threeTierNegativeControlLabelsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+List<String> threeTierPositiveControlLabels = threeTierPositiveControlLabelsRaw instanceof List ? threeTierPositiveControlLabelsRaw.collect { it.toString().trim() }.findAll { it } : threeTierPositiveControlLabelsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+def threeTierNegativeControlLabelsCsv = threeTierNegativeControlLabels.join(',')
+def threeTierPositiveControlLabelsCsv = threeTierPositiveControlLabels.join(',')
+if( threeTierEnabled && threeTierNegativeControlLabels.isEmpty() ) {
+    exit 1, "three_tier_decontam.negative_control_labels must contain the negative-control sample IDs"
+}
+def threeTierConcentrationCol = threeTierConfig.concentration_col ?: 'DNA_conc'
+def threeTierTypeCol = threeTierConfig.type_col ?: 'Type_Group'
+def threeTierSampleTypesRaw = threeTierConfig.sample_types ?: ['BAL', 'Bronchial Brush', 'Oral Rinse']
+List<String> threeTierSampleTypes = threeTierSampleTypesRaw instanceof List ?
+    threeTierSampleTypesRaw.collect { it.toString().trim() }.findAll { it } :
+    threeTierSampleTypesRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
+if( threeTierEnabled && threeTierSampleTypes.isEmpty() ) {
+    exit 1, "three_tier_decontam.sample_types must contain at least one sample type"
+}
+def threeTierSampleTypesCsv = threeTierSampleTypes.join(',')
+def threeTierPooledThreshold = threeTierConfig.pooled_threshold != null ? (threeTierConfig.pooled_threshold as double) : 0.1d
+def threeTierWithinTypeThreshold = threeTierConfig.within_type_threshold != null ? (threeTierConfig.within_type_threshold as double) : 0.1d
+def threeTierAggressiveThreshold = threeTierConfig.aggressive_threshold != null ? (threeTierConfig.aggressive_threshold as double) : 0.5d
+def threeTierCombineMode = (threeTierConfig.combine_mode ?: 'min').toString().trim().toLowerCase()
+if( !(threeTierCombineMode in ['min', 'fisher']) ) {
+    exit 1, "Invalid three_tier_decontam.combine_mode '${threeTierCombineMode}'. Allowed: min, fisher"
+}
+def threeTierBiologicalPlausibility = threeTierConfig.containsKey('biological_plausibility') ?
+    (threeTierConfig.biological_plausibility as boolean) : true
 if( mitoEnabled ) {
     ensureBlastReferenceExists(mitoBlastDbPath, mitoBlastFastaPath, 'mitochondrial')
     ensureBlastReferenceExists(mitoBiofDbPath, mitoBiofFastaPath, 'contaminant')
@@ -903,6 +1013,9 @@ if( sankeyEnabled && !generalStatsEnabled ) {
 }
 def analysisCfg = parseMetadataAndBasicAnalysisConfig(config, configRoot, outputDir, filterCountsEnabled as boolean, generalStatsEnabled as boolean, pipelineThreads as int, dirMap)
 analysisCfg.each { key, value -> binding.setVariable(key as String, value) }
+if( threeTierEnabled && !binding.getVariable('metadataPlotsEnabled') ) {
+    exit 1, "three_tier_decontam.enabled requires metadata_plots.enabled to be true"
+}
 
 def indicatorCfg = parseIndicatorAndNetworkConfig(config, configRoot, outputDir, pipelineThreads as int, analysisCfg)
 indicatorCfg.each { key, value -> binding.setVariable(key as String, value) }
@@ -1003,6 +1116,12 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         metadataIncludeRank = metadataIncludeRankRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
     }
     def metadataPlotsMitoThreshold = metadataPlotsConfig.mito_threshold_line != null ? (metadataPlotsConfig.mito_threshold_line as double) : 1000d
+    def metadataPlotsInputTable = (metadataPlotsConfig.input_table ?: 'filtered').toString().trim().toLowerCase()
+    if( !(metadataPlotsInputTable in ['filtered', 'pre_filter_micro']) ) {
+        exit 1, "metadata_plots.input_table must be one of: filtered, pre_filter_micro"
+    }
+    def metadataPlotsMinPreCorrectionSampleSum = metadataPlotsConfig.min_pre_correction_sample_sum != null ? (metadataPlotsConfig.min_pre_correction_sample_sum as double) : 0d
+    boolean metadataPlotsDropZeroAsvs = metadataPlotsConfig.containsKey('drop_zero_asvs') ? (metadataPlotsConfig.drop_zero_asvs as boolean) : false
     boolean metadataPlotsRunMicro = metadataPlotsConfig.containsKey('run_micro') ? (metadataPlotsConfig.run_micro as boolean) : true
     boolean metadataPlotsRunMito = metadataPlotsConfig.containsKey('run_mito') ? (metadataPlotsConfig.run_mito as boolean) : true
     if( metadataPlotsEnabled && !metadataPlotsRunMicro && !metadataPlotsRunMito ) {
@@ -1423,6 +1542,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         metadataPlotsSubtractionGroups: metadataPlotsSubtractionGroups,
         metadataPlotsGroupOrder: metadataPlotsGroupOrder,
         metadataIncludeRank: metadataIncludeRank,
+        metadataPlotsInputTable: metadataPlotsInputTable,
+        metadataPlotsMinPreCorrectionSampleSum: metadataPlotsMinPreCorrectionSampleSum,
+        metadataPlotsDropZeroAsvs: metadataPlotsDropZeroAsvs,
         batchCorrectionEnabled: batchCorrectionEnabled,
         batchOptimize: batchOptimize,
         batchConqurLogisticLasso: batchConqurLogisticLasso,
@@ -1607,8 +1729,42 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     if( !(vocCorrelationDirection in ['positive','negative','both']) ) {
         exit 1, "voc_correlation.correlation_direction must be one of: positive, negative, both"
     }
+    def vocCorrelationIsaDirection = vocCorrelationConfig.isa_correlation_direction ?
+        vocCorrelationConfig.isa_correlation_direction.toString().trim().toLowerCase() : vocCorrelationDirection
+    if( !(vocCorrelationIsaDirection in ['positive','negative','both']) ) {
+        exit 1, "voc_correlation.isa_correlation_direction must be one of: positive, negative, both"
+    }
     def vocCorrelationCasePalette = vocCorrelationConfig.case_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationCaseCol] ?: '')
     def vocCorrelationIsaPalette = vocCorrelationConfig.isa_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationTypeCol] ?: '')
+    def vocCorrelationIsaBrushGroupsRaw = vocCorrelationConfig.isa_brush_groups ?: ['Bronchial Brush', 'Lung Brush']
+    def vocCorrelationIsaBrushGroups = vocCorrelationIsaBrushGroupsRaw instanceof List ?
+        vocCorrelationIsaBrushGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        vocCorrelationIsaBrushGroupsRaw.toString().trim()
+    def vocCorrelationIsaAllTypeGroupsRaw = vocCorrelationConfig.isa_all_type_groups ?: metadataKeepTypes
+    def vocCorrelationIsaAllTypeGroups = vocCorrelationIsaAllTypeGroupsRaw instanceof List ?
+        vocCorrelationIsaAllTypeGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        vocCorrelationIsaAllTypeGroupsRaw.toString().trim()
+    boolean vocCorrelationIsaExcludeAllTypes = vocCorrelationConfig.containsKey('isa_exclude_all_types_from_brush') ?
+        (vocCorrelationConfig.isa_exclude_all_types_from_brush as boolean) : true
+    def vocCorrelationIsaMinAbsRho = vocCorrelationConfig.isa_min_abs_rho != null ?
+        (vocCorrelationConfig.isa_min_abs_rho as double) : 0.0d
+    if( vocCorrelationIsaMinAbsRho < 0d || vocCorrelationIsaMinAbsRho > 1d ) {
+        exit 1, "voc_correlation.isa_min_abs_rho must be between 0 and 1"
+    }
+    def vocCorrelationSampleMinAbsZ = vocCorrelationConfig.sample_min_abs_z != null ?
+        (vocCorrelationConfig.sample_min_abs_z as double) : 0.0d
+    def vocPatientInference = vocCorrelationConfig.containsKey('patient_inference') ? (vocCorrelationConfig.patient_inference as boolean) : true
+    def vocPatientPermutations = vocCorrelationConfig.patient_permutations != null ? (vocCorrelationConfig.patient_permutations as int) : 9999
+    def vocPatientSeed = vocCorrelationConfig.patient_seed != null ? (vocCorrelationConfig.patient_seed as int) : 42
+    def vocPatientMinPatients = vocCorrelationConfig.patient_min_patients != null ? (vocCorrelationConfig.patient_min_patients as int) : 6
+    def vocPatientMinNonzero = vocCorrelationConfig.patient_min_nonzero != null ? (vocCorrelationConfig.patient_min_nonzero as int) : 3
+    def vocClrPseudocount = vocCorrelationConfig.clr_pseudocount != null ? (vocCorrelationConfig.clr_pseudocount as double) : 0.5d
+    if( vocPatientPermutations < 1 || vocPatientMinPatients < 3 || vocPatientMinNonzero < 1 || vocClrPseudocount <= 0d ) {
+        exit 1, "VOC patient inference requires positive permutations/nonzero minimum/pseudocount and at least 3 patients"
+    }
+    if( vocCorrelationSampleMinAbsZ < 0d ) {
+        exit 1, "voc_correlation.sample_min_abs_z must be non-negative"
+    }
 
     def clustermapsConfig = config.clustermaps ?: [:]
     boolean clustermapsRequested = clustermapsConfig.containsKey('enabled') ? (clustermapsConfig.enabled as boolean) : false
@@ -1680,6 +1836,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def spieceasiMinRelAbund = spieceasiConfig.min_rel_abund != null ? (spieceasiConfig.min_rel_abund as double) : 0d
     def spieceasiMinPrevalence = spieceasiConfig.min_prevalence != null ? (spieceasiConfig.min_prevalence as double) : 0d
     boolean spieceasiRemoveZeroVar = spieceasiConfig.containsKey('remove_zero_var') ? (spieceasiConfig.remove_zero_var as boolean) : true
+    boolean spieceasiForceKeepIndicatorAsvs = spieceasiConfig.containsKey('force_keep_indicator_asvs') ? (spieceasiConfig.force_keep_indicator_asvs as boolean) : true
     def spieceasiMethod = spieceasiConfig.method ?: 'glasso'
     def spieceasiLambdaMinRatio = spieceasiConfig.lambda_min_ratio != null ? (spieceasiConfig.lambda_min_ratio as double) : 1e-2d
     def spieceasiNlambda = spieceasiConfig.nlambda ? (spieceasiConfig.nlambda as int) : 20
@@ -1699,6 +1856,19 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         exit 1, "spieceasi.network_enabled requires indicspecies.enabled to be true"
     }
     boolean networkEnabled = networkRequested && indicspeciesEnabled
+    def networkTopologyConfig = config.network_topology ?: [:]
+    boolean networkTopologyEnabled = networkTopologyConfig.containsKey('enabled') ? (networkTopologyConfig.enabled as boolean) : false
+    if( networkTopologyEnabled && !spieceasiEnabled ) {
+        exit 1, "network_topology.enabled requires spieceasi.enabled to be true"
+    }
+    def networkTopologyOutputDir = networkTopologyConfig.output_dir ?: spieceasiOutputDir
+    def networkTopologyOutputDirAbs = resolveOutputRelative(networkTopologyOutputDir.toString(), outputDir)
+    def networkTopologyNNull = networkTopologyConfig.n_null != null ? (networkTopologyConfig.n_null as int) : 1000
+    def networkTopologySeed = networkTopologyConfig.seed != null ? (networkTopologyConfig.seed as int) : 42
+    boolean networkTopologySkipNull = networkTopologyConfig.containsKey('skip_null') ? (networkTopologyConfig.skip_null as boolean) : false
+    if( networkTopologyNNull < 0 ) {
+        exit 1, "network_topology.n_null must be non-negative"
+    }
     def networkGraphAllPath = spieceasiConfig.graph_pos_all ? resolveOptionalPath(spieceasiConfig.graph_pos_all, configRoot) : new File(spieceasiOutputDirAbs, "${spieceasiPrefix}_network_pos_all.graphml").canonicalPath
     def networkGraphThrPath = spieceasiConfig.graph_pos_sub ? resolveOptionalPath(spieceasiConfig.graph_pos_sub, configRoot) : new File(spieceasiOutputDirAbs, "${spieceasiPrefix}_network_pos_thr.graphml").canonicalPath
     def networkNodeFeaturesPath = spieceasiConfig.node_features ? resolveOptionalPath(spieceasiConfig.node_features, configRoot) : new File(spieceasiOutputDirAbs, "${spieceasiPrefix}_node_features.csv").canonicalPath
@@ -2090,6 +2260,18 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationUseLegacySubset: vocCorrelationUseLegacySubset,
         vocCorrelationVocCols: vocCorrelationVocCols,
         vocCorrelationDirection: vocCorrelationDirection,
+        vocCorrelationIsaDirection: vocCorrelationIsaDirection,
+        vocCorrelationIsaBrushGroups: vocCorrelationIsaBrushGroups,
+        vocCorrelationIsaAllTypeGroups: vocCorrelationIsaAllTypeGroups,
+        vocCorrelationIsaExcludeAllTypes: vocCorrelationIsaExcludeAllTypes,
+        vocCorrelationIsaMinAbsRho: vocCorrelationIsaMinAbsRho,
+        vocCorrelationSampleMinAbsZ: vocCorrelationSampleMinAbsZ,
+        vocPatientInference: vocPatientInference,
+        vocPatientPermutations: vocPatientPermutations,
+        vocPatientSeed: vocPatientSeed,
+        vocPatientMinPatients: vocPatientMinPatients,
+        vocPatientMinNonzero: vocPatientMinNonzero,
+        vocClrPseudocount: vocClrPseudocount,
         vocCorrelationCasePalette: vocCorrelationCasePalette,
         vocCorrelationIsaPalette: vocCorrelationIsaPalette,
         clustermapsOutputDirAbs: clustermapsOutputDirAbs,
@@ -2136,6 +2318,9 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         networkGraphAllPath: networkGraphAllPath,
         networkGraphThrPath: networkGraphThrPath,
         networkNodeFeaturesPath: networkNodeFeaturesPath,
+        networkTopologyOutputDirAbs: networkTopologyOutputDirAbs,
+        networkTopologyNNull: networkTopologyNNull,
+        networkTopologySeed: networkTopologySeed,
         networkLayoutSeed: networkLayoutSeed,
         networkLayoutScale: networkLayoutScale,
         networkDegreeScale: networkDegreeScale,
@@ -2244,12 +2429,15 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         spieceasiEnabled: spieceasiEnabled,
         spieceasiTranspose: spieceasiTranspose,
         spieceasiRemoveZeroVar: spieceasiRemoveZeroVar,
+        spieceasiForceKeepIndicatorAsvs: spieceasiForceKeepIndicatorAsvs,
         spieceasiKeepNegative: spieceasiKeepNegative,
         spieceasiAllPosOnly: spieceasiAllPosOnly,
         spieceasiForceFilter: spieceasiForceFilter,
         spieceasiForceSpieceasi: spieceasiForceSpieceasi,
         spieceasiForceGraphs: spieceasiForceGraphs,
         networkEnabled: networkEnabled,
+        networkTopologyEnabled: networkTopologyEnabled,
+        networkTopologySkipNull: networkTopologySkipNull,
         networkModes: networkModes,
         networkModuleBestOnly: networkModuleBestOnly,
         networkModuleIsaOnly: networkModuleIsaOnly,
@@ -2273,7 +2461,35 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
 }
 
 workflow {
-    def rawReadsForAsv = raw_reads
+    def coreStage = core(raw_reads)
+    def standardStage = standard(
+        coreStage.concat_counts,
+        coreStage.filtered,
+        coreStage.taxonomy_table
+    )
+    if( metadataPlotsEnabled ) {
+        optional(
+            standardStage.asv_meta,
+            standardStage.asv_final,
+            standardStage.metadata_micro,
+            coreStage.raw_counts_three_tier,
+            standardStage.fastq_stats,
+            standardStage.filtered_stats,
+            coreStage.raw_counts_sankey,
+            standardStage.filtered_decon,
+            standardStage.filtered_micro,
+            coreStage.filtered_fasta,
+            coreStage.taxonomy_table
+        )
+    }
+}
+
+workflow core {
+    take:
+    raw_reads_input
+
+    main:
+    def rawReadsForAsv = raw_reads_input
     def fastp_result = FASTP_QC(rawReadsForAsv)
     def reads_after_qc = fastp_result.reads
     def reads_after_merge = MERGE_READS(reads_after_qc)
@@ -2295,11 +2511,29 @@ workflow {
     def count_matrix_stage = CREATE_COUNT_MATRIX(concat_for_counts, nochi_input)
     def count_matrix_channel = count_matrix_stage.count_matrix
     def asv_counts_for_sankey = count_matrix_channel.map { tuple -> tuple[0] }
+    def asv_counts_for_three_tier = count_matrix_channel.map { tuple -> tuple[0] }
     def filtered_stage = FILTER_TABLE(count_matrix_channel)
     def filtered_channel = filtered_stage.filtered
     def filtered_fasta_for_taxonomy = filtered_channel.map { tuple -> tuple[1] }
     def sina_stage = SINA_TRIM(filtered_fasta_for_taxonomy)
     def taxonomy_stage = TAXONOMY(sina_stage.trimmed_fasta)
+
+    emit:
+    concat_counts = concat_for_counts
+    raw_counts_sankey = asv_counts_for_sankey
+    raw_counts_three_tier = asv_counts_for_three_tier
+    filtered = filtered_channel
+    filtered_fasta = filtered_fasta_for_taxonomy
+    taxonomy_table = taxonomy_stage.taxonomy_table
+}
+
+workflow standard {
+    take:
+    concat_for_counts
+    filtered_channel
+    taxonomy_table
+
+    main:
     def runMitoStages = mitoEnabled || filterCountsEnabled
     def filter_counts_stage = null
     if( runMitoStages ) {
@@ -2308,9 +2542,9 @@ workflow {
             mitoBiofFastaPath ?: mitoBiofDbPath
         )
         def mitomaster_stage = MITOMASTER(filtered_channel, blast_database_stage.databases)
-        def mito_summary = MITO_DECONTAM(mitomaster_stage.mito_artifacts, taxonomy_stage.taxonomy_table)
+        def mito_summary = MITO_DECONTAM(mitomaster_stage.mito_artifacts, taxonomy_table)
         if( filterCountsEnabled ) {
-            filter_counts_stage = FILTER_COUNTS(filtered_channel, taxonomy_stage.taxonomy_table, mito_summary.nontarget_table)
+            filter_counts_stage = FILTER_COUNTS(filtered_channel, taxonomy_table, mito_summary.nontarget_table)
         }
     }
     if( metadataPlotsEnabled && filter_counts_stage == null ) {
@@ -2321,33 +2555,224 @@ workflow {
         general_stats_stage = GENERAL_STATS(concat_for_counts)
     }
 
-    def metadata_analysis_stage = null
-    def metaMicroForNetwork = null
-    def asvFinalForSpieceasi = null
-    def asvFinalForNetwork = null
-    def asvMetaForMasterSummary = null
-    def asvFinalForMasterSummary = null
-    def indicspeciesTablesForOverlay = Channel.value(file(emptyModulesPath))
-    def indicspeciesGroup1SummaryForSpieceasi = Channel.value(file(emptyModulesPath))
+
+    emptyStandard = Channel.value(file(emptyModulesPath))
+    fastqStats = general_stats_stage != null ? general_stats_stage.fastq_stats : emptyStandard
+    filteredStats = general_stats_stage != null ? general_stats_stage.filtered_stats : emptyStandard
+    filteredDecon = filter_counts_stage != null ? filter_counts_stage.filtered_decon : emptyStandard
+    filteredMicro = filter_counts_stage != null ? filter_counts_stage.filtered_micro : emptyStandard
+    filteredMito = filter_counts_stage != null ? filter_counts_stage.filtered_mito : emptyStandard
+    metadataMicro = emptyStandard
+    baseAsvMeta = emptyStandard
+    baseAsvFinal = emptyStandard
     if( metadataPlotsEnabled ) {
-        metadata_analysis_stage = RUN_METADATA_ANALYSES(
-            general_stats_stage.fastq_stats,
-            filter_counts_stage.filtered_counts,
-            filter_counts_stage.filtered_mito,
-            taxonomy_stage.taxonomy_table
-        )
-        metaMicroForNetwork = metadata_analysis_stage.meta_micro_network
-        asvFinalForSpieceasi = metadata_analysis_stage.asv_final_spieceasi
-        asvFinalForNetwork = metadata_analysis_stage.asv_final_network
-        asvMetaForMasterSummary = metadata_analysis_stage.asv_meta_master_summary
-        asvFinalForMasterSummary = metadata_analysis_stage.asv_final_master_summary
-        indicspeciesTablesForOverlay = metadata_analysis_stage.indicspecies_tables
-        indicspeciesGroup1SummaryForSpieceasi = metadata_analysis_stage.indicspecies_group1_summary
+        def metadataMicroInput = metadataPlotsInputTable == 'pre_filter_micro' ? filter_counts_stage.filtered_micro : filter_counts_stage.filtered_counts
+        def metadataStage = PLOT_METADATA(fastqStats, metadataMicroInput, filteredMito, taxonomy_table)
+        metadataMicro = metadataStage.metadata_micro
+        baseAsvMeta = metadataStage.asv_meta_micro
+        baseAsvFinal = metadataStage.asv_final_micro
     }
+
+    emit:
+    fastq_stats = fastqStats
+    filtered_stats = filteredStats
+    filtered_decon = filteredDecon
+    filtered_micro = filteredMicro
+    filtered_mito = filteredMito
+    metadata_micro = metadataMicro
+    asv_meta = baseAsvMeta
+    asv_final = baseAsvFinal
+}
+
+workflow optional {
+    take:
+    base_asv_meta
+    base_asv_final
+    metadata_micro
+    raw_asv_counts
+    fastq_stats
+    filtered_stats
+    raw_counts_sankey
+    filtered_decon
+    filtered_micro
+    filtered_fasta
+    taxonomy_table
+
+    main:
+    baseAsvMeta = base_asv_meta.map { it }
+    baseAsvFinal = base_asv_final.map { it }
+    if( threeTierEnabled ) {
+        three_tier_stage = THREE_TIER_DECONTAM(
+            raw_asv_counts,
+            baseAsvMeta,
+            baseAsvFinal,
+            Channel.value(file(threeTierMetadataPath))
+        )
+        baseAsvMeta = three_tier_stage.filtered_long.map { it }
+        baseAsvFinal = three_tier_stage.filtered_wide.map { it }
+    }
+
+    metaMicroForBatch = metadata_micro.map { it }
+    metaMicroForOutlier = metadata_micro.map { it }
+    metaMicroForPlotUpset = metadata_micro.map { it }
+    metaMicroForCollectors = metadata_micro.map { it }
+    metaMicroForDiversity = metadata_micro.map { it }
+    metaMicroForIndicspecies = metadata_micro.map { it }
+    metaMicroForIndicspeciesPlots = metadata_micro.map { it }
+    metaMicroForClustermaps = metadata_micro.map { it }
+    metaMicroForNetwork = metadata_micro.map { it }
+    asvMetaForBatch = baseAsvMeta.map { it }
+    asvMetaSeedForCorrection = baseAsvMeta.map { it }
+    asvMetaForBubbleplotter = baseAsvMeta.map { it }
+    asvMetaForUmap = baseAsvMeta.map { it }
+    asvMetaForClustermaps = baseAsvMeta.map { it }
+    asvMetaForVocCorrelation = baseAsvMeta.map { it }
+    asvMetaForPowerAnalysis = baseAsvMeta.map { it }
+    asvMetaForTaxonomyPatientAware = baseAsvMeta.map { it }
+    asvMetaForLungStatus = baseAsvMeta.map { it }
+    asvMetaForMasterSummary = baseAsvMeta.map { it }
+
+    asvFinalForBatch = baseAsvFinal.map { it }
+    asvFinalForCollectors = baseAsvFinal.map { it }
+    asvFinalForDiversity = baseAsvFinal.map { it }
+    asvFinalForIndicspecies = baseAsvFinal.map { it }
+    asvFinalForSpieceasi = baseAsvFinal.map { it }
+    asvFinalForNetwork = baseAsvFinal.map { it }
+    asvFinalForVocCorrelation = baseAsvFinal.map { it }
+    asvFinalForPowerAnalysis = baseAsvFinal.map { it }
+    asvFinalForTaxonomyPatientAware = baseAsvFinal.map { it }
+    asvFinalForLungStatus = baseAsvFinal.map { it }
+    asvFinalForMasterSummary = baseAsvFinal.map { it }
+
+    if( plotUpsetEnabled ) {
+        PLOT_UPSET(metaMicroForPlotUpset)
+    }
+
+    batch_stage = null
+    asvClrForOutlier = null
+    if( batchCorrectionEnabled ) {
+        batch_stage = ASV_BATCH_CORRECTION(
+            metaMicroForBatch,
+            asvMetaForBatch,
+            asvFinalForBatch
+        )
+        asvClrForOutlier = batch_stage.asv_clr_after
+        asvFinalForCollectors = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForDiversity = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForIndicspecies = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForSpieceasi = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForNetwork = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForVocCorrelation = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForPowerAnalysis = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForTaxonomyPatientAware = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForLungStatus = batch_stage.asv_corrected_counts_int.map { it }
+        asvFinalForMasterSummary = batch_stage.asv_corrected_counts_int.map { it }
+        umapResultsForTrajectory = batch_stage.umap_results
+        if( bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
+            corrected_asv_meta_stage = ASV_META_FROM_CORRECTED(
+                asvMetaSeedForCorrection,
+                batch_stage.asv_corrected_counts_int
+            )
+            asvMetaForBubbleplotter = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForUmap = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForClustermaps = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForVocCorrelation = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForPowerAnalysis = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForTaxonomyPatientAware = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForLungStatus = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+            asvMetaForMasterSummary = corrected_asv_meta_stage.asv_meta_corrected.map { it }
+        }
+    }
+    if( bubbleplotterEnabled ) {
+        BUBBLEPLOTTER(asvMetaForBubbleplotter)
+    }
+    if( umapClusteringEnabled ) {
+        UMAP_CLUSTERING(asvMetaForUmap)
+    }
+    if( outlierEnabled ) {
+        OUTLIER_CHECKER(
+            asvClrForOutlier,
+            metaMicroForOutlier
+        )
+    }
+    if( collectorsEnabled ) {
+        COLLECTORS_CURVE(
+            asvFinalForCollectors,
+            metaMicroForCollectors
+        )
+    }
+    if( diversityEnabled ) {
+        DIVERSITY_ANALYSIS(
+            metaMicroForDiversity,
+            asvFinalForDiversity
+        )
+    }
+
+    indicspecies_stage = null
+    if( indicspeciesEnabled ) {
+        indicspecies_stage = INDICSPECIES(
+            metaMicroForIndicspecies,
+            asvFinalForIndicspecies
+        )
+        if( indicspeciesPlotEnabled ) {
+            INDICSPECIES_PLOTS(
+                metaMicroForIndicspeciesPlots,
+                indicspecies_stage.all_tables.collect()
+            )
+        }
+        if( indicspeciesAlignedEnabled ) {
+            INDICSPECIES_ALIGNED_PLOTS(
+                indicspecies_stage.all_tables.collect()
+            )
+        }
+    }
+
+    indicspeciesReadyForClustermaps = indicspeciesEnabled ? indicspecies_stage.done.map { true } : Channel.value(false)
+    indicspeciesReadyForPowerAnalysis = indicspeciesEnabled ? indicspecies_stage.done.map { true } : Channel.value(false)
+    indicspeciesTablesForOverlay = indicspeciesEnabled ? indicspecies_stage.all_tables.collect() : Channel.value(file(emptyModulesPath))
+    indicspeciesTablesForVocCorrelation = indicspeciesEnabled ? indicspecies_stage.all_tables.collect() : Channel.value(file(emptyModulesPath))
+    indicspeciesGroup1SummaryForSpieceasi = indicspeciesEnabled ? indicspecies_stage.group1_summary : Channel.value(file(emptyModulesPath))
+
+    if( vocCorrelationEnabled ) {
+        VOC_CORRELATION(
+            asvMetaForVocCorrelation,
+            asvFinalForVocCorrelation,
+            indicspeciesTablesForVocCorrelation
+        )
+    }
+
+    if( clustermapsEnabled ) {
+        CLUSTERMAPS(
+            asvMetaForClustermaps,
+            metaMicroForClustermaps,
+            indicspeciesReadyForClustermaps
+        )
+    }
+    if( powerAnalysisEnabled ) {
+        POWER_ANALYSIS_PIPELINE(
+            asvMetaForPowerAnalysis,
+            asvFinalForPowerAnalysis,
+            indicspeciesReadyForPowerAnalysis
+        )
+    }
+    if( taxonomyPatientAwareEnabled ) {
+        TAXONOMY_PATIENT_AWARE(
+            asvMetaForTaxonomyPatientAware,
+            asvFinalForTaxonomyPatientAware
+        )
+    }
+    if( lungStatusAnalysisEnabled ) {
+        LUNG_STATUS_ANALYSIS(
+            asvMetaForLungStatus,
+            asvFinalForLungStatus
+        )
+    }
+
+
     def asv_mag_link_stage = null
     if( asvMagLinkEnabled ) {
         asv_mag_link_stage = ASV_MAG_LINK(
-            filtered_fasta_for_taxonomy
+            filtered_fasta
         )
     }
     def spieceasi_stage = null
@@ -2358,16 +2783,20 @@ workflow {
     def nodeFeaturesForNetwork = null
     def modulesSubForNetwork = null
     def modulesAllForNetwork = null
+    def networkTopologyStage = null
     if( spieceasiEnabled ) {
         spieceasi_stage = SPIECEASI(
             asvFinalForSpieceasi,
-            indicspeciesGroup1SummaryForSpieceasi
+            spieceasiForceKeepIndicatorAsvs ? indicspeciesGroup1SummaryForSpieceasi : Channel.value(file(emptyModulesPath))
         )
         graphAllForModules = spieceasi_stage.graph_all.map { it }
         graphAllForNetwork = spieceasi_stage.graph_all.map { it }
         graphThrForModules = spieceasiAllPosOnly ? spieceasi_stage.graph_all.map { it } : spieceasi_stage.graph_thr.map { it }
         graphThrForNetwork = spieceasiAllPosOnly ? spieceasi_stage.graph_all.map { it } : spieceasi_stage.graph_thr.map { it }
         nodeFeaturesForNetwork = spieceasi_stage.node_features
+        if( networkTopologyEnabled ) {
+            networkTopologyStage = NETWORK_TOPOLOGY(spieceasi_stage.graph_thr.map { it })
+        }
     } else if( networkEnabled ) {
         graphAllForModules = Channel.value(file(networkGraphAllPath))
         graphAllForNetwork = Channel.value(file(networkGraphAllPath))
@@ -2394,14 +2823,14 @@ workflow {
     if( networkEnabled ) {
         def networkMetadataChannel = metaMicroForNetwork != null ? metaMicroForNetwork : Channel.value(file(networkMetadataPath))
         def asvMagReadyForNetwork = asv_mag_link_stage != null ? asv_mag_link_stage.done : Channel.value(file(emptyModulesPath))
-        graph_network_stage = RUN_GRAPH_NETWORK(
+        graph_network_stage = GRAPH_NETWORK(
             graphAllForNetwork,
             graphThrForNetwork,
             nodeFeaturesForNetwork,
             asvFinalForNetwork,
             networkMetadataChannel,
             asvMagReadyForNetwork,
-            taxonomy_stage.taxonomy_table,
+            taxonomy_table,
             indicspeciesTablesForOverlay,
             modulesSubForNetwork,
             modulesAllForNetwork
@@ -2411,12 +2840,12 @@ workflow {
     if( networkEnabled && asvMagLinkEnabled ) {
         def moduleMagGraphDone = graph_network_stage != null ? graph_network_stage.done : Channel.value(file(emptyModulesPath))
         def moduleMagAsvDone = asv_mag_link_stage != null ? asv_mag_link_stage.done : Channel.value(file(emptyModulesPath))
-        module_mag_anchors_stage = RUN_MODULE_MAG_ANCHORS(
+        module_mag_anchors_stage = MODULE_MAG_ANCHORS(
             modulesAllForNetwork,
             nodeFeaturesForNetwork,
-            taxonomy_stage.taxonomy_table,
-            metadata_analysis_stage.asv_final_spieceasi,
-            metadata_analysis_stage.meta_micro_network,
+            taxonomy_table,
+            asvFinalForSpieceasi,
+            metaMicroForNetwork,
             moduleMagAsvDone,
             moduleMagGraphDone
         )
@@ -2424,11 +2853,11 @@ workflow {
     def sankey_stage = null
     if( sankeyEnabled ) {
         sankey_stage = SANKEY(
-            general_stats_stage.fastq_stats,
-            general_stats_stage.filtered_stats,
-            asv_counts_for_sankey,
-            filter_counts_stage.filtered_decon,
-            filter_counts_stage.filtered_micro
+            fastq_stats,
+            filtered_stats,
+            raw_counts_sankey,
+            filtered_decon,
+            filtered_micro
         )
     }
     if( masterSummaryEnabled ) {
@@ -2438,7 +2867,7 @@ workflow {
         def masterSummaryNetworkDone = graph_network_stage != null ? graph_network_stage.done : Channel.value(file(emptyModulesPath))
         def masterSummarySankeyDone = sankey_stage != null ? sankey_stage.done : Channel.value(file(emptyModulesPath))
         def masterSummaryAsvMagDone = asv_mag_link_stage != null ? asv_mag_link_stage.done : Channel.value(file(emptyModulesPath))
-        def masterSummaryOptionalDone = Channel.value(file(emptyModulesPath))
+        def masterSummaryOptionalDone = networkTopologyStage != null ? networkTopologyStage.done : Channel.value(file(emptyModulesPath))
         MASTER_SUMMARY(
             asvMetaForMasterSummary,
             asvFinalForMasterSummary,
@@ -2448,6 +2877,15 @@ workflow {
             masterSummaryOptionalDone
         )
     }
+
+    emit:
+    meta_micro_network = metaMicroForNetwork
+    asv_final_spieceasi = asvFinalForSpieceasi
+    asv_final_network = asvFinalForNetwork
+    asv_meta_master_summary = asvMetaForMasterSummary
+    asv_final_master_summary = asvFinalForMasterSummary
+    indicspecies_tables = indicspeciesTablesForOverlay
+    indicspecies_group1_summary = indicspeciesEnabled ? indicspecies_stage.group1_summary : Channel.value(file(emptyModulesPath))
 }
 
 workflow RUN_METADATA_ANALYSES {
@@ -2456,6 +2894,7 @@ workflow RUN_METADATA_ANALYSES {
     filtered_micro
     filtered_mito
     taxonomy_table
+    raw_asv_counts
 
     main:
     metadata_stage = PLOT_METADATA(
@@ -2464,6 +2903,19 @@ workflow RUN_METADATA_ANALYSES {
         filtered_mito,
         taxonomy_table
     )
+
+    baseAsvMeta = metadata_stage.asv_meta_micro.map { it }
+    baseAsvFinal = metadata_stage.asv_final_micro.map { it }
+    if( threeTierEnabled ) {
+        three_tier_stage = THREE_TIER_DECONTAM(
+            raw_asv_counts,
+            baseAsvMeta,
+            baseAsvFinal,
+            Channel.value(file(threeTierMetadataPath))
+        )
+        baseAsvMeta = three_tier_stage.filtered_long.map { it }
+        baseAsvFinal = three_tier_stage.filtered_wide.map { it }
+    }
 
     metaMicroForBatch = metadata_stage.metadata_micro.map { it }
     metaMicroForOutlier = metadata_stage.metadata_micro.map { it }
@@ -2474,28 +2926,28 @@ workflow RUN_METADATA_ANALYSES {
     metaMicroForIndicspeciesPlots = metadata_stage.metadata_micro.map { it }
     metaMicroForClustermaps = metadata_stage.metadata_micro.map { it }
     metaMicroForNetwork = metadata_stage.metadata_micro.map { it }
-    asvMetaForBatch = metadata_stage.asv_meta_micro.map { it }
-    asvMetaSeedForCorrection = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForBubbleplotter = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForUmap = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForClustermaps = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForVocCorrelation = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForPowerAnalysis = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForTaxonomyPatientAware = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForLungStatus = metadata_stage.asv_meta_micro.map { it }
-    asvMetaForMasterSummary = metadata_stage.asv_meta_micro.map { it }
+    asvMetaForBatch = baseAsvMeta.map { it }
+    asvMetaSeedForCorrection = baseAsvMeta.map { it }
+    asvMetaForBubbleplotter = baseAsvMeta.map { it }
+    asvMetaForUmap = baseAsvMeta.map { it }
+    asvMetaForClustermaps = baseAsvMeta.map { it }
+    asvMetaForVocCorrelation = baseAsvMeta.map { it }
+    asvMetaForPowerAnalysis = baseAsvMeta.map { it }
+    asvMetaForTaxonomyPatientAware = baseAsvMeta.map { it }
+    asvMetaForLungStatus = baseAsvMeta.map { it }
+    asvMetaForMasterSummary = baseAsvMeta.map { it }
 
-    asvFinalForBatch = metadata_stage.asv_final_micro.map { it }
-    asvFinalForCollectors = metadata_stage.asv_final_micro.map { it }
-    asvFinalForDiversity = metadata_stage.asv_final_micro.map { it }
-    asvFinalForIndicspecies = metadata_stage.asv_final_micro.map { it }
-    asvFinalForSpieceasi = metadata_stage.asv_final_micro.map { it }
-    asvFinalForNetwork = metadata_stage.asv_final_micro.map { it }
-    asvFinalForVocCorrelation = metadata_stage.asv_final_micro.map { it }
-    asvFinalForPowerAnalysis = metadata_stage.asv_final_micro.map { it }
-    asvFinalForTaxonomyPatientAware = metadata_stage.asv_final_micro.map { it }
-    asvFinalForLungStatus = metadata_stage.asv_final_micro.map { it }
-    asvFinalForMasterSummary = metadata_stage.asv_final_micro.map { it }
+    asvFinalForBatch = baseAsvFinal.map { it }
+    asvFinalForCollectors = baseAsvFinal.map { it }
+    asvFinalForDiversity = baseAsvFinal.map { it }
+    asvFinalForIndicspecies = baseAsvFinal.map { it }
+    asvFinalForSpieceasi = baseAsvFinal.map { it }
+    asvFinalForNetwork = baseAsvFinal.map { it }
+    asvFinalForVocCorrelation = baseAsvFinal.map { it }
+    asvFinalForPowerAnalysis = baseAsvFinal.map { it }
+    asvFinalForTaxonomyPatientAware = baseAsvFinal.map { it }
+    asvFinalForLungStatus = baseAsvFinal.map { it }
+    asvFinalForMasterSummary = baseAsvFinal.map { it }
 
     if( plotUpsetEnabled ) {
         PLOT_UPSET(metaMicroForPlotUpset)
@@ -2689,6 +3141,90 @@ workflow RUN_MODULE_MAG_ANCHORS {
     sample_top_modules = stage.sample_top_modules
     sample_module_matrix = stage.sample_module_matrix
     done = stage.done
+}
+
+/*
+ * Re-run the complete configured analysis graph from an authoritative final
+ * microbial count-table checkpoint.  This intentionally skips read processing,
+ * taxonomic assignment, mitochondrial processing, and count filtering while
+ * using their preserved artifacts as inputs to the normal downstream processes.
+ */
+workflow RUN_FROM_FINAL_CHECKPOINT {
+    def checkpoint = config.checkpoint ?: [:]
+    if( !checkpoint.asv_counts || !checkpoint.fastq_stats || !checkpoint.mito_counts || !checkpoint.taxonomy ) {
+        exit 1, "RUN_FROM_FINAL_CHECKPOINT requires checkpoint.asv_counts, checkpoint.fastq_stats, checkpoint.mito_counts, and checkpoint.taxonomy"
+    }
+
+    def checkpointCounts = Channel.value(file(checkpoint.asv_counts as String))
+    def checkpointFastqStats = Channel.value(file(checkpoint.fastq_stats as String))
+    def checkpointMitoCounts = Channel.value(file(checkpoint.mito_counts as String))
+    def checkpointTaxonomy = Channel.value(file(checkpoint.taxonomy as String))
+    def checkpointRawCountsPath = checkpoint.raw_asv_counts ?: checkpoint.asv_counts
+    def checkpointRawCounts = Channel.value(file(checkpointRawCountsPath as String))
+
+    def downstream = RUN_METADATA_ANALYSES(
+        checkpointFastqStats,
+        checkpointCounts,
+        checkpointMitoCounts,
+        checkpointTaxonomy,
+        checkpointRawCounts
+    )
+
+    def emptyDependency = Channel.value(file(emptyModulesPath))
+    def graphNetworkDone = emptyDependency
+    def networkTopologyDone = emptyDependency
+    if( spieceasiEnabled ) {
+        def spieceasiStage = SPIECEASI(
+            downstream.asv_final_spieceasi,
+            emptyDependency
+        )
+        def graphAll = spieceasiStage.graph_all.map { it }
+        def graphThresholded = spieceasiAllPosOnly ?
+            spieceasiStage.graph_all.map { it } : spieceasiStage.graph_thr.map { it }
+
+        if( networkTopologyEnabled ) {
+            def topologyStage = NETWORK_TOPOLOGY(spieceasiStage.graph_thr.map { it })
+            networkTopologyDone = topologyStage.done
+        }
+
+        def modulesSub = Channel.value(file(emptyModulesPath))
+        def modulesAll = Channel.value(file(emptyModulesPath))
+        if( networkEnabled && networkModulesEnabled ) {
+            def moduleStage = NETWORK_MODULES(
+                spieceasiStage.graph_all.map { it },
+                spieceasiAllPosOnly ? spieceasiStage.graph_all.map { it } : spieceasiStage.graph_thr.map { it }
+            )
+            modulesSub = moduleStage.modules_sub
+            modulesAll = moduleStage.modules_all
+        }
+
+        if( networkEnabled ) {
+            def graphStage = RUN_GRAPH_NETWORK(
+                graphAll,
+                graphThresholded,
+                spieceasiStage.node_features,
+                downstream.asv_final_network,
+                downstream.meta_micro_network,
+                emptyDependency,
+                checkpointTaxonomy,
+                downstream.indicspecies_tables,
+                modulesSub,
+                modulesAll
+            )
+            graphNetworkDone = graphStage.done
+        }
+    }
+
+    if( masterSummaryEnabled ) {
+        MASTER_SUMMARY(
+            downstream.asv_meta_master_summary,
+            downstream.asv_final_master_summary,
+            graphNetworkDone,
+            emptyDependency,
+            emptyDependency,
+            networkTopologyDone
+        )
+    }
 }
 
 process FASTP_QC {
@@ -3403,8 +3939,6 @@ process PLOT_METADATA {
     def metadataMitoFile = "${outputDir}/mito/metadata/metadata_updated_mito.tsv"
     def asvMetaMicroFile = "${outputDir}/metadata/ASV_meta_micro.tsv"
     def asvMetaMitoFile = "${outputDir}/mito/metadata/ASV_meta_mito.tsv"
-    def asvTargetMicroFile = "${outputDir}/ASVs/${filterCountsOutputName}"
-    def asvTargetMitoFile = "${outputDir}/mito/ASVs/${filterCountsOutputName.replace('.tsv','.mito.tsv')}"
     def asvFinalMicroFile = "${outputDir}/ASVs/ASV_final.micro.tsv"
     def asvFinalMitoFile = "${outputDir}/mito/ASVs/ASV_final.mito.tsv"
     def asvTaxTable = "${outputDir}/taxonomy/ASV_SILVA_tax.full-length.vsearch.tsv"
@@ -3417,9 +3951,9 @@ cmd=(
   --data-dir "${outputDir}"
   --sub-dir "${metadataPlotsSubDir}"
   --metadata "${metadataPlotsMetadataPath}"
-  --taxonomy "${asvTaxTable}"
-  --asv-micro "${asvTargetMicroFile}"
-  --asv-mito "${asvTargetMitoFile}"
+  --taxonomy "${taxonomy_table}"
+  --asv-micro "${asv_micro}"
+  --asv-mito "${asv_mito}"
   --sample-id-col "${metadataPlotsSampleCol}"
   --group1-col "${metadataPlotsTypeCol}"
   --color-col "${metadataPlotsColorCol}"
@@ -3430,6 +3964,10 @@ cmd=(
   --verbose
 )
 cmd+=( --subtraction-groups "${metadataSubtractionGroupsCsv}" )
+if [[ "${metadataPlotsMinPreCorrectionSampleSum}" != "0.0" && "${metadataPlotsMinPreCorrectionSampleSum}" != "0" ]]; then
+  cmd+=( --min-pre-correction-sample-sum "${metadataPlotsMinPreCorrectionSampleSum}" )
+fi
+${metadataPlotsDropZeroAsvs ? 'cmd+=( --drop-zero-asvs )' : ''}
 ${includeRankAppend}
 if [[ -n "${metadataKeepTypesCsv}" ]]; then
   cmd+=( --keep-types "${metadataKeepTypesCsv}" )
@@ -3487,6 +4025,96 @@ link_if_exists "${asvFinalMicroFile}" "ASV_final.micro.tsv"
 link_if_exists "${metadataMitoFile}" "metadata_updated_mito.tsv"
 link_if_exists "${asvMetaMitoFile}" "ASV_meta_mito.tsv"
 link_if_exists "${asvFinalMitoFile}" "ASV_final.mito.tsv"
+"""
+}
+
+/*
+ * Optional SPARK manuscript three-tier decontamination.
+ *
+ * Statistical scores are learned from the pre-filter count matrix, where the
+ * negative controls still exist.  The resulting ASV decisions are then applied
+ * to the final host-filtered long and wide microbial tables.  Those filtered
+ * tables replace the ordinary PLOT_METADATA tables for every downstream module.
+ */
+process THREE_TIER_DECONTAM {
+    cpus pipelineThreads
+    conda "${threeTierCondaEnvPath}"
+    publishDir "${threeTierOutputDirAbs}", mode: 'copy', overwrite: true
+
+    when:
+    threeTierEnabled
+
+    input:
+    path(raw_counts)
+    path(analyzed_long)
+    path(analyzed_wide)
+    path(metadata_source)
+
+    output:
+    path("ASV_meta_three_tier.tsv"), emit: filtered_long
+    path("ASV_final_three_tier.tsv"), emit: filtered_wide
+    path("three_tier_results"), emit: audit
+    path("three_tier_decontam.done"), emit: done
+
+    script:
+    def plausibilityArg = threeTierBiologicalPlausibility ? '' : '--disable-biological-plausibility'
+    """
+set -euo pipefail
+
+mkdir -p three_tier_results/pooled three_tier_results/within_type three_tier_results/filtered
+
+python "${threeTierMetadataScriptPath}" \
+  --counts "${raw_counts}" \
+  --metadata-in "${metadata_source}" \
+  --metadata-out three_tier_results/decontam_metadata.tsv \
+  --sample-col-in "${threeTierMetadataSampleCol}" \
+  --sample-col-out "${threeTierSampleCol}" \
+  --negative-control-labels "${threeTierNegativeControlLabelsCsv}" \
+  --positive-control-labels "${threeTierPositiveControlLabelsCsv}" \
+  --negative-control-col "${threeTierNegativeControlCol}" \
+  --positive-control-col "${threeTierPositiveControlCol}" \
+  --concentration-col "${threeTierConcentrationCol}" \
+  --type-col "${threeTierTypeCol}"
+
+Rscript "${threeTierPooledScriptPath}" \
+  --counts "${raw_counts}" \
+  --metadata three_tier_results/decontam_metadata.tsv \
+  --sample-col "${threeTierSampleCol}" \
+  --neg-col "${threeTierNegativeControlCol}" \
+  --conc-col "${threeTierConcentrationCol}" \
+  --exclude-positives-col "${threeTierPositiveControlCol}" \
+  --threshold-default "${threeTierPooledThreshold}" \
+  --threshold-aggressive "${threeTierAggressiveThreshold}" \
+  --outdir three_tier_results/pooled
+
+Rscript "${threeTierWithinScriptPath}" \
+  --counts "${raw_counts}" \
+  --metadata three_tier_results/decontam_metadata.tsv \
+  --sample-col "${threeTierSampleCol}" \
+  --neg-col "${threeTierNegativeControlCol}" \
+  --conc-col "${threeTierConcentrationCol}" \
+  --pos-col "${threeTierPositiveControlCol}" \
+  --type-col "${threeTierTypeCol}" \
+  --sample-types "${threeTierSampleTypesCsv}" \
+  --threshold-default "${threeTierWithinTypeThreshold}" \
+  --threshold-aggressive "${threeTierAggressiveThreshold}" \
+  --combine-mode "${threeTierCombineMode}" \
+  --pooled three_tier_results/pooled/decontam_per_asv_scores.tsv \
+  --outdir three_tier_results/within_type
+
+python "${threeTierApplyScriptPath}" \
+  --pooled-scores three_tier_results/pooled/decontam_per_asv_scores.tsv \
+  --within-type-scores three_tier_results/within_type/decontam_by_sample_type_per_asv.tsv \
+  --analyzed-long "${analyzed_long}" \
+  --analyzed-wide "${analyzed_wide}" \
+  --prev-threshold "${threeTierPooledThreshold}" \
+  --freq-threshold "${threeTierWithinTypeThreshold}" \
+  ${plausibilityArg} \
+  --outdir three_tier_results/filtered
+
+cp three_tier_results/filtered/ASV_master_long_filtered.tsv ASV_meta_three_tier.tsv
+cp three_tier_results/filtered/ASV_master_count_wide_filtered.tsv ASV_final_three_tier.tsv
+touch three_tier_decontam.done
 """
 }
 
@@ -3702,20 +4330,17 @@ process ASV_BATCH_CORRECTION {
     def umapComparisonPngFile = "${batchCorrectionOutputDirAbs}/batch_correction_umap_comparison.png"
     def batchCorrectionStatsFile = "${batchCorrectionOutputDirAbs}/batch_correction_statistics.tsv"
     def umapResultsFile = "${batchCorrectionOutputDirAbs}/umap_hdbscan_results.tsv"
-    def asv_final = "ASVs/${asv_counts}"
-    def updated_metadata = "metadata/${metadata_table}"
-    def asv_metadata = "metadata/${asv_meta}"
     """
 set -euo pipefail
 
 python "${batchCorrectionScriptPath}" \\
-  --data-dir "${outputDir}" \\
-  --asv "${asv_final}" \\
-  --metadata "${updated_metadata}" \\
-  --asv-meta "${asv_metadata}" \\
+  --data-dir "." \\
+  --asv "${asv_counts}" \\
+  --metadata "${metadata_table}" \\
+  --asv-meta "${asv_meta}" \\
   --sample-id-col "${batchCorrectionSampleIdCol}" \\
   --batch-col "${batchCorrectionBatchCol}" \\
-  --output-dir "${batchCorrectionOutputDir}" \\
+  --output-dir "${batchCorrectionOutputDirAbs}" \\
   --asv-orientation "${batchCorrectionOrientation}" \\
   --conqur-mode "${batchConqurMode}" \\
   --conqur-num-core ${batchConqurNumCore} \\
@@ -4395,9 +5020,21 @@ ${legacySubsetArg}${vocColsArgs}  --spieceasi-min-rel-abund ${spieceasiMinRelAbu
   --spieceasi-min-prevalence ${spieceasiMinPrevalence} \\
   --spieceasi-remove-zero-var ${spieceasiRemoveZeroVar} \\
   --correlation-direction "${vocCorrelationDirection}" \\
+  --isa-correlation-direction "${vocCorrelationIsaDirection}" \\
   --case-palette "${vocCorrelationCasePalette}" \\
   --isa-palette "${vocCorrelationIsaPalette}" \\
   --isa-q-threshold ${indicspeciesQThreshold} \\
+  --isa-brush-groups "${vocCorrelationIsaBrushGroups}" \\
+  --isa-all-type-groups "${vocCorrelationIsaAllTypeGroups}" \\
+  --isa-exclude-all-types-from-brush "${vocCorrelationIsaExcludeAllTypes}" \\
+  --isa-min-abs-rho ${vocCorrelationIsaMinAbsRho} \\
+  --sample-min-abs-z ${vocCorrelationSampleMinAbsZ} \\
+  --patient-inference ${vocPatientInference} \\
+  --patient-permutations ${vocPatientPermutations} \\
+  --patient-seed ${vocPatientSeed} \\
+  --patient-min-patients ${vocPatientMinPatients} \\
+  --patient-min-nonzero ${vocPatientMinNonzero} \\
+  --clr-pseudocount ${vocClrPseudocount} \\
   --indicspecies-glob "*_indicator_species*.tsv"
 
 touch voc_correlation.done
@@ -4474,6 +5111,7 @@ bash "${powerAnalysisScriptPath}" \\
   --sample-sizes-cancer "${powerAnalysisSampleSizesCancer}" \\
   --sample-sizes-stype "${powerAnalysisSampleSizesStype}" \\
   --n-simulations ${powerAnalysisNSimulations} \\
+  --workers ${task.cpus} \\
   --n-perm ${powerAnalysisNPerm} \\
   --alpha ${powerAnalysisAlpha} \\
   --seed ${powerAnalysisSeed} \\
@@ -4945,6 +5583,46 @@ touch network_modules.done
 """
 }
 
+process NETWORK_TOPOLOGY {
+    cpus 1
+    conda "${networkTopologyCondaEnvPath}"
+
+    when:
+    networkTopologyEnabled
+
+    input:
+    path(graph_thr, stageAs: 'network_graph_thresholded.graphml')
+
+    output:
+    path("network_topology_summary.tsv"), emit: summary
+    path("network_topology_null_draws.tsv"), emit: null_draws
+    path("network_topology.done"), emit: done
+
+    script:
+    def skipNullFlag = networkTopologySkipNull ? '1' : '0'
+    """
+set -euo pipefail
+mkdir -p "${networkTopologyOutputDirAbs}"
+
+TOPOLOGY_NULL_ARGS=()
+if [[ "${skipNullFlag}" == "1" ]]; then
+  TOPOLOGY_NULL_ARGS+=(--skip-null)
+fi
+
+python "${networkTopologyScriptPath}" \\
+  --graphml "${graph_thr}" \\
+  --output "${networkTopologyOutputDirAbs}/network_topology_summary.tsv" \\
+  --null-output "${networkTopologyOutputDirAbs}/network_topology_null_draws.tsv" \\
+  --n-null ${networkTopologyNNull} \\
+  --seed ${networkTopologySeed} \\
+  "\${TOPOLOGY_NULL_ARGS[@]}"
+
+ln -sf "${networkTopologyOutputDirAbs}/network_topology_summary.tsv" network_topology_summary.tsv
+ln -sf "${networkTopologyOutputDirAbs}/network_topology_null_draws.tsv" network_topology_null_draws.tsv
+touch network_topology.done
+"""
+}
+
 process GRAPH_NETWORK {
     cpus pipelineThreads
     conda "${networkCondaEnvPath}"
@@ -5302,7 +5980,9 @@ def prepareMetadataAssets(String metadataPath, String sampleCol, String groupCol
     def outputRows = [outputHeader.join('\t')]
     rows.drop(1).each { line ->
         def fields = line.split(/\t/, -1).toList()
-        while( fields.size() < header.size() ) fields << ''
+        while( fields.size() < header.size() ) {
+            fields << ''
+        }
         def group = fields[groupIdx].trim()
         if( colorIdx >= 0 ) fields[colorIdx] = palette[group] ?: fields[colorIdx]
         else fields << (palette[group] ?: '')
@@ -5346,8 +6026,8 @@ def matchesExtension(String name, List<Pattern> patterns){
 
 def isR1Like(String base, List<String> tokens){
     tokens.any { tok ->
-        def rx = /(^|[_\.\-])${Pattern.quote(tok)}([_\.\-]|$)/
-        base ==~ /.*${rx}.*/
+        def rx = Pattern.compile("(^|[_\\.\\-])${Pattern.quote(tok)}([_\\.\\-]|\$)")
+        rx.matcher(base).find()
     }
 }
 
@@ -5361,17 +6041,18 @@ def sampleFromName(String baseName, String stripRegex, List<Pattern> extPatterns
 
 def findR2File(File r1File, List<String> r1Tokens, List<String> r2Tokens){
     def original = r1File.name
-    for( int i=0; i<r1Tokens.size(); i++ ){
+    for( i in 0..<r1Tokens.size() ){
         def r1 = r1Tokens[i]
         def r2 = r2Tokens[i]
+        def quotedR1 = Pattern.quote(r1)
         def replacements = [
-            [/_${Pattern.quote(r1)}_/, "_${r2}_"],
-            [/\.${Pattern.quote(r1)}\./, ".${r2}."],
-            [/-${Pattern.quote(r1)}-/, "-${r2}-"],
-            [/-${Pattern.quote(r1)}\./, "-${r2}."],
-            [/_${Pattern.quote(r1)}\./, "_${r2}."],
-            [/_${Pattern.quote(r1)}$/, "_${r2}"],
-            [/${Pattern.quote(r1)}_001/, "${r2}_001"]
+            [Pattern.compile("_${quotedR1}_"), "_${r2}_"],
+            [Pattern.compile("\\.${quotedR1}\\."), ".${r2}."],
+            [Pattern.compile("-${quotedR1}-"), "-${r2}-"],
+            [Pattern.compile("-${quotedR1}\\."), "-${r2}."],
+            [Pattern.compile("_${quotedR1}\\."), "_${r2}."],
+            [Pattern.compile("_${quotedR1}\$"), "_${r2}"],
+            [Pattern.compile("${quotedR1}_001"), "${r2}_001"]
         ]
         for( rep in replacements ){
             def candidateName = original.replaceFirst(rep[0], rep[1])
