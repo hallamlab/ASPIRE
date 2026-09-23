@@ -23,10 +23,31 @@ REQUIRED_DATASET_FILES = (
     "ground_truth_group_effects.tsv",
     "ground_truth_asv_chem.tsv",
     "ground_truth_network_modules.tsv",
+    "ground_truth_extraction_controls.tsv",
 )
-REQUIRED_METADATA_COLUMNS = {"sample_id", "Participant_ID", "Case", "Type_Group", "lung_status", "batch"}
+REQUIRED_METADATA_COLUMNS = {
+    "sample_id", "Participant_ID", "Case", "Type_Group", "lung_status", "batch",
+    "DNA_conc", "is_negative_control", "is_positive_control",
+}
 FASTQ_SUFFIXES = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
 THREAD_KEYS = {"threads", "ncores", "num_core", "num_cores", "n_core", "cpus", "conqur_num_core"}
+CONFIG_TIERS = ("core", "standard", "optional")
+
+
+def config_section(config: dict, name: str) -> dict:
+    """Return a named section from tiered or legacy-flat configuration."""
+    matches = []
+    if name in config:
+        matches.append(config[name])
+    for tier in CONFIG_TIERS:
+        tier_config = config.get(tier, {})
+        if isinstance(tier_config, dict) and name in tier_config:
+            matches.append(tier_config[name])
+    if len(matches) != 1 or not isinstance(matches[0], dict):
+        raise SystemExit(
+            f"Configuration section '{name}' must be defined exactly once as a mapping"
+        )
+    return matches[0]
 
 
 def sha256(path: Path) -> str:
@@ -177,26 +198,26 @@ def build_config(
     config = apply_thread_defaults(config, threads)
 
     metadata = str((dataset / "sample_metadata.tsv").resolve())
-    config["paths"].update(
+    config_section(config, "paths").update(
         input_dir=str((dataset / "fastq").resolve()),
         manifest=str((dataset / "fastq_manifest.tsv").resolve()),
         output_dir=str(output.resolve()),
         runtime_dir=str(runtime.resolve()),
         keep_runtime_dir=True,
     )
-    config["table_filter"]["script"] = str(
+    config_section(config, "table_filter")["script"] = str(
         (project_dir / "processes/filter_table/filter_ASV_table.py").resolve()
     )
-    config["mito"]["mito_fasta"] = str((dataset / "references/mitochondria.fasta").resolve())
-    config["mito"]["contaminant_fasta"] = str(
+    config_section(config, "mito")["mito_fasta"] = str((dataset / "references/mitochondria.fasta").resolve())
+    config_section(config, "mito")["contaminant_fasta"] = str(
         (dataset / "references/contaminants.fasta").resolve()
     )
-    for section in ("filter_counts", "sankey", "metadata_plots", "spieceasi"):
-        config[section]["metadata"] = metadata
-    config["voc_correlation"]["voc_table"] = str((dataset / "chemistry.tsv").resolve())
+    for section in ("filter_counts", "three_tier_decontam", "sankey", "metadata_plots", "spieceasi"):
+        config_section(config, section)["metadata"] = metadata
+    config_section(config, "voc_correlation")["voc_table"] = str((dataset / "chemistry.tsv").resolve())
     palette = str((project_dir / "examples/metadata_palette.template.tsv").resolve())
-    config["metadata_plots"]["palette_file"] = palette
-    config["sankey"]["palette_file"] = palette
+    config_section(config, "metadata_plots")["palette_file"] = palette
+    config_section(config, "sankey")["palette_file"] = palette
     return config
 
 
@@ -236,12 +257,26 @@ def main() -> None:
     portable_manifest, manifest_ids = write_portable_manifest(dataset, portable_manifest)
     validate_tabular_inputs(dataset, manifest_ids)
     config = build_config(template, dataset, output, runtime, project_dir, args.threads)
-    config["paths"]["manifest"] = str(portable_manifest)
+    config_section(config, "paths")["manifest"] = str(portable_manifest)
     args.config_out.parent.mkdir(parents=True, exist_ok=True)
     args.config_out.write_text(yaml.safe_dump(config, sort_keys=False))
+    tier_counts = ", ".join(
+        f"{tier} ({len(config.get(tier, {}))} sections)" for tier in CONFIG_TIERS
+    )
+    enabled_optional = [
+        name for name, section in config.get("optional", {}).items()
+        if isinstance(section, dict) and section.get("enabled") is True
+    ]
+    disabled_optional = [
+        name for name, section in config.get("optional", {}).items()
+        if isinstance(section, dict) and section.get("enabled") is False
+    ]
     print(f"Wrote mock-run configuration: {args.config_out.resolve()}")
     print(f"Wrote mock-run manifest: {portable_manifest} ({len(manifest_ids)} samples)")
     print(f"Configured mock-run threads: {args.threads}")
+    print(f"Configuration tiers: {tier_counts}")
+    print(f"Enabled optional benchmark modules: {', '.join(enabled_optional)}")
+    print(f"Disabled (input not supplied): {', '.join(disabled_optional)}")
     print(f"Run: ./run_asv_pipeline.sh {args.config_out.resolve()} --no-resume")
 
 

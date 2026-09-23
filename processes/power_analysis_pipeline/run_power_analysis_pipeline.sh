@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PYTHONUNBUFFERED=1
 
 usage() {
   cat <<USAGE
@@ -19,7 +20,7 @@ Usage:
     [--type-col type_group] \
     [--sample-sizes-cancer 6,8,10,15,20,25,30] \
     [--sample-sizes-stype 10,15,20,25,30,40,50] \
-    [--n-simulations 1000] [--n-perm 199] \
+    [--n-simulations 1000] [--n-perm 199] [--workers 1] \
     [--alpha 0.05] [--seed 42] \
     [--skip-estimate] [--skip-plot] \
     [--transform none|rclr] \
@@ -38,6 +39,7 @@ TYPE_COL="type_group"
 SAMPLE_SIZES_CANCER="6,8,10,15,20,25,30"
 SAMPLE_SIZES_STYPE="10,15,20,25,30,40,50"
 N_SIMULATIONS="1000"
+WORKERS="1"
 N_PERM="199"
 ALPHA="0.05"
 SEED="42"
@@ -60,6 +62,7 @@ while [[ $# -gt 0 ]]; do
     --sample-sizes-cancer) SAMPLE_SIZES_CANCER="$2"; shift 2 ;;
     --sample-sizes-stype) SAMPLE_SIZES_STYPE="$2"; shift 2 ;;
     --n-simulations) N_SIMULATIONS="$2"; shift 2 ;;
+    --workers) WORKERS="$2"; shift 2 ;;
     --n-perm) N_PERM="$2"; shift 2 ;;
     --alpha) ALPHA="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;
@@ -118,6 +121,7 @@ python3 "$SCRIPT_DIR/power_main.py" \
   --sample-sizes-cancer "$SAMPLE_SIZES_CANCER" \
   --sample-sizes-stype "$SAMPLE_SIZES_STYPE" \
   --n-simulations "$N_SIMULATIONS" \
+  --workers "$WORKERS" \
   --n-perm "$N_PERM" \
   --alpha "$ALPHA" \
   --seed "$SEED" \

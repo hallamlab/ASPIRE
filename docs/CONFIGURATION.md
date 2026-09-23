@@ -1,321 +1,364 @@
 # ASPIRE Configuration Reference
 
-This document covers every public section and key in
-`asv_pipeline_nextflow.yml`. Copy the template into a run-specific file. Empty
-values mean “not set.” Lists are YAML lists unless a field explicitly uses a
-comma-separated string. Unknown keys may be ignored and are not a stable
-extension interface.
+This guide describes the configuration accepted by the `main` branch. The
+authoritative complete template is
+[`asv_pipeline_nextflow.yml`](../asv_pipeline_nextflow.yml). Its exhaustive
+[parameter catalogue](CONFIG_PARAMETERS.md) defines every key and template
+value. Copy the template for a production run and retain the resolved copy with
+the results. Private study YAMLs are intentionally excluded from the repository
+because they contain machine-specific paths and study provenance.
 
-Values in the template demonstrate the respiratory study and mock workflows.
-They are not universal biological defaults. In particular, adapt trimming and
-length limits, metadata columns, group labels/orders, palettes, patient-pairing
-fields, prevalence cutoffs, and statistical thresholds to the study design.
+## How Configuration Is Applied
 
-## Module dependency guide
+Run ASPIRE through the supported wrapper:
 
-Core FASTQ processing, ASV generation, SINA trimming, and taxonomy form the
-base path. Most later modules consume `FILTER_COUNTS` and/or `PLOT_METADATA`.
-Metadata plots require metadata with manifest-matching sample IDs. Diversity,
-indicator, clustermap, grouping, power, paired, and network overlays require
-their configured grouping columns. `VOC_CORRELATION` additionally needs a VOC
-table. `MEASUREMENT_ASSOCIATION` needs measurement columns in metadata or a
-joinable external table. MAG branches need genome-QC/barrnap or genome FASTA
-inputs. Disable a branch when its conditional inputs are absent.
+```bash
+./run_asv_pipeline.sh my_run.yml
+```
 
-## Core input and sequence processing
+The wrapper supplies the same resolved YAML to the controller and Nextflow.
+The complete template and generated mock configuration organize process
+sections into three top-level namespaces:
 
-### `paths`, `resources`, and `filename_patterns`
+- `core`: always-scheduled ASV construction and taxonomy settings.
+- `standard`: canonical final-table preparation required by the usual
+  downstream analysis graph.
+- `optional`: independently selectable analytical and reporting branches.
 
-- `paths.input_dir`: directory searched for FASTQs when no manifest is given.
-- `paths.output_dir`: required public output directory.
-- `paths.manifest`: optional TSV with `sample_id`, `fastq_r1`, and `fastq_r2`.
-- `paths.runtime_dir`: persistent runtime root; defaults to
-  `<output_dir>/.aspire`.
-- `paths.keep_runtime_dir`: retain runtime/cache after success when true.
-- `paths.work_dir`, `paths.conda_cache_dir`: optional runtime subdirectory
-  overrides. Use storage with sufficient space and safe locking.
-- `resources.threads`: positive per-task CPU count.
-- `resources.single_end`: allow samples without R2 when true.
-- `filename_patterns.r1_tokens`, `r2_tokens`: tokens identifying read mates.
-- `filename_patterns.ext_patterns`: regular expressions for accepted FASTQs.
-- `filename_patterns.sample_strip_regex`: removes lane/read suffixes to form
-  sample IDs. Verify generated IDs before matching metadata.
+`environments` remains top-level because it is an operational software mapping
+shared by all tiers. A branch with `enabled: false` is not scheduled. An
+optional branch may intentionally be `enabled: true` in the mock benchmark;
+enabled-by-default does not mean mandatory. Enabling a branch does not create
+missing biological inputs: its metadata columns, reference files, control
+labels, VOC table, or genome inputs must also be supplied.
 
-### Read processing and ASV generation
+Legacy flat YAML configurations remain supported. A section must appear either
+flat or inside one tier, never in both places.
 
-- `fastp.trim_front_r1`, `trim_tail_r1`, `trim_front_r2`, `trim_tail_r2`:
-  non-negative base counts removed from read ends; set for the actual assay.
-- `merge.max_diffs`: maximum overlap mismatches; `min_overlap`: minimum overlap
-  bases; `trunc_quality`: quality truncation threshold; `allow_stagger`: permit
-  staggered pairs.
-- `table_filter.min_sample_sum`, `min_asv_sum`: non-negative total-count gates.
-  `table_filter.script` is an optional developer script override.
-- `filter.max_ee`: maximum expected errors; `min_len` and `max_len`: retained
-  sequence length bounds in bases.
-- `concat.relabel`: relabel sequences; `concat.label_sep`: label separator.
-- `unoise.min_size`: minimum UNOISE abundance.
-- `swarm.distance`: Swarm clustering distance.
+## Module Dependency Guide
 
-## Alignment, taxonomy, and non-target filtering
+| Section | Required upstream data | Additional required input | Main published module |
+|---|---|---|---|
+| `standard.mito` | filtered ASVs and taxonomy | BLAST databases/FASTAs; MITOMASTER network access when enabled | `non_target_filtering` |
+| `standard.filter_counts` | taxonomy and non-target evidence | metadata | `non_target_filtering` |
+| `optional.three_tier_decontam` | raw count matrix and final microbial tables | control-bearing metadata and DNA concentration | `contamination_filtering` |
+| `standard.metadata_plots` | final microbial/mitochondrial tables | metadata | `metadata_plots` |
+| `optional.batch_correction` | metadata-linked ASV tables | batch and biological-covariate columns | `batch_correction` |
+| `optional.outlier_detection` | metadata-linked ASV table | configured grouping columns | `outlier_detection` |
+| `optional.diversity` | downstream ASV counts | metadata/group columns | `diversity` |
+| `optional.indicspecies` | downstream ASV counts | grouping columns; optional patient block | `indicator_analysis` |
+| `optional.voc_correlation` | downstream ASV tables and optional ISA results | VOC table and sample/patient matching columns | `voc_correlation` |
+| `optional.power_analysis` | downstream ASV tables and ISA completion | patient, case and type columns | `power_analysis` |
+| `optional.taxonomy_patient_aware` | downstream ASV tables | patient/case/type metadata | `taxonomy` |
+| `optional.lung_status_analysis` | downstream ASV tables | patient, cancer-site and lung-side metadata | `lung_status_analysis` |
+| `optional.spieceasi` | downstream wide ASV table | none beyond configured filters | `network_analysis` |
+| `optional.network_topology` | enabled SPIEC-EASI thresholded graph | none | `network_analysis` |
+| `optional.asv_mag_link` | filtered ASV sequences | genome-QC, barrnap, and/or genome FASTA inputs | `asv_mag_link` |
+| `optional.master_summary` | metadata-linked ASV tables | enabled branch outputs are incorporated when available | `summary` |
 
-### `sina`
+When three-tier decontamination is enabled, its filtered long and wide tables
+replace the corresponding metadata-stage tables for downstream analyses. When
+batch correction is enabled, its corrected count table replaces those counts
+for the downstream branches that support correction. These are analytical
+choices, not merely extra plots.
 
-`reference` is a local ARB reference and `reference_url` its download fallback;
-`download_subdir` names the cache. `regions` lists tested variable regions and
-`trim_to` selects the retained region. `batch_size`, `threads`, `keep_gaps`, and
-`verbose` control execution and output.
+## Core Input and Runtime
 
-### `taxonomy`
+### `core.paths`
 
-`ref_taxonomy` and `ref_sequences` are local QIIME artifacts; corresponding
-`_url` keys are download fallbacks and `_filename` keys name cached files.
-`download_subdir` locates the cache. `output_dir`, `output_tsv`, `stats_tsv`,
-and `uppercase_fasta` name products; `threads` sets CPUs.
+- `input_dir`: directory searched for FASTQs when no manifest is supplied.
+- `output_dir`: public result directory. Use a new directory for an independent
+  analysis.
+- `manifest`: optional TSV mapping `sample_id`, R1 and optional R2 FASTQs.
+- `runtime_dir`: persistent Nextflow work, Conda cache and staging root;
+  defaults to `<output_dir>/.aspire`.
+- `keep_runtime_dir`: retain runtime state after success. Keep `true` for
+  resume and targeted reruns.
+- `work_dir`, `conda_cache_dir`: optional granular runtime overrides.
 
-### `mito`
+### `core.resources`
 
-`enabled` enables screening. `run_mitomaster`, `chunk_dir`, `chunk_size`,
-`mitomaster_workers`, `mitomaster_retries`, `mitomaster_timeout`, and
-`mitomaster_header_mode` control MITOMASTER. `mito_db`/`biof_db` are BLAST
-database prefixes; `mito_fasta`/`contaminant_fasta` are preferred FASTA
-alternatives. `blast_threads`, `min_pident`, and `min_percov` control BLAST
-acceptance. `mitochondria_substring`, `feature_col`, `taxon_col`,
-`consensus_col`, `steps`, and `host_first_step` define evidence fields/order.
-`output_dir`, `prefix`, `formats`, `figsize`, `style`, `dpi`, and `no_plots`
-control products.
+- `threads`: CPU request used by per-sample read-processing tasks.
+- `single_end`: set `true` only for single-end data; paired-end is the default.
 
-### `filter_counts` and `general_stats`
+### `core.filename_patterns`
 
-`filter_counts.enabled` enables final filtering. `metadata` and `sample_id_col`
-identify samples; `group_col` and `min_group_size` support group prevalence;
-`abundance_threshold` and `min_consensus` are filtering cutoffs.
-`exclude_taxa` is the rank-aware exclusion list. `taxon_col`, `consensus_col`,
-`biofactorial_col`, and `mito_cols` name evidence fields. `output`,
-`mito_output_dir`, and `save_intermediates` control products.
-`general_stats.enabled` toggles run statistics.
+`r1_tokens`, `r2_tokens`, `ext_patterns`, and `sample_strip_regex` control FASTQ
+discovery and sample-ID normalization. Prefer an explicit manifest when names
+do not follow a consistent convention. Confirm the normalized
+`summary/tables/run_manifest.tsv` before interpreting results.
 
-## Metadata and visualization
+## Read Processing and ASV Generation
 
-For all `sample_col` fields, values must match normalized manifest sample IDs.
-`color_col` names a metadata color field; `palette_file` supplies an external
-two-column palette; `*_palette` accepts `label=#RRGGBB` mappings.
+| Section | Important fields | Effect |
+|---|---|---|
+| `core.fastp` | `trim_front_r1`, `trim_tail_r1`, `trim_front_r2`, `trim_tail_r2` | Fixed end trimming before merging. Values are read-specific base counts. |
+| `core.merge` | `max_diffs`, `min_overlap`, `trunc_quality`, `allow_stagger` | Paired-read merge requirements. |
+| `core.filter` | `max_ee`, `min_len`, `max_len` | Expected-error and merged-length filters. |
+| `core.concat` | `relabel`, `label_sep` | Preserves sample identity when filtered FASTAs are concatenated. |
+| `core.unoise` | `min_size` | Minimum dereplicated abundance supplied to denoising. |
+| `core.swarm` | `distance` | ASV clustering/mapping distance setting. |
+| `core.table_filter` | `min_sample_sum`, `min_asv_sum` | Early technical count filter. `min_sample_sum` is a read count, not a percentage. |
 
-- `sankey`: `enabled`, `metadata`, `sub_dir`, `sample_col`, `group1_col`,
-  `color_col`, `palette_file`, `keep_types`, `vertical_order`, `arrangement`,
-  `output_prefix`, `title`, `make_labeled`, and `make_unlabeled` configure the
-  data-loss diagram.
-- `metadata_plots`: `enabled`, `metadata`, `sub_dir`, `sample_col`, `type_col`,
-  `color_col`, `palette_file`, `subtraction_group_col`, `subtraction_groups`,
-  `keep_types`, `group_order`, `include_rank`, `run_micro`, and `run_mito`.
-  Nested `group_normalization.enabled`, `columns`, `pattern`, `replacement`,
-  and `preserve_source` normalize group labels while retaining provenance.
-- `collectors_curve`: `enabled`, sample/group/color fields, `group_order`,
-  `permutations`, `seed`, `out_prefix`, `title`, `formats`, `xpad`, `max_cols`,
-  `show_perms`, and `presence_threshold`.
-- `plot_upset`: `enabled`, `sub_dir`, `domain`, `taxonomy_path`, sample/group/
-  color fields, `group_order`, `subset_groups`, `skip_venn`, `raw_only`,
-  `final_only`, `formats`, and `font_size`.
-- `bubbleplotter`: `enabled`, `output_prefix`, count/sample/group/color fields,
-  `group1_order`, `formats`, `figsize`, `bubble_scale`, and `no_auto_size`.
-- `umap_clustering`: the common output/count/group fields plus `normalize`,
-  `transform`, `no_scale`, `n_neighbors`, `min_dist`, `umap_metric`,
-  `min_cluster_size`, `min_samples`, and `hdbscan_metric`.
+Changing any of these settings changes the inferred ASV cohort and normally
+requires a fresh or appropriately targeted upstream run.
 
-## Batch correction and outliers
+## Alignment and Taxonomy
 
-### `batch_correction`
+### `core.sina`
 
-`enabled`, `output_dir`, `sample_id_col`, `batch_col`, `asv_orientation`,
-`biological_covariates`, `biological_color_col`, `color_palette_col`, and
-`biological_palettes` define inputs and biological structure. ConQuR controls
-are `conqur_mode`, `conqur_num_core`, `conqur_batch_ref`,
-`conqur_logistic_lasso`, `conqur_quantile_type`, `conqur_simple_match`,
-`conqur_lambda_quantile`, `conqur_interplt`, `conqur_delta`, and
-`conqur_auto_install`. `correction_policy` selects raw, corrected, or `auto`;
-auto gates are `auto_min_sample_rho`, `auto_min_bray_rho`,
-`auto_max_batch_eta_ratio`, `auto_min_batch_eta_drop`, and
-`auto_min_bio_eta_ratio`. Diagnostic clustering uses `umap_neighbors`,
-`umap_min_dist`, `hdbscan_min_cluster_size`, `hdbscan_min_samples`,
-`hdbscan_selection_method`, `optimize_clustering`, `target_clusters`,
-`n_features_plot`, and `random_state`.
+Set either `reference` to a local SINA ARB reference or `reference_url` to a
+downloadable archive. `regions` lists accepted variable-region annotations and
+`trim_to` selects the desired region. `batch_size`, `threads`, `keep_gaps`, and
+`verbose` control execution rather than biological filtering.
 
-### `outlier_detection`
+### `core.taxonomy`
 
-`enabled`, `output_dir`, `sample_col`, `group_cols`, `transform`,
-`asv_orientation`, `pre_transformed`, and `scale` define data. `use_iso`,
-`use_svm`, and `use_hdb` select detectors; `vote_threshold` is required
-agreement. Isolation Forest uses `iso_contamination`, `iso_estimators`, and
-`iso_random_state`; SVM uses `svm_kernel`, `svm_gamma`, and `svm_nu`; HDBSCAN
-uses `hdbscan_min_cluster_size`, `hdbscan_min_samples`, and `hdbscan_metric`.
+`ref_taxonomy` and `ref_sequences` point to local QIIME2 artifacts; their URL
+counterparts permit retrieval when local files are absent. Output names and
+`download_subdir` control organization. Pin local reference artifacts when an
+exact historical classification must be reproduced.
 
-## Ecological and association analyses
+## Non-Target and Host Filtering
 
-### `diversity`
+### `standard.mito`
 
-`enabled`, `output_dir`, `mito_output_dir`, `mito_input`, sample/group/color/
-block fields, `exclude_groups`, `group_order`, `run_mito`, UMAP settings,
-`permanova_perms`, `random_state`, and `verbose` configure the general branch.
-Nested `patient_aware` fields enable the paired design and name sample, patient,
-case, type, and lung-side fields; `sample_types`, contralateral controls,
-`transform`, `permutations`, `seed`, and `require_complete_types` define its
-cohort and test.
+- `enabled`: run mitochondrial/contaminant evidence generation.
+- `run_mitomaster`: contact the external MITOMASTER service. Set `false` for an
+  intentionally offline run; local taxonomy and BLAST evidence still run.
+- `chunk_size`, `mitomaster_workers`, `mitomaster_retries`,
+  `mitomaster_timeout`, `mitomaster_header_mode`: API chunking and retry policy.
+- `min_pident`, `min_percov`: local BLAST identity and coverage cutoffs.
+- `mito_db`, `biof_db`: existing nucleotide database prefixes.
+- `mito_fasta`, `contaminant_fasta`: FASTA alternatives that take precedence
+  and are rebuilt into run-specific databases.
+- `steps`, `host_first_step`, `mitochondria_substring`: evidence labels and
+  reporting order.
 
-### `indicspecies`
+### `standard.filter_counts`
 
-`enabled`, sample/color fields, `group_cols`, palettes/orders, focus labels,
-`block_col`, `perms`, `seed`, `q_threshold`, and `min_n` control tests.
-`stratified.enabled` and each `analyses` entry (`within_col`, `group_col`,
-`levels`) request nested tests. Plot fields are `focus_group1_label`,
-`label_focused_asvs`, `plot_enabled`, `plot_pairs_mode`, `plot_output_dir`,
-`aligned_plot_enabled`, `aligned_plot_output_dir`, `aligned_alpha`,
-`aligned_min_stat`, `aligned_top_n`, `venn`, and `taxonomy`. Legacy
-`group1_*`/`group2_*` fields remain supported.
+- `metadata`, `sample_id_col`, `group_col`: sample/group mapping.
+- `min_group_size`: minimum group size considered by group-aware filtering.
+- `abundance_threshold`: percentage-scale relative-abundance threshold used by
+  this process; inspect the recorded configuration when comparing runs.
+- `min_consensus`: minimum taxonomy consensus value.
+- `exclude_taxa`: explicit exact rank/value exclusions such as
+  `Species:Homo sapiens` or `Class:Mammalia`.
+- `taxon_col`, `consensus_col`, `biofactorial_col`, `mito_cols`: input evidence
+  column names.
+- `save_intermediates`: retain `.decon`, `.micro`, and mitochondrial audit
+  tables required by data-loss reporting.
 
-### `voc_correlation` and `measurement_association`
+The final downstream microbial table is `ASV_target.tsv`. The `.micro.tsv` and
+`.decon.tsv` files are audit intermediates, not authoritative replacements.
 
-- `voc_correlation`: `enabled`, metadata/patient/case/type fields,
-  `sample_types`, required `voc_table`, `output_dir`, `voc_sample_col`,
-  `sample_id_mode`, `use_legacy_voc_subset`, `correlation_direction`
-  (`positive`, `negative`, or `both`), and optional `voc_columns`.
-- `measurement_association`: `enabled`, `output_dir`, optional
-  `measurement_table`, sample/ASV IDs, paired metadata/measurement join lists,
-  `measurement_cols`, `exclude_cols`, group/palette, `max_asvs`, `min_total`,
-  `min_prevalence`, `top_correlations`, direction, `ordination_methods`
-  (`cca,rda,dbrda`), `permutations`, `top_vectors`, and `formats`.
+### `optional.three_tier_decontam`
 
-### `grouping_diagnostics`
+This optional branch requires extraction controls in the raw count matrix.
+`metadata` must include the configured sample identifier, negative/positive
+control flags, DNA concentration, and sample type.
 
-General fields are `enabled`, output/sample/group fields, `baseline_group`,
-`primary_group`, palettes/orders, `distance_metrics`, `transform`,
-`permutations`, `random_state`, and `formats`. `soft_labeling` uses `enabled`,
-`k`, `target_cols`, `exclude_labels`, `min_class_samples`, `distance_quantile`,
-`apply_downstream`, `target_col`, `min_confidence`,
-`min_neighbor_agreement`, and `min_cv_balanced_accuracy`. Nested `power` uses
-`enabled`, `sample_sizes`, `simulations`, `permutations`, `alpha`, and
-`min_groups`. Observed labels are not overwritten; excluded labels are neither
-training classes nor predictions.
+- `negative_control_col`, `positive_control_col`: Boolean/control-label fields.
+- `negative_control_labels`, `positive_control_labels`: accepted labels when
+  controls are encoded categorically.
+- `concentration_col`: DNA concentration for frequency modeling.
+- `type_col`, `sample_types`: biological strata used by within-type models.
+- `pooled_threshold`, `within_type_threshold`, `aggressive_threshold`:
+  contaminant score thresholds.
+- `combine_mode`: rule used to combine evidence tiers.
+- `biological_plausibility`: apply the final plausibility screen.
 
-## Study-design analyses
+The raw control-bearing table is used for scoring; decisions are applied to the
+host-filtered microbial tables before all downstream analyses.
 
-- `power_analysis`: `enabled`, output and sample/patient/case/type fields,
-  `sample_sizes_cancer`, `sample_sizes_stype`, `n_simulations`, `n_perm`,
-  `alpha`, `seed`, `skip_estimate`, `skip_plot`, `transform`, and contralateral
-  controls.
-- `taxonomy_patient_aware`: `enabled`, output and cohort fields, `count_col`,
-  `tax_levels`, `sample_types`, `min_prevalence`, contralateral/lung-side
-  controls, `skip_omnibus`, `transform`, `alpha`, and `top_n`.
-- `lung_status_analysis`: `enabled`, output and sample/type/case/patient fields,
-  site/side/status fields, `status_a_value`, `status_b_value`,
-  `reference_status_value`, `permutations`, and `seed`.
+## Metadata, QC and Visualization
 
-Generalized aliases are `group_power_analysis` for `power_analysis`,
-`taxonomy_group_association` for `taxonomy_patient_aware`, and
-`paired_group_contrast` for `lung_status_analysis`. Use only one name for each
-module in one configuration.
+### `standard.metadata_plots`
 
-## Clustermaps and networks
+`metadata` and `sample_col` establish sample matching. `type_col`, `color_col`,
+`palette_file`, `group_order`, and `include_rank` control annotations.
+`subtraction_group_col` and `subtraction_groups` identify groups subtracted or
+removed before the biological table is finalized. `keep_types` restricts
+retained biological types. `input_table` chooses the count-filter checkpoint;
+`min_pre_correction_sample_sum` is an additional sample read-count threshold.
+`drop_zero_asvs` removes features that become all zero. `run_micro` and
+`run_mito` select table families.
 
-### `clustermaps`
+### Other descriptive branches
 
-Fields cover enable/output/mitochondrial/ISA paths; sample, sample-code, ASV,
-count, and up to four grouping columns; orders, exclusions and palettes;
-`ranks`, per-rank `topN`, ISA statistic/significance fields and threshold;
-`formats`, `figwidth`, `row_height`, `min_height`, `max_height`, and
-`mito_sample_mode`.
+- `standard.general_stats`: enables run-level FASTQ and sequence summaries.
+- `optional.sankey`: maps sample/group columns and ordering into data-loss diagrams.
+- `optional.plot_upset`: configures domain, groups, Venn/UpSet behavior and formats.
+- `optional.bubbleplotter`: controls count/group columns, output formats and sizing.
+- `optional.umap_clustering`: controls normalization, UMAP and HDBSCAN settings.
+- `optional.collectors_curve`: controls grouping, permutations, seed and presence rule.
+- `optional.clustermaps`: selects ranks, top-N limits, ISA threshold columns, palettes,
+  sizes, formats and mitochondrial-table behavior.
 
-### `spieceasi`
+## Batch Correction and Outliers
 
-`enabled`, output/prefix, and `network_enabled` control the branch. Inference
-uses `transpose`, abundance/prevalence/zero-variance filters, `method`,
-`lambda_min_ratio`, `nlambda`, `rep_num`, `thresh`, `pulsar_criterion`,
-`ncores`, and `seed`. Module detection uses `modules_enabled`,
-`module_methods`, `module_primary_method`, `module_resolutions`, `module_reps`,
-consensus/stability/min-size gates, best-only options, and ISA filters. Graph
-inputs/overlays include module/position/node paths, `network_modes`, metadata,
-group palettes/orders/focus, and ISA groups. Rendering uses edge, layout,
-degree, ISA, and abundance size/scale fields plus `keep_negative` and
-`force_filter`, `force_spieceasi`, and `force_graphs`.
+`optional.batch_correction.enabled` activates ConQuR-based correction using `batch_col`
+and `biological_covariates`. Its `conqur_*` fields configure the correction;
+the UMAP/HDBSCAN fields configure diagnostics. Enabling it changes the count
+table used by downstream analyses and should be justified in the study design.
 
-`pulsar_criterion: stars` requests ordinary StARS. The ASPIRE compatibility
-value `bstars` requests bounded StARS by passing `criterion=stars` with lower
-and upper StARS bounds enabled; `bstars` itself is never passed to SPIEC-EASI
-as an unsupported criterion.
+`optional.outlier_detection` configures Isolation Forest, one-class SVM and HDBSCAN.
+`group_cols` defines the strata, `vote_threshold` controls consensus, and the
+`iso_*`, `svm_*`, and `hdbscan_*` fields tune individual detectors. Outlier
+results are diagnostic unless a separately documented process removes samples.
 
-### MAG and summary modules
+## Ecological and Association Analyses
 
-- `asv_mag_link`: `enabled`, optional `master_tsv`, `genome_qc_dir` or
-  `genome_qc_dirs`, `id_token_indexes`, `barrnap_dir` or `genome_fasta_dir`,
-  `output_dir`, `threads`, `min_pident`, `min_qcov`, `top_n`, and `plot_top_n`.
-- `asv_mag_network`: `enabled`, output/prefix, `graph_variant`, link identity/
-  coverage gates, taxonomy sources, `mag_id_mode`, optional `mag_abundance`,
-  its format and genome/sample/value fields, `min_shared_samples`,
-  `abundance_transform`, `functional_module_min_fraction`, and
-  `functional_annotations`.
-- `master_summary`: `enabled`, `output_dir`, source-module directories,
-  `max_direct_cols`, and the filename `whitelist` eligible for integration.
+### `optional.diversity`
 
-## `environments`
+`sample_col`, `group1_col`, `group2_col`, `color_col`, `group_order`, and
+`exclude_groups` define cohorts. `block_col` supplies the participant/block for
+repeated measures. `permanova_perms` and `random_state` control inference;
+`umap_neighbors` and `umap_min_dist` control visualization. The nested
+`patient_aware` block configures patient/case/type columns, contralateral rules,
+permutations, transformation and complete-type requirements.
 
-Every value is a process-specific Conda YAML. Keys are `main`, `sina`,
-`taxonomy`, `mitomaster`, `mito_checker`, `filter_counts`, `general_stats`,
-`sankey`, `plot_metadata`, `batch_correction`, `outlier_checker`,
-`collectors_curve`, `plot_upset`, `bubbleplotter`, `umap_clustering`,
-`diversity`, `indicspecies`, `voc_correlation`, `measurement_association`,
-`grouping_diagnostics`, `group_label_augmentation`, `clustermaps`,
-`power_analysis`, `taxonomy_patient_aware`, `lung_status_analysis`,
-`spieceasi`, `network_modules`, `network`, `master_summary`, `asv_mag_link`, and
-`asv_mag_network`. Keep committed values for ordinary runs. Overrides are for
-dependency development and change the reproducibility environment.
+### `optional.indicspecies`
 
-## Remaining field glossary
+`group_cols` lists primary groupings and `block_col` optionally restricts
+permutations. `perms`, `seed`, `q_threshold`, and `min_n` control tests.
+`stratified.analyses` requests a `group_col` analysis separately within selected
+levels of another column. Palette/order fields control display only.
+`plot_enabled` and `aligned_plot_enabled` independently schedule the two plot
+families; aligned plot thresholds are configured with `aligned_*` fields.
 
-The following less-common fields are listed explicitly so configuration review
-does not require searching the workflow source:
+### `optional.voc_correlation`
 
-- Taxonomy cache names: `ref_taxonomy_url`, `ref_taxonomy_filename`,
-  `ref_sequences_url`, and `ref_sequences_filename`.
-- General join and identifier fields: `metadata_sample_col`, `asv_id_col`,
-  `metadata_join_cols`, `measurement_join_cols`, and `sample_code_col`.
-- Patient/lung design fields: `cancer_site_col`, `contralateral_col`,
-  `contralateral_sample_types`, `contralateral_value`,
-  `exclude_contralateral_in_cancer`, `keep_contralateral_in_cancer`,
-  `lung_code_col`, `lung_side_col`, `lung_status_col`, `tumor_side_col`, and
-  `healthy_col`.
-- Clustermap fields: `isa_file`, `exclude_group1`, `group2_col`,
-  `group3_col`, `group4_col`, `group1_palette`, `group2_palette`,
-  `group3_palette`, `group4_palette`, `group2_order`, `isa_min_stat`,
-  `isa_significance_cols`, and `isa_stat_cols`.
-- Shared grouping maps: `group_palettes`, `group_orders`, and `focus_labels`.
-- Master-summary source locations: `clustermaps_dir`, `indicspecies_dir`,
-  `spieceasi_dir`, and `asv_mag_dir`.
-- Network module fields: `module_seed`, `module_consensus_threshold`,
-  `module_best_only`, `module_best_min_size`, `module_best_min_stability`,
-  `module_isa_only`, `module_color_by_isa`, `module_isa_source`,
-  `module_isa_min_stat`, and `module_isa_max_q`.
-- Optional network input/overlay fields: `modules_sub`, `modules_all`,
-  `graph_pos_sub`, `graph_pos_all`, `node_features`, and `isa_overlay_groups`.
-- Network filtering/rendering fields: `min_rel_abund`, `remove_zero_var`,
-  `edge_threshold`, `edge_width_scale`, `layout_iters`, `layout_seed`,
-  `layout_scale`, `degree_scale`, `degree_size_mode`, `degree_min_area`,
-  `isa_scale`, `abundance_size_mode`, `abundance_reference`,
-  `abundance_reference_area`, `abundance_min_area`, `abundance_max_area`, and
-  `abundance_scale_power`.
-- MAG taxonomy and abundance schema fields: `asv_taxonomy_source`,
-  `mag_taxonomy_source`, `mag_abundance_format`, `mag_abundance_genome_col`,
-  `mag_abundance_sample_col`, and `mag_abundance_value_col`.
+- `voc_table`, `voc_sample_col`: VOC matrix and its identifier.
+- `metadata_sample_col`, `patient_col`, `case_col`, `type_col`: matching and
+  grouping fields.
+- `sample_types`: eligible sample types.
+- `sample_id_mode`, `use_legacy_voc_subset`: matching/subsetting behavior for
+  established datasets.
+- `correlation_direction`: reported direction for the baseline ASV-VOC output.
+- `isa_correlation_direction`: direction for ISA-focused correlation outputs.
+- `isa_brush_groups`, `isa_all_type_groups`,
+  `isa_exclude_all_types_from_brush`: membership rules for ISA/VOC figures.
+- `isa_min_abs_rho`: minimum absolute Spearman magnitude for focused rows and
+  columns.
+- `sample_min_abs_z`: minimum absolute sample VOC z-score for focused displays.
+- `voc_columns`: explicit VOC list; empty permits numeric discovery.
 
-Path/column fields name inputs or exact case-sensitive columns. Boolean fields
-toggle the behavior named by the key. Size, scale, threshold, and iteration
-fields are numeric and should retain template values unless the corresponding
-analysis design is being deliberately changed.
+Patient-level inference is enabled by default within VOC analysis. Configure
+`patient_inference`, `patient_permutations`, `patient_seed`,
+`patient_min_patients`, `patient_min_nonzero`, and `clr_pseudocount`.
+See [VOC statistics](VOC_STATISTICS.md) for normalization, permutation tests,
+FDR families, outputs, and limitations of the legacy sample-level plots.
 
-## Production preflight checklist
+### Study-design modules
 
-- All active paths exist and reference compatible files.
-- Manifest IDs are unique, pairing is correct, and metadata IDs match exactly.
-- Every active group, color, patient, lung-side, and measurement field exists.
-- Palette labels and orders cover observed metadata values.
-- Trimming, merge, length, and error parameters match the assay.
-- Optional modules without their conditional inputs are disabled.
-- A representative run has been reviewed for read retention, filtering,
-  taxonomy, sample accounting, and metadata joins before the full cohort run.
+- `optional.power_analysis`: cancer/type-group sample-size grids, simulation and
+  permutation counts, alpha, seed, transformation and contralateral handling.
+- `optional.taxonomy_patient_aware`: taxonomic levels, prevalence, patient/case/type
+  columns, contralateral handling, transformation, alpha and top-N display.
+- `optional.lung_status_analysis`: patient, case, cancer-site, lung-side and derived
+  tumour-side/contralateral/healthy label columns.
+
+#### Power-analysis execution and precision
+
+The sample-type taxonomic power stage uses the CPUs allocated to its Nextflow
+task for independent, seed-stable bootstrap simulations. It precomputes patient/
+sample-type means and accelerates the small exact signed-rank tests on validated
+SciPy 1.17.1; other versions fall back to their native SciPy implementation.
+The statistical procedure, simulation counts, permutation counts, and existing
+early-stopping rule are unchanged. Cancer PERMANOVA also reuses its centered
+distance matrix within each permutation test. Other power stages, including
+ISA, remain serial; these optimizations do not eliminate their runtime.
+
+Sample-type taxonomic checkpoints are saved every 25 completed replicates under
+`power_analysis/results/.taxonomic_sample_type_checkpoints/` in runtime staging.
+They are keyed by inputs, settings, implementation, and library versions. A retry
+with the same inputs reuses them regardless of worker count; changed inputs or
+settings create new checkpoints. Earlier runs without checkpoints cannot recover
+their in-memory progress. Python progress output is unbuffered on new runs.
+Standalone execution supports `run_power_analysis_pipeline.sh --workers N`;
+Nextflow supplies `--workers` from `task.cpus`, so no YAML parameter is needed.
+
+There is no universal required number of simulations. Keep `n_simulations: 1000`
+for the full analysis and the existing smaller mock setting for demonstrations.
+For an estimated power of 0.80, 1,000 simulations give Monte Carlo standard error
+about 0.013 (approximately ±2.5 percentage points at 95%); 100 give about 0.040
+(±7.8 points). This measures simulation precision, not uncertainty from the
+original study or adequacy of its sample size. The inner `n_perm` setting is
+separate. See [Morris et al. (2019)](https://doi.org/10.1002/sim.8086).
+
+## Networks and MAG Linkage
+
+### Additional optional modules
+
+The complete template includes `optional.measurement_association` (sample-matched
+continuous measurements and constrained ordination), `optional.grouping_diagnostics`
+(group separation and optional validated label augmentation), and
+`optional.asv_mag_network` (taxonomy-filtered ASV–MAG network mapping). These are
+disabled by default and do not replace the dedicated VOC or network processes.
+Their inputs and outputs are described in [Process Reference](PROCESS_REFERENCE.md)
+and all declared parameters appear in [Parameter Catalogue](CONFIG_PARAMETERS.md).
+
+For batch correction, `correction_policy` chooses `always` (corrected counts),
+`never` (raw counts), or `auto` (quality-gated selection); check the emitted decision
+table before interpreting downstream results. SPIEC-EASI's `pulsar_criterion`
+chooses `stars` or `bstars` (bounded StARS). Set these explicitly when reproducing
+an existing analysis rather than relying on defaults.
+
+The generalized config aliases `group_power_analysis`, `taxonomy_group_association`,
+and `paired_group_contrast` are accepted in place of `power_analysis`,
+`taxonomy_patient_aware`, and `lung_status_analysis`, respectively. Use only one
+name for each module. The corresponding terminal stages have generalized names
+under the same `optional:` tier; old rerun names remain supported.
+
+### `optional.spieceasi`
+
+`min_rel_abund`, `min_prevalence`, and `remove_zero_var` define the network ASV
+cohort. `method`, `lambda_min_ratio`, `nlambda`, `rep_num`, `thresh`, `ncores`,
+and `seed` configure inference. `edge_threshold` and `keep_negative` control the
+reported graph. `force_keep_indicator_asvs` should be enabled only when the
+study explicitly requires indicator taxa to bypass the standard cohort filter.
+
+`network_enabled` schedules graph rendering. `modules_enabled`,
+`module_methods`, `module_resolutions`, `module_reps`,
+`module_consensus_threshold`, and `module_seed` control consensus module
+detection. The remaining palette, sizing, layout, and ISA-overlay fields affect
+figures rather than inference.
+
+### `optional.network_topology`
+
+`n_null` is the number of seeded degree-preserving configuration-model draws;
+`seed` makes them reproducible. `skip_null: true` reports observed topology
+without the null comparison. The input is the thresholded SPIEC-EASI graph, so
+`optional.spieceasi.enabled` is required.
+
+### `optional.asv_mag_link`
+
+Supply one or more of `genome_qc_dir`, `genome_qc_dirs`, or `barrnap_dir`, plus
+genome FASTAs where required. `min_pident` and `min_qcov` control ASV-to-SSU
+matching; `threads`, `top_n`, and `plot_top_n` control execution and reporting.
+Leave the module disabled when no genome/MAG data exist.
+
+## Summary and Environments
+
+`optional.master_summary` builds integrated ASV tables. Its directory fields identify
+the enabled analysis products and `whitelist` specifies files eligible for
+direct integration. `max_direct_cols` protects the output from unbounded wide
+joins.
+
+`environments` maps logical process groups to committed Conda YAMLs. Most users
+should not change these paths. A change alters software provenance and should
+be recorded with the run configuration and Git commit.
+
+## Production Preflight Checklist
+
+1. Copy `asv_pipeline_nextflow.yml` and use a new `core.paths.output_dir`.
+2. Validate every absolute path and remove unused placeholder paths.
+3. Confirm manifest sample IDs against metadata and all external tables.
+4. Confirm primer trimming, read length and expected-error settings.
+5. Pin taxonomy/SINA references when exact reproducibility matters.
+6. Decide explicitly whether MITOMASTER, host filtering, three-tier
+   decontamination and batch correction apply.
+7. Disable branches lacking required columns or inputs.
+8. Record the Git commit and preserve the resolved YAML, manifest, report,
+   checksums and logs.

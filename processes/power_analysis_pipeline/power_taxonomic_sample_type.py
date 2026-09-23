@@ -8,7 +8,14 @@ Tests: "Is Phylum A more abundant in BAL vs Oral Rinse vs Bronchial Brush?"
 
 import argparse
 import warnings
+import hashlib
+import json
+import os
+from concurrent.futures import ProcessPoolExecutor
+from functools import lru_cache
 from pathlib import Path
+import scipy
+import statsmodels
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -133,7 +140,7 @@ def patient_level_abundance_by_type(count_matrix, patient_ids, sample_types):
     return patient_abundances, unique_stypes
 
 
-def run_power_simulation(count_matrix, patient_ids, sample_types, taxa_names,
+def run_power_simulation_reference(count_matrix, patient_ids, sample_types, taxa_names,
                          n_patients, n_simulations=1000, alpha=0.05, seed=42,
                          transform='none'):
     """
@@ -201,6 +208,140 @@ def run_power_simulation(count_matrix, patient_ids, sample_types, taxa_names,
     return power
 
 
+@lru_cache(maxsize=4096)
+def _signed_rank_distribution(ranks):
+    """Exact sign-flip distribution, using doubled ranks to retain half ranks."""
+    counts = np.zeros(sum(ranks) + 1, dtype=np.int64)
+    counts[0] = 1
+    for rank in ranks:
+        counts[rank:] += counts[:-rank].copy()
+    return counts
+
+
+def fast_wilcoxon(x, y):
+    """Preserve SciPy auto semantics; accelerate its small exhaustive branch only.
+
+    The compatibility gate is deliberately conservative: other SciPy versions
+    retain their own implementation until equivalence has been validated.
+    """
+    d = np.asarray(x) - np.asarray(y)
+    if (scipy.__version__ == '1.17.1' and len(d) <= 13
+            and np.isfinite(d).all()
+            and (np.any(d == 0) or len(np.unique(np.abs(d))) < len(d))):
+        nonzero = d[d != 0]
+        if not len(nonzero):
+            return 1.0
+        ranks = np.rint(2 * stats.rankdata(np.abs(nonzero))).astype(int)
+        distribution = _signed_rank_distribution(tuple(sorted(ranks)))
+        observed = ranks[nonzero > 0].sum()
+        return min(1.0, 2 * min(distribution[:observed + 1].sum(),
+                                distribution[observed:].sum()) / (2 ** len(nonzero)))
+    try:
+        return wilcoxon(x, y, zero_method='wilcox', correction=False,
+                        alternative='two-sided', mode='auto').pvalue
+    except ValueError:
+        return 1.0
+
+
+def _prepare_profiles(count_matrix, patient_ids, sample_types):
+    abundances, types = patient_level_abundance_by_type(count_matrix, patient_ids, sample_types)
+    patients = np.unique(patient_ids)
+    profiles = {}
+    for stype in types:
+        profiles[stype] = np.array([abundances[stype].get(
+            patient, np.full(count_matrix.shape[1], np.nan)) for patient in patients])
+    return patients, profiles
+
+
+def _simulation_pvalues(patients, profiles, n_patients, seed):
+    # RandomState reproduces the original np.random.seed/choice sequence.
+    selected = np.random.RandomState(seed).choice(len(patients), size=n_patients, replace=True)
+    pair_values = []
+    for type1, type2 in combinations(profiles, 2):
+        x, y = profiles[type1][selected], profiles[type2][selected]
+        present = np.isfinite(x).all(axis=1) & np.isfinite(y).all(axis=1)
+        if present.sum() >= 3:
+            pair_values.append([fast_wilcoxon(a, b)
+                                for a, b in zip(x[present].T, y[present].T)])
+    # Python min, as in the reference, intentionally preserves its NaN behavior.
+    return [min(values) for values in zip(*pair_values)] if pair_values else []
+
+
+_SIMULATION_STATE = None
+
+
+def _initialize_worker(state):
+    global _SIMULATION_STATE
+    _SIMULATION_STATE = state
+
+
+def _run_replicate(index):
+    patients, profiles, n_patients, seed, alpha = _SIMULATION_STATE
+    pvalues = _simulation_pvalues(patients, profiles, n_patients, seed + index)
+    return bool(np.any(multipletests(pvalues, alpha=alpha, method='fdr_bh')[0])) if pvalues else False
+
+
+def run_power_simulation(count_matrix, patient_ids, sample_types, taxa_names,
+                         n_patients, n_simulations=1000, alpha=0.05, seed=42,
+                         transform='none', workers=1, checkpoint_dir=None):
+    """Seed-stable parallel equivalent of the reference sample-type simulation.
+
+    Checkpoints are content-addressed and atomically replaced every 25 replicates.
+    This preserves the existing relative-abundance calculation (including the
+    historical behavior of the transform argument), minimum pairwise p-values,
+    BH correction, and the caller's early stopping rule.
+    """
+    if n_simulations < 1 or workers < 1 or n_patients < 1:
+        raise ValueError('Simulations, workers, and patients must be positive')
+    patients, profiles = _prepare_profiles(count_matrix, patient_ids, sample_types)
+    state = (patients, profiles, n_patients, seed, alpha)
+    digest = hashlib.sha256(Path(__file__).read_bytes())
+    digest.update(np.ascontiguousarray(count_matrix).tobytes())
+    digest.update(json.dumps([list(map(str, patient_ids)), list(map(str, sample_types)),
+                              list(map(str, taxa_names)), n_patients, n_simulations,
+                              alpha, seed, transform, scipy.__version__, np.__version__,
+                              pd.__version__, statsmodels.__version__,
+                              str(count_matrix.dtype), count_matrix.shape]).encode())
+    checkpoint = None
+    completed = []
+    if checkpoint_dir is not None:
+        Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
+        checkpoint = Path(checkpoint_dir) / (digest.hexdigest() + '.json')
+        if checkpoint.exists():
+            completed = json.loads(checkpoint.read_text())
+            if (not isinstance(completed, list) or len(completed) > n_simulations
+                    or any(type(value) is not bool for value in completed)):
+                raise ValueError(f'Invalid simulation checkpoint: {checkpoint}')
+            print(f'    Resuming {len(completed)}/{n_simulations} replicates', flush=True)
+
+    def save():
+        if checkpoint is not None:
+            temporary = checkpoint.with_suffix(f'.{os.getpid()}.tmp')
+            temporary.write_text(json.dumps(completed))
+            temporary.replace(checkpoint)
+
+    executor = None
+    try:
+        if len(completed) < n_simulations:
+            if workers > 1:
+                executor = ProcessPoolExecutor(max_workers=min(workers, n_simulations - len(completed)),
+                                               initializer=_initialize_worker, initargs=(state,))
+                results = executor.map(_run_replicate, range(len(completed), n_simulations), chunksize=1)
+            else:
+                _initialize_worker(state)
+                results = map(_run_replicate, range(len(completed), n_simulations))
+            for result in results:
+                completed.append(result)
+                if len(completed) % 25 == 0:
+                    save()
+                    print(f'    {len(completed)}/{n_simulations} replicates', flush=True)
+    finally:
+        save()
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
+    return sum(completed) / n_simulations
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Taxonomic abundance power - Sample Type Comparisons"
@@ -209,6 +350,8 @@ def main():
     parser.add_argument("--sample-sizes", default="10,15,20,25,30,40,50",
                        help="Comma-separated sample sizes (n patients)")
     parser.add_argument("--n-simulations", type=int, default=1000)
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Parallel sample-type taxonomic simulation workers")
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patient-col", default="Participant_ID")
@@ -293,7 +436,9 @@ def main():
                 n_simulations=args.n_simulations,
                 alpha=args.alpha,
                 seed=args.seed,
-                transform=args.transform
+                transform=args.transform,
+                workers=args.workers,
+                checkpoint_dir=outdir / '.taxonomic_sample_type_checkpoints'
             )
 
             print(f"→ Power={power:.3f}")

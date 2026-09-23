@@ -39,6 +39,8 @@ def main():
     parser.add_argument("--sample-sizes-stype", default="10,15,20,25,30,40,50,60,70,80,90,100",
                        help="Sample sizes for sample type comparisons")
     parser.add_argument("--n-simulations", type=int, default=1000)
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Workers for sample-type taxonomic power simulations")
     parser.add_argument("--n-perm", type=int, default=199)
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
@@ -246,6 +248,7 @@ def main():
         # 3b. Sample Type Comparison
         cmd = [
             sys.executable, str(script_dir / 'power_taxonomic_sample_type.py'),
+            '--workers', str(args.workers),
             '--data-long', args.data_long,
             '--sample-sizes', args.sample_sizes_stype,
             '--n-simulations', str(args.n_simulations),

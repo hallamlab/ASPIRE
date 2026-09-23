@@ -28,6 +28,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import warnings
@@ -243,7 +244,7 @@ def _run_conqur_r(
               if (!requireNamespace("ConQuR", quietly = TRUE)) {
                 remotes::install_github(
                   "wdl2459/ConQuR",
-                  dependencies = TRUE,
+                  dependencies = NA,
                   upgrade = "never",
                   lib = lib_primary
                 )
@@ -380,7 +381,18 @@ def _run_conqur_r(
             str(int(random_state)),
         ]
         run_env = os.environ.copy()
-        r_lib_user = td_path / "r_libs_user"
+        # Keep auto-installed ConQuR in the isolated process environment so it
+        # is reused on resume. A task-temporary library forced every execution
+        # to download and compile the package again, then immediately deleted it.
+        configured_r_lib = (
+            run_env.get("ASPIRE_R_LIBS_USER")
+            or run_env.get("R_LIBS_USER")
+        )
+        r_lib_user = (
+            Path(configured_r_lib).expanduser()
+            if configured_r_lib
+            else Path(sys.prefix) / "lib" / "R" / "library"
+        )
         r_lib_user.mkdir(parents=True, exist_ok=True)
         run_env["R_LIBS_USER"] = str(r_lib_user)
         proc = subprocess.run(cmd, capture_output=True, text=True, env=run_env)

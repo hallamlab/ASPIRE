@@ -3,10 +3,14 @@ set -euo pipefail
 
 export NXF_VER="${NXF_VER:-25.10.0}"
 export NXF_SYNTAX_PARSER="${NXF_SYNTAX_PARSER:-v1}"
+export NXF_ANSI_LOG="${NXF_ANSI_LOG:-true}"
+# Reserve enough dashboard width for full tier-qualified process names.
+export TERMINAL_WIDTH="${TERMINAL_WIDTH:-160}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "$0")"
 CONTROL_ENV_DIR="${CONTROL_ENV_DIR:-${SCRIPT_DIR}/.controller_env}"
+REQUIRED_NEXTFLOW_PACKAGE_VERSION="25.10.4"
 ORIGINAL_ARGS=("$@")
 
 PROCESS_ORDER=(
@@ -28,6 +32,7 @@ PROCESS_ORDER=(
   FILTER_COUNTS
   GENERAL_STATS
   PLOT_METADATA
+  THREE_TIER_DECONTAM
   GROUPING_DIAGNOSTICS
   GROUP_LABEL_AUGMENTATION
   PLOT_UPSET
@@ -48,6 +53,7 @@ PROCESS_ORDER=(
   TAXONOMY_GROUP_ASSOCIATION
   PAIRED_GROUP_CONTRAST
   SPIECEASI
+  NETWORK_TOPOLOGY
   NETWORK_MODULES
   ASV_MAG_LINK
   ASV_MAG_NETWORK
@@ -63,6 +69,34 @@ declare -A PROCESS_ALIASES=(
   [LUNG_STATUS_ANALYSIS]=PAIRED_GROUP_CONTRAST
 )
 
+# Stable user-facing execution tiers. These qualify --list-stages output and
+# --rerun-from input without changing Nextflow process identities or caches.
+declare -A PROCESS_TIER=(
+  [GROUPING_DIAGNOSTICS]=optional [GROUP_LABEL_AUGMENTATION]=optional
+  [MEASUREMENT_ASSOCIATION]=optional [ASV_MAG_NETWORK]=optional
+  [GROUP_POWER_ANALYSIS]=optional [TAXONOMY_GROUP_ASSOCIATION]=optional
+  [PAIRED_GROUP_CONTRAST]=optional
+  [FASTP_QC]=core [MERGE_READS]=core [FILTER_READS]=core
+  [RELABEL_FILTERED]=core [CONCAT_FASTAS]=core [DEREPLICATE]=core
+  [DENOISE]=core [CHIMERA_CHECK]=core [CREATE_COUNT_MATRIX]=core
+  [FILTER_TABLE]=core [SINA_TRIM]=core [TAXONOMY]=core
+  [PREPARE_BLAST_DATABASES]=standard [MITOMASTER]=standard
+  [MITO_DECONTAM]=standard [FILTER_COUNTS]=standard
+  [GENERAL_STATS]=standard [PLOT_METADATA]=standard
+  [THREE_TIER_DECONTAM]=optional [PLOT_UPSET]=optional
+  [ASV_BATCH_CORRECTION]=optional [ASV_META_FROM_CORRECTED]=optional
+  [BUBBLEPLOTTER]=optional [UMAP_CLUSTERING]=optional
+  [OUTLIER_CHECKER]=optional [COLLECTORS_CURVE]=optional
+  [DIVERSITY_ANALYSIS]=optional [INDICSPECIES]=optional
+  [INDICSPECIES_PLOTS]=optional [INDICSPECIES_ALIGNED_PLOTS]=optional
+  [VOC_CORRELATION]=optional [CLUSTERMAPS]=optional
+  [POWER_ANALYSIS_PIPELINE]=optional [TAXONOMY_PATIENT_AWARE]=optional
+  [LUNG_STATUS_ANALYSIS]=optional [SPIECEASI]=optional
+  [NETWORK_TOPOLOGY]=optional [NETWORK_MODULES]=optional
+  [ASV_MAG_LINK]=optional [GRAPH_NETWORK]=optional
+  [MODULE_MAG_ANCHORS]=optional [SANKEY]=optional [MASTER_SUMMARY]=optional
+)
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -74,11 +108,11 @@ Options:
   --resume-policy POLICY     Resume baseline selection when --resume-run is not set.
                              Allowed: last-with-tasks (default), latest
   --no-resume                Disable resume for this run (cold execution).
-  --list-stages              Print known process names for --rerun-from and exit.
+  --list-stages              Print tier-qualified process names for --rerun-from and exit.
   --help, -h                 Show this help.
 
 Examples:
-  run_asv_pipeline.sh asv_pipeline_nextflow.yml --rerun-from FILTER_COUNTS
+  run_asv_pipeline.sh asv_pipeline_nextflow.yml --rerun-from standard:FILTER_COUNTS
   run_asv_pipeline.sh --resume-run lethal_poisson
   run_asv_pipeline.sh --resume-policy latest
   run_asv_pipeline.sh --rerun-from PLOT_METADATA -- -with-report report.html
@@ -101,6 +135,12 @@ if [[ -z "${IN_CONTROLLER_ENV:-}" ]]; then
   elif [[ ! -x "$CONTROL_ENV_DIR/bin/mamba" ]]; then
     echo "[controller] Updating controller environment to provide an isolated mamba executable."
     mamba env update --prefix "$CONTROL_ENV_DIR" --file "${SCRIPT_DIR}/processes/controller/env.yml"
+  else
+    installed_nextflow_version="$(mamba list --prefix "$CONTROL_ENV_DIR" nextflow 2>/dev/null | awk '$1 == "nextflow" { print $2; exit }')"
+    if [[ "$installed_nextflow_version" != "$REQUIRED_NEXTFLOW_PACKAGE_VERSION" ]]; then
+      echo "[controller] Updating Nextflow launcher ${installed_nextflow_version:-unknown} -> ${REQUIRED_NEXTFLOW_PACKAGE_VERSION}."
+      mamba env update --prefix "$CONTROL_ENV_DIR" --file "${SCRIPT_DIR}/processes/controller/env.yml"
+    fi
   fi
   flock -u 8
   exec env IN_CONTROLLER_ENV=1 CONTROL_ENV_DIR="$CONTROL_ENV_DIR" conda run --no-capture-output -p "$CONTROL_ENV_DIR" "$SCRIPT_PATH" "$@"
@@ -189,7 +229,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$LIST_STAGES" -eq 1 ]]; then
-  printf '%s\n' "${PROCESS_ORDER[@]}"
+  for stage_name in "${PROCESS_ORDER[@]}"; do
+    printf '%s:%s\n' "${PROCESS_TIER[$stage_name]}" "$stage_name"
+  done
   if [[ ${#PROCESS_ALIASES[@]} -gt 0 ]]; then
     echo "# aliases"
     for alias_name in "${!PROCESS_ALIASES[@]}"; do
@@ -198,6 +240,17 @@ if [[ "$LIST_STAGES" -eq 1 ]]; then
   fi
   exit 0
 fi
+
+echo "[controller] Configured process tiers (disabled optional stages are skipped by Nextflow):"
+current_tier=""
+for stage_name in "${PROCESS_ORDER[@]}"; do
+  stage_tier="${PROCESS_TIER[$stage_name]}"
+  if [[ "$stage_tier" != "$current_tier" ]]; then
+    printf '  %s:\n' "$stage_tier"
+    current_tier="$stage_tier"
+  fi
+  printf '    %s:%s\n' "$stage_tier" "$stage_name"
+done
 
 if [[ "$RESUME_POLICY" != "last-with-tasks" && "$RESUME_POLICY" != "latest" ]]; then
   echo "Invalid --resume-policy '${RESUME_POLICY}'. Allowed: last-with-tasks, latest" >&2
@@ -317,14 +370,14 @@ resolve_config_path() {
   fi
 }
 
-OUTPUT_DIR=$(yq -r '.paths.output_dir // empty' "$CONFIG_FILE")
-RUNTIME_DIR=$(yq -r '.paths.runtime_dir // empty' "$CONFIG_FILE")
-KEEP_RUNTIME_DIR=$(yq -r '.paths.keep_runtime_dir // true' "$CONFIG_FILE")
-WORK_DIR=$(yq -r '.paths.work_dir // empty' "$CONFIG_FILE")
-CONDA_CACHE_DIR=$(yq -r '.paths.conda_cache_dir // empty' "$CONFIG_FILE")
+OUTPUT_DIR=$(yq -r '.core.paths.output_dir // .paths.output_dir // empty' "$CONFIG_FILE")
+RUNTIME_DIR=$(yq -r '.core.paths.runtime_dir // .paths.runtime_dir // empty' "$CONFIG_FILE")
+KEEP_RUNTIME_DIR=$(yq -r '.core.paths.keep_runtime_dir // .paths.keep_runtime_dir // true' "$CONFIG_FILE")
+WORK_DIR=$(yq -r '.core.paths.work_dir // .paths.work_dir // empty' "$CONFIG_FILE")
+CONDA_CACHE_DIR=$(yq -r '.core.paths.conda_cache_dir // .paths.conda_cache_dir // empty' "$CONFIG_FILE")
 
 if [[ -z "$OUTPUT_DIR" ]]; then
-  echo "paths.output_dir must be set in $CONFIG_FILE" >&2
+  echo "core.paths.output_dir (or legacy paths.output_dir) must be set in $CONFIG_FILE" >&2
   exit 1
 fi
 
@@ -459,7 +512,7 @@ else
 fi
 
 if [[ -n "$RERUN_FROM" ]]; then
-  RERUN_FROM_UPPER="$(printf '%s' "$RERUN_FROM" | tr '[:lower:]' '[:upper:]')"
+  RERUN_FROM_UPPER="$(printf '%s' "${RERUN_FROM##*:}" | tr '[:lower:]' '[:upper:]')"
   RERUN_FROM_CANONICAL="${PROCESS_ALIASES[$RERUN_FROM_UPPER]:-$RERUN_FROM_UPPER}"
   start_idx=-1
   for i in "${!PROCESS_ORDER[@]}"; do

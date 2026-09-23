@@ -32,6 +32,7 @@ MODULE_DIRS = {
     "paired_group_contrast": "paired_group_contrast",
     "clustermaps": "clustermaps",
     "spieceasi": "network_analysis",
+    "three_tier_decontam": "contamination_filtering",
     "asv_mag_link": "asv_mag_link",
     "asv_mag_network": "asv_mag_network",
     "mito": "non_target_filtering",
