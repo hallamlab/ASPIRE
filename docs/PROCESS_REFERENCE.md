@@ -1,6 +1,6 @@
 # ASPIRE Process and I/O Reference
 
-This catalogue describes the processes available on `main`. Exact filenames
+This catalogue describes the available workflow processes. Exact filenames
 are inventoried after each run in
 `<output_dir>/summary/tables/module_output_manifest.tsv`; the paths below show
 the stable public destination or the principal intermediate family.

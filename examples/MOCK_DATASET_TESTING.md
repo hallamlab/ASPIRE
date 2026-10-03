@@ -1,7 +1,8 @@
 # Mock Dataset Test
 
-This guide runs every ASPIRE analysis module against a separately supplied
-mock dataset.
+This guide runs the benchmarked ASPIRE analysis modules against a separately
+supplied mock dataset. ASV-to-MAG linkage requires separate genome inputs and
+is not part of this fixture.
 
 ## Obtain the Mock Dataset
 
@@ -15,7 +16,7 @@ as the `--dataset` argument in the commands below.
 
 ## Reviewer Fast Path
 
-From a clone of the `main` branch, edit the first two paths and run the block:
+From the ASPIRE repository directory, edit the first two paths and run the block:
 
 ```bash
 DATASET=/absolute/path/to/mock_dataset

@@ -1,7 +1,7 @@
 # ASPIRE Expert Guide
 
-This guide covers execution and diagnosis on the `main` branch. Start with the
-[README](../README.md) for installation and quick starts, the
+This guide covers execution, resource use, recovery and diagnosis. Start with the
+[installation guide](installation.md) for installation and quick starts, the
 [configuration reference](CONFIGURATION.md) for YAML semantics, and the
 [process reference](PROCESS_REFERENCE.md) for process I/O.
 

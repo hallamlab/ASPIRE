@@ -222,7 +222,7 @@ def main() -> None:
         "# Complete ASPIRE Configuration Parameter Catalogue",
         "",
         "This file documents every explicit parameter in the canonical",
-        "[`asv_pipeline_nextflow.yml`](../asv_pipeline_nextflow.yml) template. It is generated",
+        "[`asv_pipeline_nextflow.yml`](https://github.com/hallamlab/ASPIRE/blob/main/asv_pipeline_nextflow.yml) template. It is generated",
         "from that template; lists are documented as one parameter and their complete template",
         "value is shown. Paths are resolved relative to the YAML file unless absolute.",
         "",

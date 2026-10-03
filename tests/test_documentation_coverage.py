@@ -1,5 +1,6 @@
 import re
 import json
+import runpy
 from pathlib import Path
 
 import yaml
@@ -61,7 +62,10 @@ def test_every_registered_stage_is_documented():
 def test_public_docs_do_not_reference_private_study_configs():
     docs = "\n".join(
         path.read_text()
-        for path in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+        for path in [ROOT / "README.md", *[
+            ROOT / "docs" / name
+            for name in runpy.run_path(str(ROOT / "docs" / "conf.py"))["include_patterns"]
+        ]]
     )
     for private_name in (
         "SPARK_compatible.yml",

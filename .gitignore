@@ -66,3 +66,17 @@ examples/si.local.yml
 *.swp
 *.swo
 *~
+
+# Local manuscript material, study inputs and generated workflow copies
+.asv_pipeline.generated.*.nf
+/docs/ASPIRE_METHODS.md
+/docs/ASPIRE_RESULTS.md
+/docs/ASPIRE_manuscript_supplements.zip
+/docs/manuscript_*
+/docs/showcase_overlay_preview/
+/scripts/manuscript/
+/processes/diversity_analysis/BASIN_RERUN.md
+/examples/si.primer_trimmed.manifest.tsv
+/examples/si.old-output-cleanup.yml
+*.BAK
+/docs/_build/

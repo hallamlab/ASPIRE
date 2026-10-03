@@ -2,7 +2,7 @@
 
 This guide describes the configuration accepted by the `main` branch. The
 authoritative complete template is
-[`asv_pipeline_nextflow.yml`](../asv_pipeline_nextflow.yml). Its exhaustive
+[`asv_pipeline_nextflow.yml`](https://github.com/hallamlab/ASPIRE/blob/main/asv_pipeline_nextflow.yml). Its exhaustive
 [parameter catalogue](CONFIG_PARAMETERS.md) defines every key and template
 value. Copy the template for a production run and retain the resolved copy with
 the results. Private study YAMLs are intentionally excluded from the repository

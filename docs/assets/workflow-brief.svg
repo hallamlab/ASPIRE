@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="820" viewBox="0 0 1000 820" role="img" aria-labelledby="title desc"><title id="title">ASPIRE workflow overview</title><desc id="desc">Amplicon reads become ASVs and taxonomy, then microbial tables after configured non-target and optional control-based decontamination. Enabled ecology, association, network and genome-link analyses produce tables, figures and an integrated run report. Conceptual modules, not a serial execution schedule.</desc><rect width="1000" height="820" fill="white"/><defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#111111"/></marker></defs><style>text{font-family:"Times New Roman",Times,serif;fill:#111111}.wire{fill:none;stroke:#111111;stroke-width:1.5;marker-end:url(#arrow)}</style>
+<rect x="20" y="20" width="960" height="80" rx="16" fill="#CCCCCC" stroke="#666666" stroke-width="1.5"/>
+<text x="500" y="54" font-size="29" text-anchor="middle"><tspan x="500" dy="0">ASPIRE • Amplicon analysis with Nextflow</tspan></text>
+<text x="500" y="84" font-size="21" text-anchor="middle"><tspan x="500" dy="0">Reads + references + study metadata; optional controls and genome inputs</tspan></text>
+<text x="125" y="208" font-size="25" text-anchor="middle"><tspan x="125" dy="0">Sequence</tspan><tspan x="125" dy="28.249999999999996">processing</tspan></text>
+<rect x="230" y="207" width="26" height="26" fill="#F5F5F5" stroke="#111111" stroke-width="3"/>
+<text x="243" y="227" font-size="20" text-anchor="middle"><tspan x="243" dy="0">1</tspan></text>
+<circle cx="350" cy="220" r="12" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="3"/>
+<text x="350" y="156" font-size="21" text-anchor="middle"><tspan x="350" dy="0">Amplicon</tspan><tspan x="350" dy="23.729999999999997">reads</tspan></text>
+<path d="M 257.5 220 L 336.5 220" class="wire"/><path d="M 363.5 220 L 564.879 220" class="wire"/>
+<path d="M 580 207 L 593 220 L 580 233 L 567 220 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="580" y="156" font-size="23" text-anchor="middle"><tspan x="580" dy="0">QC, ASV inference</tspan><tspan x="580" dy="25.99">and taxonomy</tspan></text>
+<path d="M 595.121 220 L 866.5 220" class="wire"/>
+<circle cx="880" cy="220" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
+<text x="880" y="156" font-size="23" text-anchor="middle"><tspan x="880" dy="0">ASVs, counts</tspan><tspan x="880" dy="25.99">and taxonomy</tspan></text>
+<text x="125" y="383" font-size="25" text-anchor="middle"><tspan x="125" dy="0">Filtering</tspan></text>
+<rect x="230" y="382" width="26" height="26" fill="#F5F5F5" stroke="#111111" stroke-width="3"/>
+<text x="243" y="402" font-size="20" text-anchor="middle"><tspan x="243" dy="0">2</tspan></text>
+<circle cx="350" cy="395" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="350" y="331" font-size="21" text-anchor="middle"><tspan x="350" dy="0">ASVs and</tspan><tspan x="350" dy="23.729999999999997">metadata</tspan></text>
+<path d="M 257.5 395 L 336.5 395" class="wire"/><path d="M 363.5 395 L 564.879 395" class="wire"/>
+<path d="M 580 382 L 593 395 L 580 408 L 567 395 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="580" y="331" font-size="23" text-anchor="middle"><tspan x="580" dy="0">Non-target screening</tspan><tspan x="580" dy="25.99">and decontamination</tspan></text>
+<path d="M 595.121 395 L 866.5 395" class="wire"/>
+<circle cx="880" cy="395" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
+<text x="880" y="331" font-size="23" text-anchor="middle"><tspan x="880" dy="0">Microbial</tspan><tspan x="880" dy="25.99">analysis tables</tspan></text>
+<text x="580" y="437" font-size="20" text-anchor="middle"><tspan x="580" dy="0">Control-based decontam is optional</tspan></text>
+<text x="125" y="558" font-size="25" text-anchor="middle"><tspan x="125" dy="0">Integrated</tspan><tspan x="125" dy="28.249999999999996">analyses</tspan></text>
+<rect x="230" y="557" width="26" height="26" fill="#F5F5F5" stroke="#111111" stroke-width="3"/>
+<text x="243" y="577" font-size="20" text-anchor="middle"><tspan x="243" dy="0">3</tspan></text>
+<circle cx="350" cy="570" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="350" y="506" font-size="21" text-anchor="middle"><tspan x="350" dy="0">Selected tables;</tspan><tspan x="350" dy="23.729999999999997">other inputs as needed</tspan></text>
+<path d="M 257.5 570 L 336.5 570" class="wire"/><path d="M 363.5 570 L 564.879 570" class="wire"/>
+<path d="M 580 557 L 593 570 L 580 583 L 567 570 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="580" y="506" font-size="23" text-anchor="middle"><tspan x="580" dy="0">Ecology, associations,</tspan><tspan x="580" dy="25.99">networks and genome links</tspan></text>
+<path d="M 595.121 570 L 866.5 570" class="wire"/>
+<circle cx="880" cy="570" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
+<text x="880" y="506" font-size="23" text-anchor="middle"><tspan x="880" dy="0">Analytical</tspan><tspan x="880" dy="25.99">tables and figures</tspan></text>
+<text x="580" y="612" font-size="20" text-anchor="middle"><tspan x="580" dy="0">Branches selected by configuration</tspan></text>
+<text x="125" y="733" font-size="25" text-anchor="middle"><tspan x="125" dy="0">Reporting</tspan></text>
+<rect x="230" y="732" width="26" height="26" fill="#F5F5F5" stroke="#111111" stroke-width="3"/>
+<text x="243" y="752" font-size="20" text-anchor="middle"><tspan x="243" dy="0">4</tspan></text>
+<circle cx="350" cy="745" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="350" y="681" font-size="21" text-anchor="middle"><tspan x="350" dy="0">Enabled results</tspan><tspan x="350" dy="23.729999999999997">and run logs</tspan></text>
+<path d="M 257.5 745 L 336.5 745" class="wire"/><path d="M 363.5 745 L 564.879 745" class="wire"/>
+<path d="M 580 732 L 593 745 L 580 758 L 567 745 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="580" y="681" font-size="23" text-anchor="middle"><tspan x="580" dy="0">Combine outputs</tspan><tspan x="580" dy="25.99">and provenance</tspan></text>
+<path d="M 595.121 745 L 866.5 745" class="wire"/>
+<circle cx="880" cy="745" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
+<text x="880" y="681" font-size="23" text-anchor="middle"><tspan x="880" dy="0">Run report and</tspan><tspan x="880" dy="25.99">organized results</tspan></text>
+</svg>
