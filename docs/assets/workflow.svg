@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="2830" viewBox="0 0 1720 2830" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="3080" viewBox="0 0 1720 3080" role="img" aria-labelledby="title desc">
 <title id="title">ASPIRE complete workflow</title>
 <desc id="desc">Conceptual workflow based on ASPIRE main commit 9fb77afd2bc87c100fadb1f1b02ee8b984d3ee8c. Core read processing, ASV generation and taxonomy feed non-target screening and metadata tables. Optional three-tier decontamination uses raw control-bearing counts and metadata to flag pooled prevalence, within-type frequency and biological plausibility, filtering the long and wide tables before downstream analyses. Group diagnostics and batch correction feed ecological, patient-aware association and network analyses, including topology null tests and genome linkage. Parallel branches are shown where analyses share inputs. Numbered modules group operations rather than prescribe an execution schedule. The wrapper publishes results and the run report after successful execution.</desc>
 <metadata>Source: hallamlab/ASPIRE main, 9fb77afd2bc87c100fadb1f1b02ee8b984d3ee8c; asv_pipeline.nf, README.md, run_asv_pipeline.sh. Diagram created 2026-10-03.</metadata>
-<rect width="1720" height="2830" fill="white"/>
+<rect width="1720" height="3080" fill="white"/>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#111111"/></marker></defs>
 <style>text {font-family:"Times New Roman",Times,serif;fill:#111111} .wire {fill:none;stroke:#111111;stroke-width:1.5;marker-end:url(#arrow)} .branch {fill:none;stroke:#111111;stroke-width:1.5}</style>
 <rect x="20" y="20" width="975" height="142" rx="16" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
@@ -24,7 +24,7 @@
 <rect x="20" y="185" width="1680" height="75" rx="16" fill="#CCCCCC" stroke="#666666" stroke-width="1.5"/>
 <text x="860" y="215" font-size="28" text-anchor="middle"><tspan x="860" dy="0">ASPIRE + Nextflow • Core, standard and optional workflow tiers</tspan></text>
 <text x="860" y="245" font-size="21" text-anchor="middle"><tspan x="860" dy="0">run_asv_pipeline.sh • YAML configuration • Mamba environments • Resource requests • Resume and stage-aware reruns</tspan></text>
-<text x="160" y="340" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Read</tspan><tspan x="160" dy="30.509999999999998">preprocessing</tspan></text>
+<text x="160" y="340" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Read quality</tspan><tspan x="160" dy="30.509999999999998">control</tspan></text>
 <rect x="312" y="342" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="362" font-size="20" text-anchor="middle"><tspan x="325" dy="0">1</tspan></text>
 <circle cx="470" cy="355" r="12" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="3"/>
@@ -74,7 +74,7 @@
 <path d="M 1355.121 540 L 1586.5 540" class="wire"/>
 <circle cx="1600" cy="540" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="475" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">ASV sequences</tspan><tspan x="1600" dy="24.86">and count matrix</tspan></text>
-<text x="160" y="710" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Taxonomic</tspan><tspan x="160" dy="30.509999999999998">assignment</tspan></text>
+<text x="160" y="710" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Taxonomic</tspan><tspan x="160" dy="30.509999999999998">annotation</tspan></text>
 <rect x="312" y="712" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="732" font-size="20" text-anchor="middle"><tspan x="325" dy="0">3</tspan></text>
 <circle cx="470" cy="725" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
@@ -95,7 +95,7 @@
 <path d="M 1355.121 725 L 1586.5 725" class="wire"/>
 <circle cx="1600" cy="725" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="660" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Taxonomy and</tspan><tspan x="1600" dy="24.86">assignment stats</tspan></text>
-<text x="160" y="905" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Non-target</tspan><tspan x="160" dy="30.509999999999998">screening</tspan></text>
+<text x="160" y="905" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Background</tspan><tspan x="160" dy="30.509999999999998">removal</tspan></text>
 <rect x="312" y="907" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="927" font-size="20" text-anchor="middle"><tspan x="325" dy="0">4</tspan></text>
 <text x="160" y="976" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Configurable filtering</tspan></text>
@@ -122,7 +122,7 @@
 <circle cx="1600" cy="920" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="855" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Target counts</tspan><tspan x="1600" dy="24.86">and removal audit</tspan></text>
 <text x="870" y="987" font-size="17" text-anchor="middle"><tspan x="870" dy="0">¹ External MITOMASTER lookup is optional; local screens can run without it.</tspan></text>
-<text x="160" y="1105" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Metadata and</tspan><tspan x="160" dy="30.509999999999998">analysis tables</tspan></text>
+<text x="160" y="1105" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Metadata and</tspan><tspan x="160" dy="30.509999999999998">quality assessment</tspan></text>
 <rect x="312" y="1107" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="1127" font-size="20" text-anchor="middle"><tspan x="325" dy="0">5</tspan></text>
 <text x="160" y="1176" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Standard table preparation</tspan></text>
@@ -133,11 +133,15 @@
 <path d="M 680.0 1107 L 693.0 1120 L 680.0 1133 L 667.0 1120 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <text x="680.0" y="1055" font-size="22" text-anchor="middle"><tspan x="680.0" dy="0">Read / ASV</tspan><tspan x="680.0" dy="24.86">statistics</tspan></text>
 <text x="680.0" y="1159" font-size="20" text-anchor="middle"><tspan x="680.0" dy="0">ASPIRE / seqkit</tspan></text>
-<path d="M 695.121 1120 L 994.879 1120" class="wire"/>
-<path d="M 1010.0 1107 L 1023.0 1120 L 1010.0 1133 L 997.0 1120 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<text x="1010.0" y="1055" font-size="22" text-anchor="middle"><tspan x="1010.0" dy="0">Join sample</tspan><tspan x="1010.0" dy="24.86">metadata</tspan></text>
-<text x="1010.0" y="1159" font-size="20" text-anchor="middle"><tspan x="1010.0" dy="0">ASPIRE</tspan></text>
-<path d="M 1025.121 1120 L 1324.879 1120" class="wire"/>
+<path d="M 695.121 1120 L 884.879 1120" class="wire"/>
+<path d="M 900.0 1107 L 913.0 1120 L 900.0 1133 L 887.0 1120 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="900.0" y="1055" font-size="22" text-anchor="middle"><tspan x="900.0" dy="0">Join sample</tspan><tspan x="900.0" dy="24.86">metadata</tspan></text>
+<text x="900.0" y="1159" font-size="20" text-anchor="middle"><tspan x="900.0" dy="0">ASPIRE</tspan></text>
+<path d="M 915.121 1120 L 1104.879 1120" class="wire"/>
+<path d="M 1120.0 1107 L 1133.0 1120 L 1120.0 1133 L 1107.0 1120 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="1120.0" y="1055" font-size="22" text-anchor="middle"><tspan x="1120.0" dy="0">Subtract configured</tspan><tspan x="1120.0" dy="24.86">control-group means</tspan></text>
+<text x="1120.0" y="1159" font-size="20" text-anchor="middle"><tspan x="1120.0" dy="0">ASPIRE • optional</tspan></text>
+<path d="M 1135.121 1120 L 1324.879 1120" class="wire"/>
 <path d="M 1340.0 1107 L 1353.0 1120 L 1340.0 1133 L 1327.0 1120 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <text x="1340.0" y="1055" font-size="22" text-anchor="middle"><tspan x="1340.0" dy="0">Build linked</tspan><tspan x="1340.0" dy="24.86">long / wide tables</tspan></text>
 <text x="1340.0" y="1159" font-size="20" text-anchor="middle"><tspan x="1340.0" dy="0">ASPIRE</tspan></text>
@@ -193,7 +197,7 @@
 <path d="M 1355.121 1530 L 1586.5 1530" class="wire"/>
 <circle cx="1600" cy="1530" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="1465" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Selected counts</tspan><tspan x="1600" dy="24.86">and linked metadata</tspan></text>
-<text x="160" y="1755" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Community</tspan><tspan x="160" dy="30.509999999999998">ecology</tspan></text>
+<text x="160" y="1755" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Community structure</tspan><tspan x="160" dy="30.509999999999998">and diversity</tspan></text>
 <rect x="312" y="1757" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="1777" font-size="20" text-anchor="middle"><tspan x="325" dy="0">8</tspan></text>
 <text x="160" y="1826" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Optional analysis branches</tspan></text>
@@ -217,22 +221,22 @@
 <path d="M 1000 1757.0 L 1013 1770.0 L 1000 1783.0 L 987 1770.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <path d="M 1015.121 1770.0 L 1450 1770.0" class="branch"/>
 <text x="790" y="1758.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Group differences / dispersion</tspan></text>
-<text x="1240" y="1758.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">PERMANOVA / PERMDISP¹</tspan></text>
+<text x="1240" y="1758.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">PERMANOVA / PERMDISP²</tspan></text>
 <path d="M 590 1816.0 L 984.879 1816.0" class="wire"/>
 <path d="M 1000 1803.0 L 1013 1816.0 L 1000 1829.0 L 987 1816.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <path d="M 1015.121 1816.0 L 1450 1816.0" class="branch"/>
 <text x="790" y="1804.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Coverage and overlap</tspan></text>
-<text x="1240" y="1804.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Collector curves / UpSet / bubbleplots</tspan></text>
+<text x="1240" y="1804.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Collector curves / Venn / UpSet</tspan></text>
 <path d="M 590 1862.0 L 984.879 1862.0" class="wire"/>
 <path d="M 1000 1849.0 L 1013 1862.0 L 1000 1875.0 L 987 1862.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <path d="M 1015.121 1862.0 L 1450 1862.0" class="branch"/>
 <text x="790" y="1850.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Structure and abundance</tspan></text>
-<text x="1240" y="1850.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">UMAP / heatmaps / outliers</tspan></text>
+<text x="1240" y="1850.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">UMAP / bubbleplots / outliers</tspan></text>
 <path d="M 1450 1770 L 1586.5 1770" class="wire"/>
 <circle cx="1600" cy="1770" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="1705" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Ecological tables</tspan><tspan x="1600" dy="24.86">and figures</tspan></text>
-<text x="1080" y="1894" font-size="17" text-anchor="middle"><tspan x="1080" dy="0">¹ Patient-aware testing and ordination depend on configuration.</tspan></text>
-<text x="160" y="2005" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Indicators and</tspan><tspan x="160" dy="30.509999999999998">associations</tspan></text>
+<text x="1080" y="1894" font-size="17" text-anchor="middle"><tspan x="1080" dy="0">² Patient-aware testing and ordination depend on configuration.</tspan></text>
+<text x="160" y="2005" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Indicator species</tspan><tspan x="160" dy="30.509999999999998">and study contrasts</tspan></text>
 <rect x="312" y="2007" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="2027" font-size="20" text-anchor="middle"><tspan x="325" dy="0">9</tspan></text>
 <text x="160" y="2076" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Optional analysis branches</tspan></text>
@@ -245,13 +249,13 @@
 <path d="M 590 1958.0 L 984.879 1958.0" class="wire"/>
 <path d="M 1000 1945.0 L 1013 1958.0 L 1000 1971.0 L 987 1958.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <path d="M 1015.121 1958.0 L 1450 1958.0" class="branch"/>
-<text x="790" y="1946.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Indicator species</tspan></text>
-<text x="1240" y="1946.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">indicspecies + summary plots</tspan></text>
+<text x="790" y="1946.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Indicator species / annotations</tspan></text>
+<text x="1240" y="1946.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">indicspecies / taxonomic clustermaps</tspan></text>
 <path d="M 590 2020.0 L 984.879 2020.0" class="wire"/>
 <path d="M 1000 2007.0 L 1013 2020.0 L 1000 2033.0 L 987 2020.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <path d="M 1015.121 2020.0 L 1450 2020.0" class="branch"/>
-<text x="790" y="2008.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">VOCs / measurements</tspan></text>
-<text x="1240" y="2008.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Patient inference / ordination</tspan></text>
+<text x="790" y="2008.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Measurement associations</tspan></text>
+<text x="1240" y="2008.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Spearman / CCA / RDA / dbRDA</tspan></text>
 <path d="M 590 2082.0 L 984.879 2082.0" class="wire"/>
 <path d="M 1000 2069.0 L 1013 2082.0 L 1000 2095.0 L 987 2082.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
 <path d="M 1015.121 2082.0 L 1450 2082.0" class="branch"/>
@@ -282,7 +286,7 @@
 <path d="M 1355.121 2250 L 1586.5 2250" class="wire"/>
 <circle cx="1600" cy="2250" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="2185" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">ASV–MAG links</tspan><tspan x="1600" dy="24.86">and linkage plots</tspan></text>
-<text x="160" y="2455" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Networks and</tspan><tspan x="160" dy="30.509999999999998">genome anchors</tspan></text>
+<text x="160" y="2455" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Microbial networks</tspan><tspan x="160" dy="30.509999999999998">and genome anchors</tspan></text>
 <rect x="312" y="2457" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="2477" font-size="20" text-anchor="middle"><tspan x="325" dy="0">11</tspan></text>
 <text x="160" y="2526" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Optional • links from module 10</tspan></text>
@@ -308,30 +312,57 @@
 <path d="M 1355.121 2470 L 1586.5 2470" class="wire"/>
 <circle cx="1600" cy="2470" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="2405" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Graphs, topology,</tspan><tspan x="1600" dy="24.86">modules and anchors</tspan></text>
-<text x="160" y="2685" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Summary and</tspan><tspan x="160" dy="30.509999999999998">run report</tspan></text>
+<text x="160" y="2685" font-size="27" text-anchor="middle"><tspan x="160" dy="0">ASV–VOC</tspan><tspan x="160" dy="30.509999999999998">integration</tspan></text>
 <rect x="312" y="2687" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="2707" font-size="20" text-anchor="middle"><tspan x="325" dy="0">12</tspan></text>
-<text x="160" y="2756" font-size="17" text-anchor="middle"><tspan x="160" dy="0">After successful execution</tspan></text>
+<text x="160" y="2756" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Optional • matched VOC data</tspan></text>
 <circle cx="470" cy="2700" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<text x="470" y="2648" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Enabled outputs</tspan><tspan x="470" dy="24.86">and execution logs</tspan></text>
+<text x="470" y="2648" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Selected ASV tables,</tspan><tspan x="470" dy="24.86">VOCs and metadata</tspan></text>
 <path d="M 339.5 2700 L 456.5 2700" class="wire"/>
 <path d="M 483.5 2700 L 664.879 2700" class="wire"/>
 <path d="M 680.0 2687 L 693.0 2700 L 680.0 2713 L 667.0 2700 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<text x="680.0" y="2635" font-size="22" text-anchor="middle"><tspan x="680.0" dy="0">Combine master</tspan><tspan x="680.0" dy="24.86">ASV summaries</tspan></text>
-<text x="680.0" y="2739" font-size="20" text-anchor="middle"><tspan x="680.0" dy="0">ASPIRE • optional</tspan></text>
+<text x="680.0" y="2635" font-size="22" text-anchor="middle"><tspan x="680.0" dy="0">Match participants</tspan><tspan x="680.0" dy="24.86">and eligible ASVs</tspan></text>
+<text x="680.0" y="2739" font-size="20" text-anchor="middle"><tspan x="680.0" dy="0">Metadata joins / gates</tspan></text>
 <path d="M 695.121 2700 L 884.879 2700" class="wire"/>
 <path d="M 900.0 2687 L 913.0 2700 L 900.0 2713 L 887.0 2700 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<text x="900.0" y="2635" font-size="22" text-anchor="middle"><tspan x="900.0" dy="0">Account for samples,</tspan><tspan x="900.0" dy="24.86">reads and filtering</tspan></text>
-<text x="900.0" y="2739" font-size="20" text-anchor="middle"><tspan x="900.0" dy="0">Stats / Sankey / plots</tspan></text>
+<text x="900.0" y="2635" font-size="22" text-anchor="middle"><tspan x="900.0" dy="0">Normalize and</tspan><tspan x="900.0" dy="24.86">average within participant</tspan></text>
+<text x="900.0" y="2739" font-size="20" text-anchor="middle"><tspan x="900.0" dy="0">Relative abundance / CLR</tspan></text>
 <path d="M 915.121 2700 L 1104.879 2700" class="wire"/>
 <path d="M 1120.0 2687 L 1133.0 2700 L 1120.0 2713 L 1107.0 2700 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<text x="1120.0" y="2635" font-size="22" text-anchor="middle"><tspan x="1120.0" dy="0">Inventory outputs</tspan><tspan x="1120.0" dy="24.86">and checksums</tspan></text>
-<text x="1120.0" y="2739" font-size="20" text-anchor="middle"><tspan x="1120.0" dy="0">ASPIRE wrapper</tspan></text>
+<text x="1120.0" y="2635" font-size="22" text-anchor="middle"><tspan x="1120.0" dy="0">Test associations</tspan><tspan x="1120.0" dy="24.86">and case contrasts</tspan></text>
+<text x="1120.0" y="2739" font-size="20" text-anchor="middle"><tspan x="1120.0" dy="0">Spearman / permutation</tspan><tspan x="1120.0" dy="22.599999999999998">Mann–Whitney tests</tspan></text>
 <path d="M 1135.121 2700 L 1324.879 2700" class="wire"/>
 <path d="M 1340.0 2687 L 1353.0 2700 L 1340.0 2713 L 1327.0 2700 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<text x="1340.0" y="2635" font-size="22" text-anchor="middle"><tspan x="1340.0" dy="0">Publish tables, plots</tspan><tspan x="1340.0" dy="24.86">and run navigation</tspan></text>
-<text x="1340.0" y="2739" font-size="20" text-anchor="middle"><tspan x="1340.0" dy="0">ASPIRE wrapper</tspan></text>
+<text x="1340.0" y="2635" font-size="22" text-anchor="middle"><tspan x="1340.0" dy="0">Adjust and visualize</tspan><tspan x="1340.0" dy="24.86">statistical results</tspan></text>
+<text x="1340.0" y="2739" font-size="20" text-anchor="middle"><tspan x="1340.0" dy="0">BH correction / heatmaps</tspan></text>
 <path d="M 1355.121 2700 L 1586.5 2700" class="wire"/>
 <circle cx="1600" cy="2700" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
-<text x="1600" y="2635" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">ASPIRE run report,</tspan><tspan x="1600" dy="24.86">results and logs</tspan></text>
+<text x="1600" y="2635" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">ASV–VOC associations</tspan><tspan x="1600" dy="24.86">and VOC contrasts</tspan></text>
+<text x="1040" y="2784" font-size="17" text-anchor="middle"><tspan x="1040" dy="0">Relative abundance is primary; CLR provides sensitivity analysis. Observation gates and permutations are configurable.</tspan></text>
+<text x="160" y="2935" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Summary and</tspan><tspan x="160" dy="30.509999999999998">run report</tspan></text>
+<rect x="312" y="2937" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
+<text x="325" y="2957" font-size="20" text-anchor="middle"><tspan x="325" dy="0">13</tspan></text>
+<text x="160" y="3006" font-size="17" text-anchor="middle"><tspan x="160" dy="0">After successful execution</tspan></text>
+<circle cx="470" cy="2950" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="470" y="2898" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Enabled outputs</tspan><tspan x="470" dy="24.86">and execution logs</tspan></text>
+<path d="M 339.5 2950 L 456.5 2950" class="wire"/>
+<path d="M 483.5 2950 L 664.879 2950" class="wire"/>
+<path d="M 680.0 2937 L 693.0 2950 L 680.0 2963 L 667.0 2950 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="680.0" y="2885" font-size="22" text-anchor="middle"><tspan x="680.0" dy="0">Combine master</tspan><tspan x="680.0" dy="24.86">ASV summaries</tspan></text>
+<text x="680.0" y="2989" font-size="20" text-anchor="middle"><tspan x="680.0" dy="0">ASPIRE • optional</tspan></text>
+<path d="M 695.121 2950 L 884.879 2950" class="wire"/>
+<path d="M 900.0 2937 L 913.0 2950 L 900.0 2963 L 887.0 2950 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="900.0" y="2885" font-size="22" text-anchor="middle"><tspan x="900.0" dy="0">Account for samples,</tspan><tspan x="900.0" dy="24.86">reads and filtering</tspan></text>
+<text x="900.0" y="2989" font-size="20" text-anchor="middle"><tspan x="900.0" dy="0">Stats / Sankey / plots</tspan></text>
+<path d="M 915.121 2950 L 1104.879 2950" class="wire"/>
+<path d="M 1120.0 2937 L 1133.0 2950 L 1120.0 2963 L 1107.0 2950 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="1120.0" y="2885" font-size="22" text-anchor="middle"><tspan x="1120.0" dy="0">Inventory outputs</tspan><tspan x="1120.0" dy="24.86">and checksums</tspan></text>
+<text x="1120.0" y="2989" font-size="20" text-anchor="middle"><tspan x="1120.0" dy="0">ASPIRE wrapper</tspan></text>
+<path d="M 1135.121 2950 L 1324.879 2950" class="wire"/>
+<path d="M 1340.0 2937 L 1353.0 2950 L 1340.0 2963 L 1327.0 2950 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<text x="1340.0" y="2885" font-size="22" text-anchor="middle"><tspan x="1340.0" dy="0">Publish tables, plots</tspan><tspan x="1340.0" dy="24.86">and run navigation</tspan></text>
+<text x="1340.0" y="2989" font-size="20" text-anchor="middle"><tspan x="1340.0" dy="0">ASPIRE wrapper</tspan></text>
+<path d="M 1355.121 2950 L 1586.5 2950" class="wire"/>
+<circle cx="1600" cy="2950" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
+<text x="1600" y="2885" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">ASPIRE run report,</tspan><tspan x="1600" dy="24.86">results and logs</tspan></text>
 </svg>

@@ -4,7 +4,7 @@
 
 [Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf)
 
-The figure groups the complete workflow into conceptual modules. Numbered rows
+The figure follows the appnote’s overall theme—read/ASV processing, taxonomy and background removal, metadata and quality assessment, community diversity, indicators/networks, and ASV–VOC integration—while expanding those areas into detailed modules and retaining the additional optional branches. Numbered rows
 are not a serial execution schedule. Optional analyses run only when enabled
 and their dependencies are available. The [process reference](PROCESS_REFERENCE.md)
 lists the exact task names, inputs and outputs.
