@@ -109,4 +109,4 @@ network. Exact file paths and checksums are recorded in the output inventories.
 
 [Brief SVG](assets/workflow-brief.svg) · [Brief PDF](assets/workflow-brief.pdf)
 
-This smaller figure separates sequence processing, filtering, community ecology, indicator/association analyses, networks/genome links and reporting. It names the diversity metrics and main statistical tests while keeping individual tool steps in the complete figure. Use the complete figure above for individual tools and the three-tier filtering details.
+The brief panel follows the appnote methods: read/ASV processing, taxonomy and background removal, metadata and quality assessment, community diversity, indicators/networks, and ASV–VOC integration. It highlights the statistical methods; the complete figure includes additional optional branches such as genome linkage. These are conceptual groups: three-tier decontamination runs after metadata-table construction, and SINA trimming follows ASV inference in the code.
