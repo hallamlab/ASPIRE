@@ -2,3 +2,6 @@
 .wy-table-responsive table td, .wy-table-responsive table th { white-space: normal; }
 .rst-content img { height: auto; }
 .mermaid { overflow-x: auto; }
+
+/* Shared 2240-unit canvases preserve scale between workflow previews. */
+.rst-content img[src*="/diagrams/"] { display: block; width: 100%; max-width: 100%; height: auto; margin: 1.5rem auto; }

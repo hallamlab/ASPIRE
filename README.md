@@ -48,7 +48,7 @@ Use the same command to resume. List supported restart points with `./run_asv_pi
 
 ## Workflow
 
-[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow.svg)](docs/assets/workflow.svg)
+[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/diagrams/workflow.svg)](docs/assets/workflow.svg)
 
 [Vector SVG](docs/assets/workflow.svg) · [PDF](docs/assets/workflow.pdf) · [Workflow and data-flow diagrams](docs/workflow.md)
 

@@ -4,7 +4,7 @@ Build amplicon sequence variants (ASVs), assign taxonomy, screen non-targets and
 
 **Start here:** [install ASPIRE](installation.md), then run the [public reviewer test](reviewer-test.md). The launcher manages Mamba environments and Nextflow. Use the [study walkthrough](getting-started.md) when you are ready to analyze your own samples.
 
-[![ASPIRE complete workflow, including optional three-tier decontamination and statistical analyses.](assets/workflow.svg)](assets/workflow.svg)
+[![ASPIRE complete workflow, including optional three-tier decontamination and statistical analyses.](assets/diagrams/workflow.svg)](assets/workflow.svg)
 
 [SVG](assets/workflow.svg) · [PDF](assets/workflow.pdf) · [Workflow details and diagrams](workflow.md)
 

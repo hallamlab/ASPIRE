@@ -17,9 +17,7 @@ python -m sphinx -W --keep-going -b html docs /tmp/aspire-docs-html
 ```
 
 Open `/tmp/aspire-docs-html/index.html`. No workflow environment, references or
-sample data are needed to build the documentation. For diagrams, the generated
-HTML loads Mermaid JavaScript; an offline browser may require that asset to be
-cached. The SVG and PDF workflow figures are standalone files.
+sample data are needed to build the documentation. Workflow previews are committed SVGs and display offline without Mermaid JavaScript. The original publication SVGs and PDFs remain available as downloads.
 
 ## Connect Read the Docs
 
@@ -49,3 +47,17 @@ README and repository description. The site URL is intentionally not guessed.
 `docs/conf.py` explicitly lists published pages. Add new public pages to both
 that list and the index navigation. Local manuscript drafts, audits and private
 study configurations are not part of the public documentation build.
+
+## Shared diagram scale
+
+ASPIRE and MetaPathways use a shared 2,240-unit-wide white canvas for documentation previews. Smaller diagrams are centered without stretching; Mermaid diagrams use a common 1.5× scale to bring their 16-pixel labels close to the publication figures’ typography. Preview width is responsive, but relative scale stays consistent across pages. Click a diagram to open its SVG for closer inspection. Original publication SVG/PDF downloads stay tightly cropped.
+
+Edit Mermaid sources under `docs/diagrams/`, or the original publication SVGs under `docs/assets/`. To rebuild the committed previews from the repository root, in the documentation environment:
+
+```bash
+python -m pip install -r docs/diagram-requirements.txt
+python -m playwright install chromium
+python scripts/render_workflow_diagrams.py
+```
+
+Chromium requires its usual Linux system libraries. Rendering downloads the pinned Mermaid bundle; ordinary Sphinx builds need neither Chromium nor network access for diagrams. `docs/diagrams/figures.json` records the source mapping and shared canvas size. If a future diagram needs a wider canvas, update both projects together. Do not hand-edit generated files in `docs/assets/diagrams/`.

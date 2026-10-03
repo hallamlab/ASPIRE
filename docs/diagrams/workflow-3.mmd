@@ -1,0 +1,19 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
+flowchart TD
+    RAW[Raw ASV counts including controls] --> TECH[Technical sample / ASV filters]
+    TECH --> TARGET[ASV_target.tsv: non-target-filtered microbial counts]
+    TARGET --> BASE[Long ASV annotations and wide counts]
+    RAW --> SCORE[Optional contamination scoring]
+    SCORE --> FILTER[Apply contamination flags to long / wide tables]
+    BASE --> FILTER
+    BASE -->|Filtering disabled| SELECT[Selected base tables]
+    FILTER --> SELECT
+    SELECT --> GROUP[Optional group diagnostics / validated labels]
+    GROUP --> BATCH[Optional batch correction and count selection]
+    BATCH --> FINAL[Selected counts and synchronized long annotations]
+    FINAL --> STATS[Statistical and network modules]
+    STATS --> REPORT[Module files and integrated report]
+    classDef input fill:#DAE8FC,stroke:#6C8EBF,color:#111111
+    classDef output fill:#D5E8D4,stroke:#82B366,color:#111111
+    class RAW input
+    class FINAL,REPORT output

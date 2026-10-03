@@ -1,0 +1,21 @@
+{
+  "canvas_width": 2240,
+  "mermaid_scale": 1.5,
+  "figures": [
+    {
+      "name": "workflow-1",
+      "page": "docs/workflow.md",
+      "index": 0
+    },
+    {
+      "name": "workflow-2",
+      "page": "docs/workflow.md",
+      "index": 1
+    },
+    {
+      "name": "workflow-3",
+      "page": "docs/workflow.md",
+      "index": 2
+    }
+  ]
+}
