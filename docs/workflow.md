@@ -12,7 +12,7 @@ lists the exact task names, inputs and outputs.
 ## Conceptual workflow
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#111111"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
 flowchart TD
     I[FASTQs and sample manifest] --> C[Read QC and ASV construction]
     R[Sequence and taxonomy references] --> T[Alignment and taxonomy]
@@ -47,7 +47,7 @@ associations, rather than evidence of causal relationships.
 ## Software architecture
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#111111"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
 flowchart TD
     U[User: YAML configuration and manifest] --> W[run_asv_pipeline.sh]
     W --> C[Mamba controller environment: Nextflow and Java]
@@ -75,7 +75,7 @@ or passing native Nextflow options.
 ## Data flow and the selected analysis table
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#111111"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
 flowchart TD
     RAW[Raw ASV counts including controls] --> TECH[Technical sample / ASV filters]
     TECH --> TARGET[ASV_target.tsv: non-target-filtered microbial counts]
