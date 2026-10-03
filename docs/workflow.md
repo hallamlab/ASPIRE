@@ -109,4 +109,4 @@ network. Exact file paths and checksums are recorded in the output inventories.
 
 [Brief SVG](assets/workflow-brief.svg) · [Brief PDF](assets/workflow-brief.pdf)
 
-This smaller figure groups the workflow into sequence processing, filtering, optional analytical branches and reporting. Use the complete figure above for individual tools and the three-tier filtering details.
+This smaller figure separates sequence processing, filtering, community ecology, indicator/association analyses, networks/genome links and reporting. It names the diversity metrics and main statistical tests while keeping individual tool steps in the complete figure. Use the complete figure above for individual tools and the three-tier filtering details.

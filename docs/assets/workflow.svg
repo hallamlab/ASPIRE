@@ -201,26 +201,37 @@
 <text x="470" y="1708" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Analysis tables</tspan><tspan x="470" dy="24.86">and metadata</tspan></text>
 <path d="M 339.5 1770 L 456.5 1770" class="wire"/>
 <path d="M 483.5 1770 L 590 1770" class="branch"/>
-<path d="M 590 1708 L 590 1832" class="branch"/>
-<path d="M 1450 1708 L 1450 1832" class="branch"/>
-<path d="M 590 1708 L 984.879 1708" class="wire"/>
-<path d="M 1000 1695 L 1013 1708 L 1000 1721 L 987 1708 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<path d="M 1015.121 1708 L 1450 1708" class="branch"/>
-<text x="790" y="1696" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Overlap and abundance</tspan></text>
-<text x="1240" y="1696" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">UpSet / bubbleplots / heatmaps</tspan></text>
-<path d="M 590 1770 L 984.879 1770" class="wire"/>
-<path d="M 1000 1757 L 1013 1770 L 1000 1783 L 987 1770 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<path d="M 1015.121 1770 L 1450 1770" class="branch"/>
-<text x="790" y="1758" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Structure and outliers</tspan></text>
-<text x="1240" y="1758" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">UMAP / outlier diagnostics</tspan></text>
-<path d="M 590 1832 L 984.879 1832" class="wire"/>
-<path d="M 1000 1819 L 1013 1832 L 1000 1845 L 987 1832 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<path d="M 1015.121 1832 L 1450 1832" class="branch"/>
-<text x="790" y="1820" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Coverage and diversity</tspan></text>
-<text x="1240" y="1820" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Collector curves / diversity</tspan></text>
+<path d="M 590 1678.0 L 590 1862.0" class="branch"/>
+<path d="M 1450 1678.0 L 1450 1862.0" class="branch"/>
+<path d="M 590 1678.0 L 984.879 1678.0" class="wire"/>
+<path d="M 1000 1665.0 L 1013 1678.0 L 1000 1691.0 L 987 1678.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 1678.0 L 1450 1678.0" class="branch"/>
+<text x="790" y="1666.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Alpha diversity</tspan></text>
+<text x="1240" y="1666.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Shannon diversity</tspan></text>
+<path d="M 590 1724.0 L 984.879 1724.0" class="wire"/>
+<path d="M 1000 1711.0 L 1013 1724.0 L 1000 1737.0 L 987 1724.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 1724.0 L 1450 1724.0" class="branch"/>
+<text x="790" y="1712.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Beta diversity</tspan></text>
+<text x="1240" y="1712.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Bray–Curtis / Jaccard</tspan></text>
+<path d="M 590 1770.0 L 984.879 1770.0" class="wire"/>
+<path d="M 1000 1757.0 L 1013 1770.0 L 1000 1783.0 L 987 1770.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 1770.0 L 1450 1770.0" class="branch"/>
+<text x="790" y="1758.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Group differences / dispersion</tspan></text>
+<text x="1240" y="1758.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">PERMANOVA / PERMDISP¹</tspan></text>
+<path d="M 590 1816.0 L 984.879 1816.0" class="wire"/>
+<path d="M 1000 1803.0 L 1013 1816.0 L 1000 1829.0 L 987 1816.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 1816.0 L 1450 1816.0" class="branch"/>
+<text x="790" y="1804.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Coverage and overlap</tspan></text>
+<text x="1240" y="1804.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Collector curves / UpSet / bubbleplots</tspan></text>
+<path d="M 590 1862.0 L 984.879 1862.0" class="wire"/>
+<path d="M 1000 1849.0 L 1013 1862.0 L 1000 1875.0 L 987 1862.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 1862.0 L 1450 1862.0" class="branch"/>
+<text x="790" y="1850.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Structure and abundance</tspan></text>
+<text x="1240" y="1850.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">UMAP / heatmaps / outliers</tspan></text>
 <path d="M 1450 1770 L 1586.5 1770" class="wire"/>
 <circle cx="1600" cy="1770" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="1705" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Ecological tables</tspan><tspan x="1600" dy="24.86">and figures</tspan></text>
+<text x="1080" y="1894" font-size="17" text-anchor="middle"><tspan x="1080" dy="0">¹ Patient-aware testing and ordination depend on configuration.</tspan></text>
 <text x="160" y="2005" font-size="27" text-anchor="middle"><tspan x="160" dy="0">Indicators and</tspan><tspan x="160" dy="30.509999999999998">associations</tspan></text>
 <rect x="312" y="2007" width="26" height="26" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5"/>
 <text x="325" y="2027" font-size="20" text-anchor="middle"><tspan x="325" dy="0">9</tspan></text>
@@ -229,23 +240,23 @@
 <text x="470" y="1958" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Analysis tables;</tspan><tspan x="470" dy="24.86">measurements as needed</tspan></text>
 <path d="M 339.5 2020 L 456.5 2020" class="wire"/>
 <path d="M 483.5 2020 L 590 2020" class="branch"/>
-<path d="M 590 1958 L 590 2082" class="branch"/>
-<path d="M 1450 1958 L 1450 2082" class="branch"/>
-<path d="M 590 1958 L 984.879 1958" class="wire"/>
-<path d="M 1000 1945 L 1013 1958 L 1000 1971 L 987 1958 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<path d="M 1015.121 1958 L 1450 1958" class="branch"/>
-<text x="790" y="1946" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Indicator species</tspan></text>
-<text x="1240" y="1946" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">indicspecies + summary plots</tspan></text>
-<path d="M 590 2020 L 984.879 2020" class="wire"/>
-<path d="M 1000 2007 L 1013 2020 L 1000 2033 L 987 2020 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<path d="M 1015.121 2020 L 1450 2020" class="branch"/>
-<text x="790" y="2008" font-size="21" text-anchor="middle"><tspan x="790" dy="0">VOCs / measurements</tspan></text>
-<text x="1240" y="2008" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Patient inference / ordination</tspan></text>
-<path d="M 590 2082 L 984.879 2082" class="wire"/>
-<path d="M 1000 2069 L 1013 2082 L 1000 2095 L 987 2082 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
-<path d="M 1015.121 2082 L 1450 2082" class="branch"/>
-<text x="790" y="2070" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Group / paired comparisons</tspan></text>
-<text x="1240" y="2070" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Taxonomy / lung status / power</tspan></text>
+<path d="M 590 1958.0 L 590 2082.0" class="branch"/>
+<path d="M 1450 1958.0 L 1450 2082.0" class="branch"/>
+<path d="M 590 1958.0 L 984.879 1958.0" class="wire"/>
+<path d="M 1000 1945.0 L 1013 1958.0 L 1000 1971.0 L 987 1958.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 1958.0 L 1450 1958.0" class="branch"/>
+<text x="790" y="1946.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Indicator species</tspan></text>
+<text x="1240" y="1946.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">indicspecies + summary plots</tspan></text>
+<path d="M 590 2020.0 L 984.879 2020.0" class="wire"/>
+<path d="M 1000 2007.0 L 1013 2020.0 L 1000 2033.0 L 987 2020.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 2020.0 L 1450 2020.0" class="branch"/>
+<text x="790" y="2008.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">VOCs / measurements</tspan></text>
+<text x="1240" y="2008.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Patient inference / ordination</tspan></text>
+<path d="M 590 2082.0 L 984.879 2082.0" class="wire"/>
+<path d="M 1000 2069.0 L 1013 2082.0 L 1000 2095.0 L 987 2082.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3"/>
+<path d="M 1015.121 2082.0 L 1450 2082.0" class="branch"/>
+<text x="790" y="2070.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Group / paired comparisons</tspan></text>
+<text x="1240" y="2070.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Taxonomy / lung status / power</tspan></text>
 <path d="M 1450 2020 L 1586.5 2020" class="wire"/>
 <circle cx="1600" cy="2020" r="12" fill="#D5E8D4" stroke="#82B366" stroke-width="3"/>
 <text x="1600" y="1955" font-size="22" text-anchor="middle"><tspan x="1600" dy="0">Association tests</tspan><tspan x="1600" dy="24.86">and figures</tspan></text>
