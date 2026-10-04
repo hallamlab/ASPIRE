@@ -11,6 +11,8 @@ are not a serial execution schedule. Optional analyses run only when enabled
 and their dependencies are available. The [process reference](PROCESS_REFERENCE.md)
 lists the exact task names, inputs and outputs.
 
+The arrows connecting numbered modules show conceptual progression; they do not require independent analysis branches to execute serially.
+
 ## Conceptual workflow
 
 [![Workflow 1](assets/diagrams/workflow-1.svg)](assets/diagrams/workflow-1.svg)

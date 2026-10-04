@@ -77,4 +77,4 @@
 <rect x="20" y="1310" width="960" height="60" rx="12" fill="#D5E8D4" stroke="#82B366" stroke-width="1.5" />
 <text x="500" y="1337" font-size="23" text-anchor="middle"><tspan x="500" dy="0">Integrated tables, figures, run report and provenance</tspan></text>
 <text x="500" y="1360" font-size="17" text-anchor="middle"><tspan x="500" dy="0">¹ Patient-aware tests and optional modules depend on configuration.</tspan></text>
-</svg></svg>
+<path d="M 243 224 L 243 401" fill="none" stroke="#111111" stroke-width="1.5" marker-end="url(#arrow)" class="module-flow" /><path d="M 243 429 L 243 606" fill="none" stroke="#111111" stroke-width="1.5" marker-end="url(#arrow)" class="module-flow" /><path d="M 243 634 L 243 811" fill="none" stroke="#111111" stroke-width="1.5" marker-end="url(#arrow)" class="module-flow" /><path d="M 243 839 L 243 1016" fill="none" stroke="#111111" stroke-width="1.5" marker-end="url(#arrow)" class="module-flow" /><path d="M 243 1044 L 243 1221" fill="none" stroke="#111111" stroke-width="1.5" marker-end="url(#arrow)" class="module-flow" /></svg></svg>

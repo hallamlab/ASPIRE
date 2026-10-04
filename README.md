@@ -32,8 +32,6 @@ RESULTS=/absolute/path/to/aspire_mock_output
 Success ends with `All mock-run checks passed.` Open
 `<RESULTS>/summary/report/ASPIRE_run_report.html` to review accounting, module outputs and execution logs. See [remote report viewing](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html#view-reports-on-a-remote-server) if running over SSH.
 
-The test needs at least 8 CPU cores, 32 GB RAM and 50 GB storage as a starting provision. See the [reviewer guide](https://hallamlab-aspire.readthedocs.io/en/latest/reviewer-test.html) for inputs, expected results and coverage.
-
 ### Run your own study
 
 ```bash
@@ -46,16 +44,12 @@ Edit the input/output paths, references, sample metadata, assay settings and ena
 ./run_asv_pipeline.sh my_study.yml
 ```
 
-Use the same command to resume. List supported restart points with `./run_asv_pipeline.sh --list-stages`. [Expert operations](https://hallamlab-aspire.readthedocs.io/en/latest/EXPERT_GUIDE.html) explains targeted reruns and cache management.
+Use the same command to resume. See the [user guide](https://hallamlab-aspire.readthedocs.io/) for resources, configuration, outputs and troubleshooting.
 
 ## Workflow
 
-[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow.svg)](docs/assets/workflow.svg)
+[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg)](docs/assets/workflow-brief.svg)
 
-[Vector SVG](docs/assets/workflow.svg) · [PDF](docs/assets/workflow.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
+[Vector SVG](docs/assets/workflow-brief.svg) · [PDF](docs/assets/workflow-brief.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
 
-## Full documentation
-
-The [user guide](https://hallamlab-aspire.readthedocs.io/en/latest/index.html) covers [study preparation](https://hallamlab-aspire.readthedocs.io/en/latest/getting-started.html), [decontamination and analyses](https://hallamlab-aspire.readthedocs.io/en/latest/analyses.html), [configuration](https://hallamlab-aspire.readthedocs.io/en/latest/CONFIGURATION.html), [reports](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html), and [resuming or troubleshooting runs](https://hallamlab-aspire.readthedocs.io/en/latest/EXPERT_GUIDE.html).
-
-Documentation source lives in `docs/`. Please use [GitHub issues](https://github.com/hallamlab/ASPIRE/issues) for bug reports and feature requests; include your Git revision and relevant logs.
+For the complete workflow, configuration reference and interpretation, use the **[Read the Docs guide](https://hallamlab-aspire.readthedocs.io/)**. Report bugs and request features through [GitHub issues](https://github.com/hallamlab/ASPIRE/issues).
