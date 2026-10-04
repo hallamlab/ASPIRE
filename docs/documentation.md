@@ -33,8 +33,7 @@ Read the Docs documents the [GitHub integration and automatic notifications](htt
 The GitHub App subscribes to the required events; it does not require you to
 create an additional repository webhook manually.
 
-After the first successful deployment, add the assigned public site URL to the
-README and repository description. The site URL is intentionally not guessed.
+The public guide is hosted at [hallamlab-aspire.readthedocs.io](https://hallamlab-aspire.readthedocs.io/). Keep README guide links pointed at the hosted pages; retain only installation basics, a runnable reviewer test, the main workflow figure, and support links in the README.
 
 ## Keep documentation aligned with the code
 

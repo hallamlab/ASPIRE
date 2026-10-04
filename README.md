@@ -2,9 +2,11 @@
 
 ASPIRE is a Nextflow DSL2 workflow for ASV generation, taxonomy assignment, decontamination, metadata-linked ASV summaries, ecological analyses, VOC association analyses, network/module analyses, and optional ASV-to-MAG linkage.
 
+**[Full user guide](https://hallamlab-aspire.readthedocs.io/en/latest/index.html)** · [Reviewer test](https://hallamlab-aspire.readthedocs.io/en/latest/reviewer-test.html) · [Issues and feature requests](https://github.com/hallamlab/ASPIRE/issues)
+
 ## Quick start
 
-Use a 64-bit Linux system with Git and **Mamba** on `PATH`. The launcher creates its own Nextflow/Java controller and process environments. First-time setup needs internet access for packages and configured references. See [installation](docs/installation.md) for requirements.
+Use a 64-bit Linux system with Git and **Mamba** on `PATH`. The launcher creates its own Nextflow/Java controller and process environments. First-time setup needs internet access for packages and configured references. See [installation](https://hallamlab-aspire.readthedocs.io/en/latest/installation.html) for requirements.
 
 ```bash
 git clone https://github.com/hallamlab/ASPIRE.git
@@ -28,9 +30,9 @@ RESULTS=/absolute/path/to/aspire_mock_output
 ```
 
 Success ends with `All mock-run checks passed.` Open
-`<RESULTS>/summary/report/ASPIRE_run_report.html` to review accounting, module outputs and execution logs. See [remote report viewing](docs/outputs.md#view-reports-on-a-remote-server) if running over SSH.
+`<RESULTS>/summary/report/ASPIRE_run_report.html` to review accounting, module outputs and execution logs. See [remote report viewing](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html#view-reports-on-a-remote-server) if running over SSH.
 
-The fixture has 60 biological samples plus four extraction controls. It exercises three-tier decontamination and the benchmarked statistical/network branches; optional ASV-to-MAG linkage needs separate genome inputs. See the [full reviewer guide](examples/MOCK_DATASET_TESTING.md) for inputs, expected outputs and validation details. Allow at least 8 CPU cores, 32 GB RAM and 50 GB storage as a starting provision for this test; runtime and storage depend on input depth and package caches.
+The test needs at least 8 CPU cores, 32 GB RAM and 50 GB storage as a starting provision. See the [reviewer guide](https://hallamlab-aspire.readthedocs.io/en/latest/reviewer-test.html) for inputs, expected results and coverage.
 
 ### Run your own study
 
@@ -38,36 +40,22 @@ The fixture has 60 biological samples plus four extraction controls. It exercise
 cp asv_pipeline_nextflow.yml my_study.yml
 ```
 
-Edit the input/output paths, references, sample metadata, assay settings and enabled modules in `my_study.yml`. Follow the [study walkthrough](docs/getting-started.md) and [input guide](docs/inputs.md); the complete template contains placeholders and study-specific examples.
+Edit the input/output paths, references, sample metadata, assay settings and enabled modules in `my_study.yml`. Follow the [study walkthrough](https://hallamlab-aspire.readthedocs.io/en/latest/getting-started.html) and [input guide](https://hallamlab-aspire.readthedocs.io/en/latest/inputs.html); the complete template contains placeholders and study-specific examples.
 
 ```bash
 ./run_asv_pipeline.sh my_study.yml
 ```
 
-Use the same command to resume. List supported restart points with `./run_asv_pipeline.sh --list-stages`. [Expert operations](docs/EXPERT_GUIDE.md) explains targeted reruns and cache management.
+Use the same command to resume. List supported restart points with `./run_asv_pipeline.sh --list-stages`. [Expert operations](https://hallamlab-aspire.readthedocs.io/en/latest/EXPERT_GUIDE.html) explains targeted reruns and cache management.
 
 ## Workflow
 
-[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/diagrams/workflow.svg)](docs/assets/workflow.svg)
+[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow.svg)](docs/assets/workflow.svg)
 
-[Vector SVG](docs/assets/workflow.svg) · [PDF](docs/assets/workflow.pdf) · [Workflow and data-flow diagrams](docs/workflow.md)
+[Vector SVG](docs/assets/workflow.svg) · [PDF](docs/assets/workflow.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
 
-Numbered modules are conceptual groups, not a serial execution schedule. Configuration separates `core` ASV construction/taxonomy, `standard` final-table preparation, and `optional` analyses. Three-tier decontamination uses control-bearing raw counts to score contaminants and applies the flags to downstream microbial tables. Module selection and the available metadata determine which branches run.
+## Full documentation
 
-[Brief appnote figure: SVG](docs/assets/workflow-brief.svg) · [PDF](docs/assets/workflow-brief.pdf)
+The [user guide](https://hallamlab-aspire.readthedocs.io/en/latest/index.html) covers [study preparation](https://hallamlab-aspire.readthedocs.io/en/latest/getting-started.html), [decontamination and analyses](https://hallamlab-aspire.readthedocs.io/en/latest/analyses.html), [configuration](https://hallamlab-aspire.readthedocs.io/en/latest/CONFIGURATION.html), [reports](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html), and [resuming or troubleshooting runs](https://hallamlab-aspire.readthedocs.io/en/latest/EXPERT_GUIDE.html).
 
-## Documentation
-
-| Goal | Guide |
-|---|---|
-| Install and test | [Installation](docs/installation.md) · [Reviewer test](examples/MOCK_DATASET_TESTING.md) |
-| Prepare a study | [Study walkthrough](docs/getting-started.md) · [Inputs](docs/inputs.md) |
-| Understand filtering | [Decontamination](docs/decontamination.md) · [Analysis guide](docs/analyses.md) |
-| Configure every module | [Configuration guide](docs/CONFIGURATION.md) · [Parameter catalogue](docs/CONFIG_PARAMETERS.md) |
-| Trace the workflow | [Diagrams](docs/workflow.md) · [Process I/O reference](docs/PROCESS_REFERENCE.md) |
-| Review results | [Outputs and report](docs/outputs.md) · [VOC statistics](docs/VOC_STATISTICS.md) |
-| Resume or troubleshoot | [Expert guide](docs/EXPERT_GUIDE.md) · [Troubleshooting](docs/troubleshooting.md) |
-| Check manuscript methods | [SPARK functionality](docs/SPARK_FUNCTIONALITY.md) |
-| Build or publish the docs | [Documentation maintenance](docs/documentation.md) |
-
-The same guides build as a Read the Docs site. [GitHub issues](https://github.com/hallamlab/ASPIRE/issues) welcomes bug reports and feature requests; include the Git revision, relevant configuration and error logs.
+Documentation source lives in `docs/`. Please use [GitHub issues](https://github.com/hallamlab/ASPIRE/issues) for bug reports and feature requests; include your Git revision and relevant logs.

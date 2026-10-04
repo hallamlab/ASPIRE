@@ -1,6 +1,8 @@
 # Workflow, architecture and data flow
 
-[![Complete ASPIRE workflow](assets/diagrams/workflow.svg)](assets/workflow.svg)
+```{container} aspire-primary-workflow
+[![Complete ASPIRE workflow](assets/workflow.svg)](assets/workflow.svg)
+```
 
 [Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf)
 

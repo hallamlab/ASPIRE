@@ -5,3 +5,7 @@
 
 /* Shared 2240-unit canvases preserve scale between workflow previews. */
 .rst-content img[src*="/diagrams/"] { display: block; width: 100%; max-width: 100%; height: auto; margin: 1.5rem auto; }
+
+/* Match MP: the primary workflow uses its tight SVG and available page width. */
+.wy-nav-content:has(.aspire-primary-workflow) { max-width: none; padding-left: 12px; padding-right: 12px; }
+.aspire-primary-workflow img { display: block; width: 100%; max-width: 100%; height: auto; margin: 1.5rem auto; }
