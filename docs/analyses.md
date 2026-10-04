@@ -88,7 +88,7 @@ When batch correction is enabled, corrected count and metadata tables are produc
 
 ## VOC Correlation
 
-`VOC_CORRELATION` links VOC abundances to filtered ASV abundances. It requires `optional.voc_correlation.enabled: true`, a metadata table, the final filtered ASV counts, and `optional.voc_correlation.voc_table`.
+`VOC_CORRELATION` links filtered ASV abundances to measurements of Volatile Organic Compounds (VOCs). It requires `optional.voc_correlation.enabled: true`, a metadata table, the final filtered ASV counts, and `optional.voc_correlation.voc_table`.
 
 Direction filtering is controlled by:
 

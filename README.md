@@ -1,6 +1,6 @@
-# ASPIRE
+# ASPIRE: Amplicon Sequencing Profiler for Investigating Respiratory Ecosystems
 
-ASPIRE is a Nextflow DSL2 workflow for ASV generation, taxonomy assignment, decontamination, metadata-linked ASV summaries, ecological analyses, VOC association analyses, network/module analyses, and optional ASV-to-MAG linkage.
+ASPIRE is a Nextflow DSL2 workflow for ASV generation, taxonomy assignment, decontamination, metadata-linked ASV summaries, ecological analyses, association analyses linking ASVs with Volatile Organic Compounds (VOCs), network/module analyses, and optional ASV-to-MAG linkage.
 
 **[Full user guide](https://hallamlab-aspire.readthedocs.io/en/latest/index.html)** · [Reviewer test](https://hallamlab-aspire.readthedocs.io/en/latest/reviewer-test.html) · [Issues and feature requests](https://github.com/hallamlab/ASPIRE/issues)
 

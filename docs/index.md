@@ -1,6 +1,6 @@
-# ASPIRE
+# ASPIRE: Amplicon Sequencing Profiler for Investigating Respiratory Ecosystems
 
-Build amplicon sequence variants (ASVs), assign taxonomy, screen non-targets and contaminants, and connect microbial community profiles to sample metadata, measurements and genome references.
+Build amplicon sequence variants (ASVs), assign taxonomy, screen non-targets and contaminants, and connect microbial community profiles to sample metadata, Volatile Organic Compounds (VOCs) and genome references.
 
 **Start here:** [install ASPIRE](installation.md), then run the [public reviewer test](reviewer-test.md). The launcher manages Mamba environments and Nextflow. Use the [study walkthrough](getting-started.md) when you are ready to analyze your own samples.
 

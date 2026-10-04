@@ -9,7 +9,7 @@
 <text x="44" y="51" font-size="28" text-anchor="start"><tspan x="44" dy="0">Inputs</tspan></text>
 <text x="44" y="82" font-size="23" text-anchor="start"><tspan x="44" dy="0">Core: amplicon FASTQs, sample IDs / manifest and taxonomy references</tspan></text>
 <text x="44" y="112" font-size="23" text-anchor="start"><tspan x="44" dy="0">As enabled: metadata, controls / DNA concentrations, screening references,</tspan></text>
-<text x="44" y="141" font-size="23" text-anchor="start"><tspan x="44" dy="0">VOCs / measurements, genomes / barrnap outputs, or supplied network files</tspan></text>
+<text x="44" y="141" font-size="23" text-anchor="start"><tspan x="44" dy="0">VOCs, genomes / barrnap outputs, or supplied network files</tspan></text>
 <rect x="1030" y="25" width="670" height="88" rx="16" fill="#CCCCCC" stroke="#666666" stroke-width="1.5" />
 <text x="1090" y="53" font-size="21" text-anchor="middle"><tspan x="1090" dy="0">Module</tspan></text>
 <rect x="1078" y="73" width="24" height="24" rx="0" fill="#F5F5F5" stroke="#111111" stroke-width="1.5" />
@@ -241,7 +241,7 @@
 <text x="325" y="2027" font-size="20" text-anchor="middle"><tspan x="325" dy="0">9</tspan></text>
 <text x="160" y="2076" font-size="17" text-anchor="middle"><tspan x="160" dy="0">Optional analysis branches</tspan></text>
 <circle cx="470" cy="2020" r="12" fill="#F5F5F5" stroke="#666666" stroke-width="3" />
-<text x="470" y="1958" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Analysis tables;</tspan><tspan x="470" dy="24.86">measurements as needed</tspan></text>
+<text x="470" y="1958" font-size="22" text-anchor="middle"><tspan x="470" dy="0">Analysis tables;</tspan><tspan x="470" dy="24.86">VOCs as needed</tspan></text>
 <path d="M 339.5 2020 L 456.5 2020" class="wire" />
 <path d="M 483.5 2020 L 590 2020" class="branch" />
 <path d="M 590 1958.0 L 590 2082.0" class="branch" />
@@ -254,8 +254,8 @@
 <path d="M 590 2020.0 L 984.879 2020.0" class="wire" />
 <path d="M 1000 2007.0 L 1013 2020.0 L 1000 2033.0 L 987 2020.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3" />
 <path d="M 1015.121 2020.0 L 1450 2020.0" class="branch" />
-<text x="790" y="2008.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">Measurement associations</tspan></text>
-<text x="1240" y="2008.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Spearman / CCA / RDA / dbRDA</tspan></text>
+<text x="790" y="2008.0" font-size="21" text-anchor="middle"><tspan x="790" dy="0">ASV–VOC associations</tspan></text>
+<text x="1240" y="2008.0" font-size="20" text-anchor="middle"><tspan x="1240" dy="0">Spearman / permutation / BH correction</tspan></text>
 <path d="M 590 2082.0 L 984.879 2082.0" class="wire" />
 <path d="M 1000 2069.0 L 1013 2082.0 L 1000 2095.0 L 987 2082.0 Z" fill="#F5F5F5" stroke="#666666" stroke-width="3" />
 <path d="M 1015.121 2082.0 L 1450 2082.0" class="branch" />

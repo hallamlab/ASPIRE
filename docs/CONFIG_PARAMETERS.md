@@ -503,7 +503,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.voc_correlation.patient_inference` | bool | `true` | Add patient-level relative-abundance permutation correlations and CLR sensitivity analysis; legacy sample correlations remain exploratory. |
 | `optional.voc_correlation.patient_permutations` | int | `9999` | Seeded permutations for patient correlations and case-status tests; case-status enumeration is exact when all allocations fit this budget. Use 999 for demonstrations, 9999 or more for analysis. |
 | `optional.voc_correlation.patient_seed` | int | `42` | Random seed for patient-level VOC permutation tests. |
-| `optional.voc_correlation.patient_min_patients` | int | `6` | Minimum patients with cognate measurements to test an ASV–VOC association (at least 3; default 6 is a feasibility gate, not a power guarantee). |
+| `optional.voc_correlation.patient_min_patients` | int | `6` | Minimum patients with cognate VOC measurements to test an ASV–VOC association (at least 3; default 6 is a feasibility gate, not a power guarantee). |
 | `optional.voc_correlation.patient_min_nonzero` | int | `3` | Minimum patients with any detected counts for a candidate ASV; insufficient pairs are reported without p-values. |
 | `optional.voc_correlation.clr_pseudocount` | float | `0.5` | Positive count pseudocount added to every supplied ASV before sample-wise centered log-ratios; sensitivity analysis only, default 0.5. |
 | `optional.voc_correlation.voc_columns` | list | `[]` | Ordered values used for VOC columns by the VOC correlation module. |
@@ -731,6 +731,8 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.master_summary.whitelist` | list | `["type_group_ISA_enriched.tsv","case_ISA_enriched.tsv","type_group_case_ISA_results.tsv","type_group_indicator_species_summary.tsv","Case_indicator_species_summary.tsv","type_group_indicator_species_results.tsv","Case_indicator_species_results.tsv","spieceasi_node_features.csv","spieceasi_modules_sub.tsv","spieceasi_modules_all.tsv","module_asv_anchor_table.tsv","clustermap_ASV_ID_plot.tsv","asv2mag_pairing.tsv","asv2mag_summary.tsv","asv2mag_genome_summary.tsv"]` | Ordered values used for whitelist by the master summary module. |
 
 ### `optional.measurement_association`
+
+This general measurement-association extension is outside the publication workflow. Use `optional.voc_correlation` for ASV associations with Volatile Organic Compounds (VOCs).
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|

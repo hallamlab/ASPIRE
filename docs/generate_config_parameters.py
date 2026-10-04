@@ -69,7 +69,7 @@ EXACT = {
     "optional.voc_correlation.patient_inference": "Add patient-level relative-abundance permutation correlations and CLR sensitivity analysis; legacy sample correlations remain exploratory.",
     "optional.voc_correlation.patient_permutations": "Seeded permutations for patient correlations and case-status tests; case-status enumeration is exact when all allocations fit this budget. Use 999 for demonstrations, 9999 or more for analysis.",
     "optional.voc_correlation.patient_seed": "Random seed for patient-level VOC permutation tests.",
-    "optional.voc_correlation.patient_min_patients": "Minimum patients with cognate measurements to test an ASV–VOC association (at least 3; default 6 is a feasibility gate, not a power guarantee).",
+    "optional.voc_correlation.patient_min_patients": "Minimum patients with cognate VOC measurements to test an ASV–VOC association (at least 3; default 6 is a feasibility gate, not a power guarantee).",
     "optional.voc_correlation.patient_min_nonzero": "Minimum patients with any detected counts for a candidate ASV; insufficient pairs are reported without p-values.",
     "optional.voc_correlation.clr_pseudocount": "Positive count pseudocount added to every supplied ASV before sample-wise centered log-ratios; sensitivity analysis only, default 0.5.",
     "optional.spieceasi.min_rel_abund": "Minimum relative abundance required for an ASV to enter network inference.",
@@ -242,6 +242,10 @@ def main() -> None:
             lines.extend([
                 f"### `{tier}.{section}`" if tier != "environments" else "### Process environment definitions",
                 "",
+            ])
+            if tier == "optional" and section == "measurement_association":
+                lines.extend(["This general measurement-association extension is outside the publication workflow. Use `optional.voc_correlation` for ASV associations with Volatile Organic Compounds (VOCs).", ""])
+            lines.extend([
                 "| Parameter | Type | Template value | Definition |",
                 "|---|---|---|---|",
             ])

@@ -291,11 +291,12 @@ separate. See [Morris et al. (2019)](https://doi.org/10.1002/sim.8086).
 
 ### Additional optional modules
 
-The complete template includes `optional.measurement_association` (sample-matched
-continuous measurements and constrained ordination), `optional.grouping_diagnostics`
+The complete template includes `optional.grouping_diagnostics`
 (group separation and optional validated label augmentation), and
 `optional.asv_mag_network` (taxonomy-filtered ASV–MAG network mapping). These are
 disabled by default and do not replace the dedicated VOC or network processes.
+ASV-associated chemical analyses in the publication workflow use Volatile Organic Compounds (VOCs) through `optional.voc_correlation`. The general `optional.measurement_association` extension is outside this publication workflow.
+
 Their inputs and outputs are described in [Process Reference](PROCESS_REFERENCE.md)
 and all declared parameters appear in [Parameter Catalogue](CONFIG_PARAMETERS.md).
 

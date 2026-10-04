@@ -88,7 +88,7 @@ Both flat legacy YAML and tiered YAML remain accepted; define a section only onc
 | `PAIRED_GROUP_CONTRAST` | downstream tables and paired-group metadata | Paired comparisons; alias `LUNG_STATUS_ANALYSIS`, configured with `optional.lung_status_analysis`. |
 | `GROUPING_DIAGNOSTICS` | downstream counts and sample metadata | Group separation, ordinations, optional balanced-resampling support, and optional proposed labels in `modules/grouping_diagnostics/`. |
 | `GROUP_LABEL_AUGMENTATION` | diagnostic assignments, validation summary, metadata and downstream long table | Audited augmented metadata/long table; only changes downstream labels when `optional.grouping_diagnostics.soft_labeling.apply_downstream` is enabled and validation gates pass. |
-| `MEASUREMENT_ASSOCIATION` | downstream counts/long table, metadata and configured measurements | Spearman associations and configured CCA/RDA/dbRDA analyses in `modules/measurement_association/`; complementary to the dedicated VOC process. |
+| `MEASUREMENT_ASSOCIATION` (development extension; outside the publication workflow) | downstream counts/long table, metadata and a general measurement table | Generalized Spearman and CCA/RDA/dbRDA analyses; publication ASV–VOC associations use `VOC_CORRELATION` instead. |
 | `ASV_MAG_NETWORK` | inferred network, taxonomy, ASV-MAG links and optional MAG abundance/functions | Taxonomy-filtered network mappings and functional/abundance summaries in `modules/asv_mag_network/`. Requires ASV-MAG linking and network analysis. |
 
 These additional modules remain optional. Their full settings appear in the
