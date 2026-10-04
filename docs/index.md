@@ -47,3 +47,9 @@ documentation
 ```
 
 [Source code](https://github.com/hallamlab/ASPIRE) · [Issues and feature requests](https://github.com/hallamlab/ASPIRE/issues)
+
+## Cite ASPIRE
+
+If you use ASPIRE, please cite:
+
+> McLaughlin, R. J., Chen, S., Nag, A., Noonan, A. J. C., Bartolomeu, C., Borden, S. A., Lam, S., Myers, R., & Hallam, S. J. (2026). *ASPIRE: the Amplicon Sequencing Profiler for Investigating Respiratory Ecosystems*. bioRxiv, version 2 (12 August 2026). [DOI: 10.64898/2026.08.05.743000](https://doi.org/10.64898/2026.08.05.743000) · [Read version 2](https://www.biorxiv.org/content/10.64898/2026.08.05.743000v2).
