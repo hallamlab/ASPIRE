@@ -7,7 +7,7 @@ git clone https://github.com/hallamlab/ASPIRE.git
 cd ASPIRE
 ```
 
-Continue with the [reviewer test](reviewer-test.md) or [your own study](getting-started.md).
+Continue with the [workflow test](test.md) or [your own study](getting-started.md).
 
 ## Requirements
 
@@ -58,7 +58,7 @@ ASPIRE.
 - `examples/mock.local.yml`: full-module template used by the portable mock config generator.
 - `examples/configure_mock_run.sh`: validates a supplied mock fixture and writes a machine-local YAML.
 - `examples/validate_mock_run.sh`: validates the completed mock run against its truth contract.
-- [reviewer guide](reviewer-test.md): expanded mock test instructions.
+- [test guide](test.md): expanded mock test instructions.
 - `docs/CONFIGURATION.md`: configuration and dependency reference.
 - `docs/CONFIG_PARAMETERS.md`: exhaustive key-by-key definitions and template values.
 - `docs/EXPERT_GUIDE.md`: restart, cache, resource, and diagnostic guidance.

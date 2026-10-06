@@ -167,5 +167,5 @@ New processes should have a process-specific environment, explicit inputs and
 outputs, configuration validation, stable publication paths, and tests. Add the
 process to `run_asv_pipeline.sh --list-stages` when it is a supported rerun
 boundary. Update `PROCESS_REFERENCE.md`, `CONFIGURATION.md`, the full YAML
-template, mock configuration and mock validator together so the reviewer path
+template, mock configuration and mock validator together so the test path
 continues to exercise the advertised functionality.

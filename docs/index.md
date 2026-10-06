@@ -2,7 +2,7 @@
 
 Build amplicon sequence variants (ASVs), assign taxonomy, screen non-targets and contaminants, and connect microbial community profiles to sample metadata, Volatile Organic Compounds (VOCs) and genome references.
 
-**Start here:** [install ASPIRE](installation.md), then run the [public reviewer test](reviewer-test.md). The launcher manages Mamba environments and Nextflow. Use the [study walkthrough](getting-started.md) when you are ready to analyze your own samples.
+**Start here:** [install ASPIRE](installation.md), then run the [public workflow test](test.md). The launcher manages Mamba environments and Nextflow. Use the [study walkthrough](getting-started.md) when you are ready to analyze your own samples.
 
 ```{container} aspire-primary-workflow
 [![ASPIRE appnote overview: read processing, taxonomy, metadata, community ecology, networks and VOC integration.](assets/workflow-brief.svg)](assets/workflow-brief.svg)
@@ -17,7 +17,7 @@ Arrows between numbered modules trace the conceptual flow of results. Optional b
 :caption: Getting started
 
 installation
-reviewer-test
+test
 getting-started
 inputs
 ```

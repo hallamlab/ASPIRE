@@ -1,6 +1,6 @@
 # SPARK and ASPIRE manuscript functionality
 
-This crosswalk identifies where a reviewer can find and run the analytical
+This crosswalk identifies where a user can find and run the analytical
 functionality reported in the paired SPARK data paper and ASPIRE application
 note. It describes capabilities, not patient-data availability. The public mock
 dataset is the executable demonstration dataset.

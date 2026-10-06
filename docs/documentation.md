@@ -1,8 +1,8 @@
 # Maintain and publish the documentation
 
-The README holds installation basics, the reviewer test and links into the
+The README holds installation basics, the workflow test and links into the
 complete guides. Markdown pages under `docs/` are shared between GitHub and
-Read the Docs; `docs/index.md` defines navigation. The reviewer guide includes
+Read the Docs; `docs/index.md` defines navigation. The test guide includes
 `examples/MOCK_DATASET_TESTING.md` so its detailed test procedure has one source.
 
 ## Build locally
@@ -25,7 +25,7 @@ sample data are needed to build the documentation. Workflow previews are committ
 2. Add a project from `hallamlab/ASPIRE`. Grant the GitHub integration access to this repository; organization access may need an administrator.
 3. Select the branch containing these documentation files for the first build. Use `docs/main-user-guide` for the initial review, then `main` after merging.
 4. Keep `.readthedocs.yaml` at the repository root as the build configuration. It selects `docs/conf.py`, installs `docs/requirements.txt`, and treats Sphinx warnings as errors.
-5. Start a build and inspect its log. Open the resulting site; check the reviewer page, workflow figures, Mermaid diagrams, parameter tables and PDF downloads.
+5. Start a build and inspect its log. Open the resulting site; check the test page, workflow figures, Mermaid diagrams, parameter tables and PDF downloads.
 6. In the project versions/settings, activate the versions you want to publish and choose the default version visitors should see. After merging, make sure the production branch is the source of the default documentation build.
 7. Confirm that a subsequent push triggers a new build. The GitHub integration normally handles update notifications automatically; inspect the integration settings if it does not.
 
@@ -33,13 +33,13 @@ Read the Docs documents the [GitHub integration and automatic notifications](htt
 The GitHub App subscribes to the required events; it does not require you to
 create an additional repository webhook manually.
 
-The public guide is hosted at [hallamlab-aspire.readthedocs.io](https://hallamlab-aspire.readthedocs.io/). Keep README guide links pointed at the hosted pages; retain only installation basics, a runnable reviewer test, the main workflow figure, and support links in the README.
+The public guide is hosted at [hallamlab-aspire.readthedocs.io](https://hallamlab-aspire.readthedocs.io/). Keep README guide links pointed at the hosted pages; retain only installation basics, a runnable workflow test, the main workflow figure, and support links in the README.
 
 ## Keep documentation aligned with the code
 
 - Update the YAML template, configuration guide and process reference together.
 - Regenerate the parameter catalogue with `python docs/generate_config_parameters.py`.
-- Check registered-stage and parameter coverage with `python -m pytest tests/test_documentation_coverage.py` in a development environment containing pytest and PyYAML.
+- Check registered-stage and parameter coverage with `python -m pyworkflow tests/test_documentation_coverage.py` in a development environment containing pytest and PyYAML.
 - Build with warnings treated as errors and inspect diagrams in a browser.
 - Keep the SVG/PDF workflow figure synchronized when the analysis graph changes.
 

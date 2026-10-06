@@ -14,7 +14,7 @@ Download the ASPIRE mock dataset from Zenodo:
 Extract the downloaded archive and use the extracted `mock_dataset/` directory
 as the `--dataset` argument in the commands below.
 
-## Reviewer Fast Path
+## Test Fast Path
 
 From the ASPIRE repository directory, edit the first two paths and run the block:
 
@@ -100,7 +100,7 @@ sets the persistent runtime directory to `<output>/.aspire`, and prints the exac
 developer-specific paths manually. The generated configuration retains the
 runtime directory so interrupted and completed runs remain resumable. It also
 preserves the explicit `core`, `standard`, and `optional` namespaces so a
-reviewer can distinguish required construction stages from selectable analyses.
+test can distinguish required construction stages from selectable analyses.
 
 ## Run
 

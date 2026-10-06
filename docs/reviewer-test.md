@@ -1,5 +1,7 @@
-# Reviewer test
+---
+orphan: true
+---
 
-```{include} ../examples/MOCK_DATASET_TESTING.md
-:start-line: 1
-```
+# Test walkthrough
+
+The installation and workflow test is for everyone. Continue to the [test walkthrough](test.md).

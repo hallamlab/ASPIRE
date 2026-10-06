@@ -1,6 +1,6 @@
 # Run your own study
 
-Start from a working [installation](installation.md). A successful [reviewer test](reviewer-test.md) checks the installation before you introduce study-specific settings. See [input organization](inputs.md) before editing the YAML template.
+Start from a working [installation](installation.md). A successful [workflow test](test.md) checks the installation before you introduce study-specific settings. See [input organization](inputs.md) before editing the YAML template.
 
 ## General Quick Start
 

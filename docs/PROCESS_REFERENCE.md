@@ -13,7 +13,7 @@ compatibility:
 - `standard:PROCESS`: final-table preparation used by the usual analysis graph.
 - `optional:PROCESS`: selectable analyses and reporting stages.
 
-The launcher prints the same three groups before execution, so a reviewer can
+The launcher prints the same three groups before execution, so a user can
 distinguish the pipeline backbone from optional branches in the terminal.
 
 ## Core ASV Workflow

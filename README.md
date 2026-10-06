@@ -2,7 +2,7 @@
 
 ASPIRE is a Nextflow DSL2 workflow for ASV generation, taxonomy assignment, decontamination, metadata-linked ASV summaries, ecological analyses, association analyses linking ASVs with Volatile Organic Compounds (VOCs), network/module analyses, and optional ASV-to-MAG linkage.
 
-**[Full user guide](https://hallamlab-aspire.readthedocs.io/en/latest/index.html)** · [Reviewer test](https://hallamlab-aspire.readthedocs.io/en/latest/reviewer-test.html) · [Issues and feature requests](https://github.com/hallamlab/ASPIRE/issues)
+**[Full user guide](https://hallamlab-aspire.readthedocs.io/en/latest/index.html)** · [Workflow test](https://hallamlab-aspire.readthedocs.io/en/latest/test.html) · [Issues and feature requests](https://github.com/hallamlab/ASPIRE/issues)
 
 ## Quick start
 
@@ -13,7 +13,7 @@ git clone https://github.com/hallamlab/ASPIRE.git
 cd ASPIRE
 ```
 
-### Run the reviewer test
+### Run the workflow test
 
 Download and extract the [public mock dataset (Zenodo DOI: 10.5281/zenodo.22906294)](https://doi.org/10.5281/zenodo.22906294). The data is downloaded separately; configuration and validation scripts are included in the repository. Edit the two paths below, then run from the ASPIRE directory:
 

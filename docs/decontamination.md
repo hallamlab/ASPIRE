@@ -47,9 +47,9 @@ summary in the module's published audit. The [configuration guide](CONFIGURATION
 and [parameter catalogue](CONFIG_PARAMETERS.md) describe control identifiers,
 concentration/sample-type columns, thresholds and combination settings.
 
-## Reviewer test and study interpretation
+## Workflow test and study interpretation
 
-The [public reviewer fixture](reviewer-test.md) supplies synthetic extraction
+The [public test fixture](test.md) supplies synthetic extraction
 controls and DNA concentrations to exercise the implementation. For a real
 study, use the actual control design and measured concentrations. A technical
 validation pass does not establish that filtering choices suit every study.
