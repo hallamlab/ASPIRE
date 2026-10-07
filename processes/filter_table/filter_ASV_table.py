@@ -13,8 +13,15 @@ filtered_fasta = sys.argv[6]
 # Load count table
 count_df = pd.read_csv(count_table, sep='\t', header=0, index_col=0)
 
+def log_step(name, frame):
+    print(f"[STEP] {name}: samples={frame.shape[1]} ASVs={frame.shape[0]} reads={int(frame.to_numpy().sum())}")
+
+log_step('input', count_df)
+# When cohort decontamination is enabled, biological-only depth QC has already
+# run and this threshold is zero. Controls never enter this feature filter.
 # Filter samples by total count
 low_filter_df = count_df.loc[:, count_df.sum() >= count_threshold]
+log_step('sample_depth', low_filter_df)
 
 # Filter ASVs by per-sample relative abundance (%).
 # Keep an ASV if it reaches the threshold in at least one retained sample.
@@ -30,11 +37,15 @@ if nonzero_samples.any():
 else:
     abund_filter_df = low_filter_df.iloc[0:0]
 
+log_step('relative_abundance', abund_filter_df)
+
 # Filter ASVs that are all 0s
 filter_0s = low_filter_df > 0
 print(f"Number of ASVs before filtering: {abund_filter_df.shape[0]}")
 abund_filter_df = abund_filter_df.loc[filter_0s.any(axis=1)]
 print(f"Number of ASVs after filtering: {abund_filter_df.shape[0]}")
+
+log_step('nonzero_features', abund_filter_df)
 
 # Save filtered count table
 abund_filter_df.to_csv(filtered_table, sep='\t', header=True, index=True)

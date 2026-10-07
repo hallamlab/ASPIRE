@@ -1,13 +1,15 @@
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
 flowchart TD
-    RAW[Raw ASV counts including controls] --> TECH[Technical sample / ASV filters]
-    TECH --> TARGET[ASV_target.tsv: non-target-filtered microbial counts]
-    TARGET --> BASE[Long ASV annotations and wide counts]
-    RAW --> SCORE[Optional contamination scoring]
-    SCORE --> FILTER[Apply contamination flags to long / wide tables]
-    BASE --> FILTER
-    BASE -->|Filtering disabled| SELECT[Selected base tables]
-    FILTER --> SELECT
+    RAW[Raw ASV counts including controls and full taxonomy] --> QC[Optional biological-only depth QC]
+    QC --> TECH[TECH prevalence: biological plus technical negatives]
+    QC --> BIO[BIO prevalence: biological plus biological/sample controls]
+    TECH --> UNION[Union removal; retain original biological counts]
+    BIO --> UNION
+    UNION --> REF[Reference-based non-target screening]
+    REF --> FEATURES[FILTER_ASVS: mock 0.1% RA in any biological sample AND 5% nonzero prevalence]
+    RAW -->|Decontamination disabled| REF
+    FEATURES --> TARGET[ASV_target.tsv: non-target-filtered microbial counts]
+    TARGET --> SELECT[PLOT_METADATA: linked long and wide tables]
     SELECT --> GROUP[Optional group diagnostics / validated labels]
     GROUP --> BATCH[Optional batch correction and count selection]
     BATCH --> FINAL[Selected counts and synchronized long annotations]

@@ -3,18 +3,20 @@ flowchart TD
     I[FASTQs and sample manifest] --> C[Read QC and ASV construction]
     R[Sequence and taxonomy references] --> T[Alignment and taxonomy]
     C --> T
-    T --> F[Reference-based non-target filtering]
+    T --> D{Control decontamination enabled?}
+    D -->|Yes| QC[Biological-only depth QC; retain controls]
+    S[Sample class and pairing metadata] --> QC
+    C -->|Raw counts| QC
+    QC --> DC[Independent TECH and BIO prevalence; union removal]
+    DC --> REF[Reference-based non-target screening]
+    REF --> F[FILTER_ASVS: biological abundance and taxonomy filters]
+    D -->|No| REF
     F --> M[Metadata-linked microbial tables]
-    S[Sample metadata and controls] --> M
-    M --> D{Three-tier decontamination enabled?}
-    D -->|Yes| DC[Control-based scores and filtering]
-    D -->|No| A[Analysis table preparation]
-    C -->|Raw counts retaining controls| DC
-    S --> DC
-    DC --> A
+    S --> M
+    M --> A[Analysis table preparation]
     A --> E[Ecology, indicators and associations]
     A --> N[Networks, modules and topology]
-    C -->|ASV sequences| L[Optional ASV-to-genome linkage]
+    F -->|Final filtered ASV sequences| L[Optional ASV-to-genome linkage]
     G[Genome and barrnap references] --> L
     L --> N
     E --> O[Tables, plots and run report]

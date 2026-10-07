@@ -27,7 +27,7 @@ These stratified runs write per-level and pooled tables named like `stratified_C
 
 ## Count Filtering
 
-`FILTER_COUNTS` produces the ASV count tables used by downstream analyses. The important outputs are:
+`FILTER_ASVS` produces the ASV count tables used by downstream analyses. The important outputs are:
 
 - `ASV_target.tsv`: final microbial ASV table after contaminant removal, mitochondrial removal, abundance/prevalence filtering, taxonomy-quality filtering, and explicit taxon exclusions.
 - `ASV_target.micro.tsv`: intermediate microbial table before final abundance/taxonomy filtering; kept for audit and data-loss summaries.
@@ -51,26 +51,37 @@ standard:
 Use this for host or other known non-target ranks that should be removed even if they pass sequence and abundance filters.
 
 
-## Optional Three-Tier Decontamination
+## Control Decontamination
 
-Set `optional.three_tier_decontam.enabled: true` to run the SPARK manuscript contamination screen after `PLOT_METADATA` and before batch correction, diversity, indicator-species, SPIEC-EASI/network, VOC, clustermaps, and the other downstream modules. The statistical model uses the raw pre-filter ASV count matrix so negative controls remain available, while its decisions are applied to the final host-filtered long and wide microbial tables.
+Enable `core.control_decontam.enabled` to run independent TECH and BIO prevalence
+tests after full taxonomy, before reference screening, combined `FILTER_ASVS`
+and `PLOT_METADATA`. Biological samples must pass the post-QC depth cutoff;
+nonzero controls are exempt. Both tests use the original counts and the same
+biological cohort. ASVs flagged by either arm are removed by union.
 
 ```yaml
-optional:
-  three_tier_decontam:
+core:
+  control_decontam:
     enabled: true
     metadata: /path/to/sample_metadata.tsv
-    output_dir: three_tier_decontam
     metadata_sample_col: Sample
-    sample_types: [BAL, Bronchial Brush, Oral Rinse]
-    pooled_threshold: 0.1
-    within_type_threshold: 0.1
-    aggressive_threshold: 0.5
-    combine_mode: min
-    biological_plausibility: true
+    class_col: Type_Group
+    biological_labels: [BAL, Bronchial Brush, Oral Rinse]
+    technical_labels: [Control]
+    bio_control_labels: [Scope Flush]
+    positive_labels: [Positive]
+    min_biological_reads: 5000
+    technical_enabled: true
+    bio_control_enabled: true
+    technical_score_threshold: 0.1
+    bio_control_score_threshold: 0.1
 ```
 
-The complete score tables, flags, taxonomy audit, read-loss summary, and filtered long/wide tables are published under the configured `output_dir`. The module is disabled by default. For `RUN_FROM_FINAL_CHECKPOINT`, set `checkpoint.raw_asv_counts` to the original control-bearing count matrix; falling back to `checkpoint.asv_counts` is only valid when that table still contains the negative controls.
+Disable an arm explicitly when that class of controls is absent. Control presence
+alone does not cause removal: decontam's prevalence score must be below the
+arm's threshold. See [decontamination](decontamination.md) for sample-class rules,
+QC outputs and migration. Full-workflow resume can rerun this core stage;
+metadata-only workflows cannot reconstruct control-bearing raw counts.
 
 
 ## Metadata And ASV Outputs
@@ -101,11 +112,16 @@ optional:
 
 This setting applies to ASV-VOC correlation tables and ASV-VOC correlation heatmaps. For example, `positive` keeps only positive ASV-VOC correlations in the reported long table and correlation clustermap, allowing statements such as "VOC abundance was positively correlated with ASV X." Multiple-testing q-values are computed across the tested ASV-VOC pairs before direction filtering.
 
+ASV–VOC correlation clustermaps put **VOCs on the y-axis and ASVs on the
+x-axis**, with a landscape layout and clustering on both axes. ASV indicator
+colors follow the columns. A singleton axis is displayed without a dendrogram.
+The exported correlation matrices retain ASV rows and VOC columns for tabular use.
+
 VOC abundance plots are different from correlation plots:
 
 - `asv_voc_clustermap*` shows ASV-VOC correlation values and respects `correlation_direction`.
-- `sample_voc_brush_clustermap*` shows per-sample VOC abundance z-scores, not correlations. Blue indicates lower-than-average VOC abundance for that VOC, white is near the VOC mean, and orange indicates higher-than-average abundance.
-- `patient_case_voc_barplots_brush*` displays per-VOC patient z-scores so VOCs are visually comparable on one axis; statistical tests are still run on original patient-level VOC values.
+- `sample_voc_clustermap*` shows per-sample VOC abundance z-scores, not correlations. Blue indicates lower-than-average VOC abundance for that VOC, white is near the VOC mean, and orange indicates higher-than-average abundance.
+- `patient_case_voc_barplots*` displays per-VOC patient z-scores so VOCs are visually comparable on one axis; statistical tests are still run on original patient-level VOC values.
 
 
 ## Standard and Optional Branches
@@ -118,7 +134,7 @@ filtering, run summaries, and metadata-linked final-table construction.
 Selectable analyses live under `optional` and are controlled by their
 `enabled` flags:
 
-- `optional.three_tier_decontam`: control-based prevalence, frequency, and biological-plausibility decontamination.
+- `core.control_decontam`: independent TECH/BIO prevalence filtering before downstream analysis.
 - `optional.plot_upset`, `optional.bubbleplotter`, `optional.umap_clustering`: metadata visualization branches.
 - `optional.batch_correction` and `optional.outlier_detection`: corrected ASV tables and outlier checks.
 - `optional.collectors_curve`: rarefaction/collector curve summaries.

@@ -10,7 +10,7 @@ root_doc = 'index'
 # Explicit publication boundary: local manuscript drafts and audits never enter
 # the documentation build, even when they exist in a developer checkout.
 include_patterns = [
-    'index.md', 'installation.md', 'test.md', 'reviewer-test.md', 'getting-started.md',
+    'index.md', 'installation.md', 'test.md', 'cami-mock.md', 'reviewer-test.md', 'getting-started.md',
     'inputs.md', 'workflow.md', 'decontamination.md', 'analyses.md', 'outputs.md',
     'CONFIGURATION.md', 'CONFIG_PARAMETERS.md', 'PROCESS_REFERENCE.md',
     'EXPERT_GUIDE.md', 'VOC_STATISTICS.md', 'SPARK_FUNCTIONALITY.md',

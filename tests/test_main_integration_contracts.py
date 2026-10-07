@@ -12,8 +12,17 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_optional_graph_routes_new_modules_through_filtered_tables():
     source = (ROOT / 'asv_pipeline.nf').read_text()
     body = source.split('workflow optional {', 1)[1].split('workflow RUN_METADATA_ANALYSES {', 1)[0]
-    assert 'baseAsvMeta = three_tier_stage.filtered_long' in body
-    assert 'baseAsvFinal = three_tier_stage.filtered_wide' in body
+    assert 'CONTROL_DECONTAM(' not in body
+    core = source.split('workflow core {', 1)[1].split('workflow standard {', 1)[0]
+    assert core.index('TAXONOMY(') < core.index('CONTROL_DECONTAM(')
+    assert 'FILTER_TABLE(' not in source and 'FILTER_COUNTS(' not in source
+    standard = source.split('workflow standard {', 1)[1].split('workflow optional {', 1)[0]
+    assert standard.index('MITO_DECONTAM(') < standard.index('FILTER_ASVS(') < standard.index('PLOT_METADATA(')
+    assert 'def metadataMicroInput = filter_counts_stage.filtered_counts' in standard
+    assert 'filtered_fasta = filter_counts_stage.filtered_fasta' in standard
+    assert 'counts_for_feature_filter = decontam_stage.cleaned' in core
+    assert "binding.setVariable('metadataPlotsSubtractionGroups', [])" in source
+    assert 'controlDecontamEnabled ? 0 :' in source
     for name in ['Batch', 'MeasurementAssociation', 'GroupingDiagnostics']:
         assert f'asvFinalFor{name} = baseAsvFinal.map' in body
     assert 'asvMetaForGroupAugmentation = baseAsvMeta.map' in body
@@ -35,7 +44,7 @@ def test_launcher_lists_every_stage_with_tier_and_preserves_aliases():
     stages = result.stdout.split('# aliases')[0].splitlines()
     assert stages and all(re.fullmatch(r'(core|standard|optional):[A-Z_]+', row) for row in stages)
     assert 'POWER_ANALYSIS_PIPELINE -> GROUP_POWER_ANALYSIS' in result.stdout
-    assert 'optional:THREE_TIER_DECONTAM' in stages
+    assert 'core:CONTROL_DECONTAM' in stages
 
 
 def test_mock_preserves_existing_correction_and_network_choices():

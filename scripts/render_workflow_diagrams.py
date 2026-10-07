@@ -7,6 +7,7 @@ pinned Mermaid bundle; documentation builds use the committed SVGs offline.
 """
 from pathlib import Path
 import json
+import argparse
 import xml.etree.ElementTree as ET
 from playwright.sync_api import sync_playwright
 
@@ -16,13 +17,20 @@ ET.register_namespace('', NS[1:-1])
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--mermaid-js', type=Path, help='Local Mermaid 11.12.1 bundle for offline rendering')
+    args = parser.parse_args()
     config = json.loads((ROOT / 'docs/diagrams/figures.json').read_text())
     rendered = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto('about:blank')
-        page.add_script_tag(url='https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.min.js')
+        page.set_default_timeout(45000)
+        if args.mermaid_js:
+            page.add_script_tag(path=str(args.mermaid_js.resolve()))
+        else:
+            page.add_script_tag(url='https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.min.js')
         page.evaluate('mermaid.initialize({startOnLoad:false,securityLevel:"strict"})')
         for item in config['figures']:
             code = (ROOT / 'docs/diagrams' / (item['name'] + '.mmd')).read_text()

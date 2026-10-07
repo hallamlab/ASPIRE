@@ -62,9 +62,9 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
-| `core.table_filter.min_sample_sum` | int | `5000` | Minimum total reads required for a sample to survive the early technical count filter. |
-| `core.table_filter.min_asv_sum` | int | `0` | Minimum study-wide count required for an ASV to survive the early technical count filter. |
-| `core.table_filter.script` | str | `processes/filter_table/filter_ASV_table.py` | Repository-relative implementation used for early count-table filtering. |
+| `core.table_filter.min_sample_reads` | int | `5000` | General sample-depth cutoff used only when control decontamination is disabled; otherwise min_biological_reads performs biological-only inclusion upstream. |
+| `core.table_filter.min_relative_abundance_pct` | int | `0` | Initial per-sample relative-abundance percentage inside FILTER_ASVS; retain an ASV meeting this in any sample. Zero disables abundance exclusion. |
+| `core.table_filter.script` | str | `processes/filter_table/filter_ASV_table.py` | Repository-relative implementation of the initial step inside FILTER_ASVS. |
 
 ### `core.filter`
 
@@ -124,6 +124,24 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `core.taxonomy.uppercase_fasta` | str | `ASVs.upper.fasta` | Path to the uppercase FASTA reference; null means it is not supplied. |
 | `core.taxonomy.threads` | int | `6` | CPU threads requested by this module. |
 
+### `core.control_decontam`
+
+| Parameter | Type | Template value | Definition |
+|---|---|---|---|
+| `core.control_decontam.enabled` | bool | `false` | Run independent TECH/BIO prevalence tests before biological feature filtering. |
+| `core.control_decontam.metadata` | null | `null` | Path to the metadata TSV consumed by this module. |
+| `core.control_decontam.metadata_sample_col` | str | `Sample` | Sample-identifier column in the metadata table. |
+| `core.control_decontam.min_biological_reads` | int | `5000` | Minimum post-QC count sum for biological samples only. Biological/sample and technical controls are exempt. |
+| `core.control_decontam.class_col` | str | `sample_class` | Metadata column defining sample class. Filenames and sample IDs are never used to infer class. |
+| `core.control_decontam.biological_labels` | list | `["biological"]` | Metadata values identifying biological samples. |
+| `core.control_decontam.technical_labels` | list | `["technical"]` | Metadata values identifying water, extraction and library negatives. |
+| `core.control_decontam.bio_control_labels` | list | `["bio_control"]` | Metadata values identifying biological/sample controls, such as scope flushes. |
+| `core.control_decontam.positive_labels` | list | `["positive"]` | Metadata values identifying positive controls excluded from both tests. |
+| `core.control_decontam.technical_enabled` | bool | `true` | Run technical-negative versus QC-passing biological prevalence test. |
+| `core.control_decontam.bio_control_enabled` | bool | `true` | Run biological-control versus QC-passing biological prevalence test. |
+| `core.control_decontam.technical_score_threshold` | float | `0.1` | TECH decontam score cutoff, strictly between 0 and 1; flag scores below it. Default 0.1 is not 0.1% or minimum sample prevalence. |
+| `core.control_decontam.bio_control_score_threshold` | float | `0.1` | BIO decontam score cutoff, strictly between 0 and 1; flag scores below it. Independent of TECH and of abundance/prevalence filters. |
+
 ## `standard`
 
 ### `standard.mito`
@@ -168,7 +186,8 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `standard.filter_counts.output` | str | `ASV_target.tsv` | Output filename written by this module. |
 | `standard.filter_counts.group_col` | str | `Type_Group` | Primary grouping column used by this module. |
 | `standard.filter_counts.min_group_size` | int | `3` | Minimum number of samples required for a metadata group to participate in group-aware filtering. |
-| `standard.filter_counts.abundance_threshold` | float | `0.5` | Minimum relative-abundance percentage used by the final abundance filter; 0.5 means 0.5%. |
+| `standard.filter_counts.min_relative_abundance_pct` | float | `0.5` | Per-sample microbial relative-abundance percentage; retain an ASV meeting it in any biological sample after control filtering. General default 0.5%; mock 0.1%. |
+| `standard.filter_counts.min_prevalence_fraction` | int | `0` | Minimum fraction of retained biological samples with nonzero counts, independent of RA. Mock 0.05 (5%); general default 0 disables it. Positive values require control decontamination. Includes zero-depth columns remaining after feature removal. |
 | `standard.filter_counts.sample_id_col` | str | `Sample` | Column containing sample identifiers. |
 | `standard.filter_counts.min_consensus` | float | `0.0` | Minimum taxonomy consensus score accepted by final count filtering. |
 | `standard.filter_counts.exclude_taxa` | list | `["Species:Homo sapiens","Class:Mammalia"]` | Exact rank-qualified taxa removed even when they pass other filters. |
@@ -196,12 +215,10 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `standard.metadata_plots.type_col` | str | `Type_Group` | Column containing sample-type labels. |
 | `standard.metadata_plots.color_col` | str | `Color` | Metadata column containing or selecting display colors. |
 | `standard.metadata_plots.palette_file` | null | `null` | Path to, or configured name of, the palette file input. |
-| `standard.metadata_plots.subtraction_group_col` | str | `Type_Group` | Input-table column containing subtraction group. |
-| `standard.metadata_plots.subtraction_groups` | list | `["Scope Flush","Skin Brush","Control"]` | Ordered values used for subtraction groups by the metadata plots module. |
 | `standard.metadata_plots.keep_types` | list | `["Oral Rinse","BAL","Bronchial Brush"]` | Retain types when true. |
 | `standard.metadata_plots.group_order` | list | `["Oral Rinse","BAL","Bronchial Brush"]` | Explicit category order used for group analysis and display. |
 | `standard.metadata_plots.include_rank` | list | `[]` | Ordered values used for include rank by the metadata plots module. |
-| `standard.metadata_plots.input_table` | str | `filtered` | Path to, or configured name of, the input table input. |
+| `standard.metadata_plots.input_table` | str | `filtered` | Must be filtered: PLOT_METADATA receives the complete FILTER_ASVS result; pre-filter microbial counts are audit-only. |
 | `standard.metadata_plots.min_pre_correction_sample_sum` | int | `0` | Minimum accepted pre correction sample sum for the metadata plots module. |
 | `standard.metadata_plots.drop_zero_asvs` | bool | `false` | Enable or disable drop zero ASVs behavior in the metadata plots module. |
 | `standard.metadata_plots.run_micro` | bool | `true` | Run micro when true. |
@@ -213,28 +230,6 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `standard.metadata_plots.group_normalization.preserve_source` | bool | `true` | Enable or disable preserve source behavior in the metadata plots module. |
 
 ## `optional`
-
-### `optional.three_tier_decontam`
-
-| Parameter | Type | Template value | Definition |
-|---|---|---|---|
-| `optional.three_tier_decontam.enabled` | bool | `false` | Whether this module or nested analysis is scheduled. |
-| `optional.three_tier_decontam.output_dir` | str | `three_tier_decontam` | Directory or published subdirectory used for output dir. |
-| `optional.three_tier_decontam.metadata` | null | `null` | Path to the metadata TSV consumed by this module. |
-| `optional.three_tier_decontam.metadata_sample_col` | str | `Sample` | Sample-identifier column in the metadata table. |
-| `optional.three_tier_decontam.sample_col` | str | `Sample` | Column containing sample identifiers. |
-| `optional.three_tier_decontam.negative_control_col` | str | `is_negative_control` | Input-table column containing negative control. |
-| `optional.three_tier_decontam.positive_control_col` | str | `is_positive_control` | Input-table column containing positive control. |
-| `optional.three_tier_decontam.negative_control_labels` | list | `["PBS","PBS_twz","Negative_96","Negative_man"]` | Ordered values used for negative control labels by the three tier decontam module. |
-| `optional.three_tier_decontam.positive_control_labels` | list | `["Positive_96","Positive_man"]` | Ordered values used for positive control labels by the three tier decontam module. |
-| `optional.three_tier_decontam.concentration_col` | str | `DNA_conc` | Input-table column containing concentration. |
-| `optional.three_tier_decontam.type_col` | str | `Type_Group` | Column containing sample-type labels. |
-| `optional.three_tier_decontam.sample_types` | list | `["BAL","Bronchial Brush","Oral Rinse"]` | Ordered values used for sample types by the three tier decontam module. |
-| `optional.three_tier_decontam.pooled_threshold` | float | `0.1` | Decontam score cutoff for the pooled control-based tier. |
-| `optional.three_tier_decontam.within_type_threshold` | float | `0.1` | Decontam score cutoff applied within each configured sample type. |
-| `optional.three_tier_decontam.aggressive_threshold` | float | `0.5` | Secondary, more permissive contaminant score cutoff used by the configured combination rule. |
-| `optional.three_tier_decontam.combine_mode` | str | `min` | Rule used to combine pooled and within-type contaminant evidence. |
-| `optional.three_tier_decontam.biological_plausibility` | bool | `true` | Apply the taxonomy/biological-plausibility tier before producing downstream tables. |
 
 ### `optional.sankey`
 
@@ -495,9 +490,9 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.voc_correlation.use_legacy_voc_subset` | bool | `true` | Enable or disable use legacy VOC subset behavior in the VOC correlation module. |
 | `optional.voc_correlation.correlation_direction` | str | `positive` | Direction retained in the baseline ASV–VOC correlation outputs: positive, negative, or both. |
 | `optional.voc_correlation.isa_correlation_direction` | str | `both` | Direction retained in ISA-focused ASV–VOC outputs. |
-| `optional.voc_correlation.isa_brush_groups` | list | `["Bronchial Brush","Lung Brush"]` | Ordered values used for isa brush groups by the VOC correlation module. |
+| `optional.voc_correlation.isa_focus_groups` | list | `["Bronchial Brush","Lung Brush"]` | Sample-type labels defining the focus-group ISA/VOC subset; matching groups may include these labels in singleton or mixed memberships. |
 | `optional.voc_correlation.isa_all_type_groups` | list | `["Oral Rinse","BAL","Bronchial Brush"]` | Ordered values used for isa all type groups by the VOC correlation module. |
-| `optional.voc_correlation.isa_exclude_all_types_from_brush` | bool | `true` | Enable or disable isa exclude all types from brush behavior in the VOC correlation module. |
+| `optional.voc_correlation.isa_exclude_all_types_from_focus` | bool | `true` | Exclude universal sample-type memberships from the focus-group ISA/VOC subset. |
 | `optional.voc_correlation.isa_min_abs_rho` | float | `0.35` | Minimum absolute Spearman rho required in focused ISA/VOC rows and columns. |
 | `optional.voc_correlation.sample_min_abs_z` | float | `2.5` | Minimum absolute sample VOC z-score used for focused sample heatmaps. |
 | `optional.voc_correlation.patient_inference` | bool | `true` | Add patient-level relative-abundance permutation correlations and CLR sensitivity analysis; legacy sample correlations remain exploratory. |
@@ -543,7 +538,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.taxonomy_patient_aware.count_col` | str | `count` | Column containing ASV counts or transformed count values. |
 | `optional.taxonomy_patient_aware.tax_levels` | str | `Phylum,Family` | Value selecting or naming tax levels for the taxonomy patient aware module. |
 | `optional.taxonomy_patient_aware.sample_types` | str | `Oral Rinse,BAL,Bronchial Brush` | Value selecting or naming sample types for the taxonomy patient aware module. |
-| `optional.taxonomy_patient_aware.min_prevalence` | float | `0.1` | Minimum accepted prevalence for the taxonomy patient aware module. |
+| `optional.taxonomy_patient_aware.min_prevalence_fraction` | float | `0.1` | Fraction of nonzero patient profiles retained for taxonomic tests; for sample-type contrasts use pooled patient-by-type profiles. 0.1 means 10%. |
 | `optional.taxonomy_patient_aware.exclude_contralateral_in_cancer` | bool | `true` | Values or groups excluded according to contralateral in cancer. |
 | `optional.taxonomy_patient_aware.contralateral_col` | str | `lung_status` | Input-table column containing contralateral. |
 | `optional.taxonomy_patient_aware.cancer_site_col` | str | `Cancer_Site` | Input-table column containing cancer site. |
@@ -657,8 +652,8 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.spieceasi.group2_palette` | str | `Non-Cancer=#FFFFFF,Cancer=#A50026,Cancer+Non-Cancer=#000000,not_indicator=#D3D3D3` | Explicit label-to-color mapping used for group2 displays. |
 | `optional.spieceasi.focus_group1_label` | str | `Bronchial Brush` | Value selecting or naming focus group1 label for the spieceasi module. |
 | `optional.spieceasi.transpose` | bool | `true` | Transpose the configured matrix orientation before analysis. |
-| `optional.spieceasi.min_rel_abund` | float | `0.005` | Minimum relative abundance required for an ASV to enter network inference. |
-| `optional.spieceasi.min_prevalence` | float | `0.05` | Minimum prevalence required for an ASV to enter network inference. |
+| `optional.spieceasi.min_relative_abundance_fraction` | float | `0.005` | Network-input per-sample abundance fraction; 0.001 means 0.1%. Require at least one sample to meet it; force-kept indicators bypass it. |
+| `optional.spieceasi.min_prevalence_fraction` | float | `0.05` | Fraction of network-input samples with a nonzero count; 0.05 means 5%. Force-kept indicators bypass it; zero-variance filtering still applies. |
 | `optional.spieceasi.remove_zero_var` | bool | `true` | Enable or disable remove zero var behavior in the spieceasi module. |
 | `optional.spieceasi.force_keep_indicator_asvs` | bool | `true` | Force keep indicator ASVs instead of accepting a reusable cached product. |
 | `optional.spieceasi.method` | str | `glasso` | Value selecting or naming method for the spieceasi module. |
@@ -750,7 +745,7 @@ This general measurement-association extension is outside the publication workfl
 | `optional.measurement_association.group_palette` | null | `null` | Explicit label-to-color mapping used for group displays. |
 | `optional.measurement_association.max_asvs` | int | `300` | Maximum accepted ASVs for the measurement association module. |
 | `optional.measurement_association.min_total` | float | `0.0` | Minimum accepted total for the measurement association module. |
-| `optional.measurement_association.min_prevalence` | float | `0.0` | Minimum accepted prevalence for the measurement association module. |
+| `optional.measurement_association.min_prevalence_fraction` | float | `0.0` | Fraction of matched measurement/count samples with nonzero ASV counts. 0 disables this filter; this is not the final biological-table filter. |
 | `optional.measurement_association.top_correlations` | int | `100` | Numeric setting for top correlations in the measurement association module. |
 | `optional.measurement_association.correlation_direction` | str | `both` | Value selecting or naming correlation direction for the measurement association module. |
 | `optional.measurement_association.ordination_methods` | str | `cca,rda,dbrda` | Comma-separated constrained ordination methods to run: cca, rda, and/or dbrda. |
@@ -828,7 +823,7 @@ This general measurement-association extension is outside the publication workfl
 | `environments.mitomaster` | str | `processes/mitomaster/env.yml` | Conda environment YAML used by the mitomaster process family. |
 | `environments.mito_checker` | str | `processes/mito_decontam/env.yml` | Conda environment YAML used by the mito checker process family. |
 | `environments.filter_counts` | str | `processes/shared_envs/asv_pipeline.yml` | Conda environment YAML used by the filter counts process family. |
-| `environments.three_tier_decontam` | str | `processes/three_tier_decontam/env.yml` | Conda environment YAML used by the three tier decontam process family. |
+| `environments.control_decontam` | str | `processes/control_decontam/env.yml` | Conda environment YAML used by the control decontam process family. |
 | `environments.general_stats` | str | `processes/general_stats/env.yml` | Conda environment YAML used by the general stats process family. |
 | `environments.sankey` | str | `processes/sankey/env.yml` | Conda environment YAML used by the sankey process family. |
 | `environments.plot_metadata` | str | `processes/plot_metadata/env.yml` | Conda environment YAML used by the plot metadata process family. |

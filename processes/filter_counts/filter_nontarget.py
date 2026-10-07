@@ -101,6 +101,10 @@ def parse_args() -> argparse.Namespace:
         help="Minimum relative abundance threshold (percent within a sample; ASV kept if threshold is met in >=1 sample)"
     )
     filtering.add_argument(
+        "--min-prevalence-fraction", type=float, default=0.0,
+        help="Minimum fraction of input biological samples with a nonzero count (0.05 = 5%); independent of RA"
+    )
+    filtering.add_argument(
         "--min-consensus",
         type=float,
         default=0.0,
@@ -215,6 +219,8 @@ def filter_samples_by_group(
         print(f"[INFO] Available columns: {list(metadata_df.columns)}")
         sys.exit(1)
     
+    # Only samples still present after upstream inclusion can support a group.
+    metadata_df = metadata_df.loc[metadata_df.index.isin(count_df.columns)]
     # Count samples per group
     group_counts = metadata_df[group_col].value_counts()
     
@@ -304,6 +310,36 @@ def filter_nontarget_asvs(
     mito_cnt_df = count_df.loc[mito_keep]
     
     return decon_cnt_df, micro_cnt_df, mito_cnt_df
+
+
+def biological_feature_qc(count_df: pd.DataFrame, abundance_pct: float,
+                          prevalence_fraction: float) -> pd.DataFrame:
+    """Independent RA and nonzero-prevalence gates on the same biological cohort.
+
+    Keep zero-depth columns in the prevalence denominator: their biological
+    inclusion was decided upstream, before contamination and reference removal.
+    """
+    import math
+    if not math.isfinite(abundance_pct) or not 0 <= abundance_pct <= 100:
+        raise ValueError("Relative abundance must be a percentage between 0 and 100")
+    if not math.isfinite(prevalence_fraction) or not 0 <= prevalence_fraction <= 1:
+        raise ValueError("Prevalence must be a fraction between 0 and 1")
+    n_samples = count_df.shape[1]
+    present = (count_df > 0).sum(axis=1)
+    totals = count_df.sum(axis=0)
+    relative = count_df.div(totals.where(totals > 0), axis=1).fillna(0) * 100
+    max_ra = relative.max(axis=1).fillna(0) if n_samples else pd.Series(0., index=count_df.index)
+    prevalence = present / n_samples if n_samples else pd.Series(0., index=count_df.index)
+    audit = pd.DataFrame(dict(n_biological_samples=n_samples, n_nonzero_samples=present,
+                              prevalence_fraction=prevalence, max_relative_abundance_pct=max_ra,
+                              min_prevalence_fraction=prevalence_fraction,
+                              min_relative_abundance_pct=abundance_pct), index=count_df.index.copy())
+    audit.index.name = 'ASV_ID'
+    audit['passes_prevalence'] = prevalence.ge(prevalence_fraction)
+    audit['passes_relative_abundance'] = max_ra.ge(abundance_pct)
+    audit['passes_feature_filters'] = (audit.passes_prevalence & audit.passes_relative_abundance
+                                       & present.gt(0))
+    return audit
 
 
 def filter_by_abundance(
@@ -550,10 +586,14 @@ def main():
     
     # Filter by abundance
     print(f"\n[STEP 4] Filtering by abundance threshold...")
-    abund_filter_df = filter_by_abundance(
-        count_df=micro_cnt_df,
-        threshold_pct=args.abundance_threshold
-    )
+    feature_qc = biological_feature_qc(micro_cnt_df, args.abundance_threshold,
+                                       args.min_prevalence_fraction)
+    feature_qc_path = args.output.with_name(args.output.stem + '.feature_qc.tsv')
+    feature_qc['retained_final'] = False
+    abund_filter_df = micro_cnt_df.loc[feature_qc.passes_feature_filters]
+    print(f"[INFO] Independent RA >= {args.abundance_threshold}% and prevalence >= "
+          f"{args.min_prevalence_fraction:g}: {len(micro_cnt_df)} -> {len(abund_filter_df)} ASVs; "
+          f"denominator={micro_cnt_df.shape[1]} biological samples")
     
     # Filter by taxonomy
     print(f"\n[STEP 5] Filtering by taxonomy quality...")
@@ -566,6 +606,10 @@ def main():
         exclude_taxa=exclude_taxa
     )
     
+    feature_qc['retained_final'] = feature_qc.index.isin(final_df.index)
+    feature_qc_path.parent.mkdir(parents=True, exist_ok=True)
+    feature_qc.to_csv(feature_qc_path, sep='\t')
+
     # Save final output
     print(f"\n[STEP 6] Saving outputs...")
     
@@ -585,7 +629,7 @@ def main():
     print(f"  └─ Mitochondrial:      {len(mito_cnt_df)}")
     print(f"After abundance filter:  {len(abund_filter_df)}")
     print(f"After taxonomy filter:   {len(final_df)}")
-    print(f"\nFinal ASVs:              {len(final_df)} ({100*len(final_df)/len(count_df):.1f}% of input)")
+    print(f"\nFinal ASVs:              {len(final_df)} ({(100*len(final_df)/len(count_df) if len(count_df) else 0):.1f}% of input)")
     print(f"Final samples:           {len(final_df.columns)}")
     print("="*70)
     print("[OK] Filtering complete!")

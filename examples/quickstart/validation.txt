@@ -1,0 +1,32 @@
+[PASS] publication_layout: missing modules=none
+[PASS] sample_accounting: manifest=46, metadata=46, published=46
+[PASS] control_classes: class counts={'biological': 30, 'bio_control': 12, 'technical': 4}
+[PASS] control_metadata: QC samples=46, pairing columns=['Participant_ID', 'source_sample']
+[PASS] biological_depth_qc: cutoff=5000, passing=30
+[PASS] biological_qc_counts: QC biological counts equal raw counts
+[PASS] cami_control_arms: TECH and BIO must both be enabled
+[PASS] TECH_cohort: biological=30, controls=4, low-depth controls=2
+[PASS] TECH_calls: threshold=0.1, flagged=3
+[PASS] TECH_technical_prevalence: denominator=4
+[PASS] TECH_biological_prevalence: denominator=30
+[PASS] BIO_cohort: biological=30, controls=12, low-depth controls=12
+[PASS] BIO_calls: threshold=0.1, flagged=4
+[PASS] BIO_bio_control_prevalence: denominator=12
+[PASS] BIO_biological_prevalence: denominator=30
+[PASS] contamination_union: categories={'CLEAN': 25, 'BIO': 4, 'TECH': 3}; retained counts unchanged
+[PASS] contamination_reasons: removed ASVs=7
+[PASS] combined_filter_counts_fasta: ASVs=24, biological samples=30
+[PASS] biological_prevalence_abundance: RA>=0.1%; nonzero prevalence>=0.05; biological denominator=30
+[PASS] non_target_truth: identified=4/4, excluded_from_micro=True
+[PASS] taxonomy: assigned ASVs=31
+[PASS] truth_id_mapping: mapped inferred ASVs=32
+[PASS] indicator_analysis: significant=2, implanted_recovered=2
+[PASS] voc_correlation: rho>=0.30 pairs=15, implanted_positive_recovered=3
+[PASS] voc_patient_inference: patients=12, tested=144, insufficient=0; significance is not required
+[PASS] network_analysis: edges=36, largest_module=5, implanted_within_module_edges=30
+[PASS] network_topology: nodes=24, thresholded_positive_edges=36, null_draws=100
+[PASS] plot_contract: modules without SVG=none
+[PASS] manifest_integrity: invalid entries=0
+
+Validated dataset with 46 samples against aspire-quickstart/results
+All mock-run checks passed.

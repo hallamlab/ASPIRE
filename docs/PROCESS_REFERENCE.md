@@ -9,7 +9,7 @@ Every process has a tier-qualified user-facing identifier. Use these identifiers
 with `./run_asv_pipeline.sh --rerun-from`; unqualified names remain accepted for
 compatibility:
 
-- `core:PROCESS`: required ASV construction and taxonomy stages.
+- `core:PROCESS`: ASV construction, taxonomy and configurable control decontamination.
 - `standard:PROCESS`: final-table preparation used by the usual analysis graph.
 - `optional:PROCESS`: selectable analyses and reporting stages.
 
@@ -29,25 +29,24 @@ distinguish the pipeline backbone from optional branches in the terminal.
 | `DENOISE` | dereplicated sequences | denoised ASV candidates | Remove inferred sequencing errors. |
 | `CHIMERA_CHECK` | ASV candidates | non-chimeric ASV FASTA | Remove chimeric sequences. |
 | `CREATE_COUNT_MATRIX` | labelled reads and ASV FASTA | raw ASV-by-sample matrix | Map reads back to ASVs. |
-| `FILTER_TABLE` | raw matrix and ASV FASTA | technically filtered counts/FASTA | Enforce sample-depth and ASV-total thresholds. |
-| `SINA_TRIM` | filtered ASV FASTA | aligned/region-trimmed ASVs | Identify and trim configured 16S variable regions. |
+| `SINA_TRIM` | all inferred ASV FASTA | aligned/region-trimmed ASVs | Identify and trim configured 16S variable regions. |
 | `TAXONOMY` | trimmed ASVs and SILVA artifacts | `modules/taxonomy/tables/` | Assign taxonomy and classification statistics. |
+| `CONTROL_DECONTAM` | raw ASV counts/FASTA, full taxonomy, class metadata | `modules/contamination_filtering/` | Biological-only depth QC, separate TECH/BIO prevalence tests, union removal before feature filtering. |
 
 ## Non-Target Filtering and Final Tables
 
 | Process | Principal input | Principal output | Purpose |
 |---|---|---|---|
 | `PREPARE_BLAST_DATABASES` | configured BLAST databases or FASTAs | `references/reference/blast_databases/` | Archive/rebuild reproducible run databases. |
-| `MITOMASTER` | filtered ASVs | MITOMASTER result/chunk tables | Query candidate mitochondrial sequences when enabled. |
+| `MITOMASTER` | inferred ASV sequences | MITOMASTER result/chunk tables | Query candidate mitochondrial sequences when enabled. |
 | `MITO_DECONTAM` | taxonomy, MITOMASTER and local BLAST evidence | `modules/non_target_filtering/` | Combine non-target evidence and audit calls. |
-| `FILTER_COUNTS` | filtered matrix, taxonomy, non-target calls, metadata | `ASV_target.tsv` plus audit tables | Produce final host/non-target/abundance-filtered microbial counts. |
+| `FILTER_ASVS` | decontaminated counts/FASTA, taxonomy, non-target calls, metadata | `ASV_target.tsv`, matching `ASVs_target.fasta.gz`, original intermediates and filter audits | Apply both initial and microbial abundance rules, group-size, non-target, taxonomy and nonzero-ASV filters. |
 | `PLOT_METADATA` | final microbial and mitochondrial counts, metadata | `modules/metadata_plots/` | Build `ASV_meta_micro.tsv`, `ASV_final.micro.tsv`, updated metadata and master tables. |
-| `THREE_TIER_DECONTAM` | raw control-bearing counts, final long/wide tables, control metadata | `modules/contamination_filtering/` | Score control prevalence/frequency/plausibility and filter downstream ASV tables. |
 
-`ASV_target.tsv` is the final microbial table emitted by `FILTER_COUNTS`.
+`ASV_target.tsv` is the final microbial table emitted by `FILTER_ASVS`.
 `ASV_final.micro.tsv` is its downstream wide sample-by-ASV representation after
-metadata/control handling. When three-tier or batch correction is enabled, the
-corresponding filtered/corrected wide table becomes the downstream count input.
+metadata/control handling. Control decontamination occurs before these tables are constructed. Optional
+batch correction subsequently selects corrected counts for downstream analyses.
 
 ## Descriptive and Metadata Processes
 
@@ -93,7 +92,7 @@ Both flat legacy YAML and tiered YAML remain accepted; define a section only onc
 
 These additional modules remain optional. Their full settings appear in the
 [parameter catalogue](CONFIG_PARAMETERS.md). Grouping diagnostics and label
-augmentation use the three-tier-filtered counts/annotations when that filter is enabled.
+augmentation use the control-decontaminated counts/annotations when that filter is enabled.
 
 ## VOC Process Details
 

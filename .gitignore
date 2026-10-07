@@ -80,3 +80,9 @@ examples/si.local.yml
 /examples/si.old-output-cleanup.yml
 *.BAK
 /docs/_build/
+
+# Locally generated quickstart data and configuration
+/aspire-quickstart/
+/aspire-cami-mock.yml
+/aspire-cami-mock.manifest.tsv
+/aspire-cami-mock.metadata.tsv

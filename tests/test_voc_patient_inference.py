@@ -134,6 +134,6 @@ def test_cli_end_to_end_on_synthetic_samples(tmp_path, monkeypatch):
     result = pd.read_csv(tmp_path/"out/patient_asv_voc_permutation_long.tsv", sep="\t")
     assert set(result.normalization) == {"relative_abundance","clr"}
     assert result.n_patients.max() == 7
-    cases = pd.read_csv(tmp_path/"out/patient_voc_case_tests_brush.tsv", sep="\t")
+    cases = pd.read_csv(tmp_path/"out/patient_voc_case_tests.tsv", sep="\t")
     assert cases.n_cancer_patients.iloc[0] == 3
     assert cases.n_control_patients.iloc[0] == 4

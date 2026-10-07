@@ -22,6 +22,20 @@ At minimum, review:
 - any `/abs/path/...` placeholder
 - enabled optional branches that require metadata, reference databases, VOC tables, or genome/MAG inputs
 
+## Configure controls and biological inclusion
+
+For the TECH/BIO workflow, enable `core.control_decontam.enabled` and provide its
+metadata, sample identifier column, class column and class labels. The general
+template leaves this stage disabled until the study's control design is specified.
+Both enabled arms use the same biological cohort passing 5,000 post-QC ASV reads;
+nonzero controls are exempt. Disable the unused arm for TECH-only or BIO-only data.
+
+The [decontamination guide](decontamination.md) describes the full configuration.
+The order is full taxonomy → control decontamination → reference screening →
+`FILTER_ASVS` → `PLOT_METADATA`. The mock uses a 0.1% final abundance cutoff in at
+least one biological sample; the general template's default is 0.5%. Set
+`standard.filter_counts.min_relative_abundance_pct` explicitly for your study.
+
 Run the pipeline:
 
 ```bash

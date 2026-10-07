@@ -15,6 +15,7 @@ ASPIRE is developed for a 64-bit Linux environment. Before starting, install:
 
 - Bash and standard GNU command-line utilities.
 - Conda or Mamba, with `mamba` available on `PATH`.
+- Python 3 for generating the bundled quickstart fixture.
 - Git for obtaining and identifying the workflow revision.
 - Internet access on the first run to solve Conda environments and download
   configured SINA and QIIME2/SILVA references. Fully offline runs require
@@ -42,6 +43,7 @@ Verify the entrypoint prerequisites:
 ```bash
 command -v bash
 command -v git
+command -v python3
 command -v mamba
 ```
 
@@ -56,6 +58,7 @@ ASPIRE.
 - `asv_pipeline.nf`: current Nextflow workflow.
 - `asv_pipeline_nextflow.yml`: authoritative complete config template with every supported parameter.
 - `examples/mock.local.yml`: full-module template used by the portable mock config generator.
+- `examples/run_quickstart.sh`: builds the small installation fixture, runs ASPIRE and validates it.
 - `examples/configure_mock_run.sh`: validates a supplied mock fixture and writes a machine-local YAML.
 - `examples/validate_mock_run.sh`: validates the completed mock run against its truth contract.
 - [test guide](test.md): expanded mock test instructions.

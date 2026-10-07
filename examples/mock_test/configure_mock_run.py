@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -48,6 +49,13 @@ def config_section(config: dict, name: str) -> dict:
             f"Configuration section '{name}' must be defined exactly once as a mapping"
         )
     return matches[0]
+
+
+def write_if_changed(path: Path, content: str) -> None:
+    """Preserve timestamps of identical inputs so Nextflow can resume their tasks."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.is_file() or path.read_text() != content:
+        path.write_text(content)
 
 
 def sha256(path: Path) -> str:
@@ -126,13 +134,73 @@ def write_portable_manifest(dataset: Path, destination: Path) -> tuple[Path, set
         r2 = resolve_fastq(str(row.fastq_r2), source, dataset, row.sample_id, "R2")
         rows.append(f"{row.sample_id}\t{r1}\t{r2}")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text("\n".join(rows) + "\n")
+    write_if_changed(destination, "\n".join(rows) + "\n")
     return destination.resolve(), set(frame["sample_id"])
+
+
+CAMI_COLORS = {"Airways": "#009E73", "Oral": "#6A3D9A", "Skin": "#CC79A7", "Control": "#8C8C8C"}
+
+
+def is_cami_metadata(metadata):
+    return {"source_sample", "body_site", "study_role"} <= set(metadata.columns) and {
+        "Airways", "Oral", "Skin"
+    } <= set(metadata["body_site"].dropna())
+
+
+def has_synthetic_clinical_design(metadata):
+    return bool('synthetic_clinical' in metadata and metadata['synthetic_clinical'].fillna(False).astype(str).str.lower().isin(['true','1']).any())
+
+
+def configure_cami_profile(config, project_dir, clinical=False):
+    """Configure the airway/oral comparison and explicit control classes."""
+    def adapt(value):
+        if isinstance(value, dict):
+            return {("batch" if key == "Case" and not clinical else key): adapt(item) for key,item in value.items()}
+        if isinstance(value, list):
+            return [adapt(item) for item in value]
+        if isinstance(value, str):
+            if value == "Case" and not clinical: return "batch"
+            if value == "Participant_ID" and not clinical: return "source_sample"
+            return value.replace("Bronchial Brush", "Airways").replace("BAL", "Oral")
+        return value
+    config = adapt(config)
+    palette = str((project_dir / 'examples/cami_palette.tsv').resolve())
+    primary = 'Airways=#009E73,Oral=#6A3D9A,Airways+Oral=#B8E186,not_indicator=#D3D3D3'
+    secondary = 'Case' if clinical else 'batch'
+    batches = 'Control=#8C8C8C,Cancer=#D55E00' if clinical else 'plate_1=#8C8C8C,plate_2=#0072B2'
+    for section in ('metadata_plots', 'sankey'):
+        config_section(config,section)['palette_file'] = palette
+    config_section(config,'table_filter')['min_sample_reads'] = 5000
+    # CAMI classes come from metadata: skin is the biological/sample control;
+    # oral and airways are biological samples; extraction blanks are technical.
+    config_section(config,'control_decontam').update(
+        class_col='Type_Group', biological_labels=['Airways','Oral'],
+        technical_labels=['Control'], bio_control_labels=['Skin'],
+        positive_labels=['Positive'], technical_enabled=True, bio_control_enabled=True)
+    config_section(config,'metadata_plots').update(
+        keep_types=['Airways','Oral'], group_order=['Airways','Oral'], input_table='filtered')
+    config_section(config,'sankey')['vertical_order'] = ['Airways','Oral','Skin','Control']
+    config_section(config,'batch_correction')['biological_covariates'] = 'Type_Group,Case' if clinical else 'Type_Group'
+    for section in ('umap_clustering','diversity','clustermaps'):
+        config_section(config,section).update(group1_palette=primary, group2_palette=batches)
+    for section in ('indicspecies','spieceasi'):
+        config_section(config,section)['group_palettes'] = {'Type_Group':primary, secondary:batches}
+        config_section(config,section)['group_orders'] = {'Type_Group':['Airways','Oral'], secondary:['Control','Cancer'] if clinical else ['plate_1','plate_2']}
+    # Patient-aware branches use the explicit synthetic clinical design.
+    config_section(config,'diversity')['patient_aware']['enabled'] = clinical
+    for section in ('taxonomy_patient_aware','lung_status_analysis','power_analysis'):
+        config_section(config,section)['enabled'] = clinical
+    config_section(config,'voc_correlation').update(patient_inference=clinical, sample_types='Airways,Oral',
+        isa_focus_groups=['Airways'], isa_all_type_groups=['Airways','Oral'])
+    return config
 
 
 def validate_tabular_inputs(dataset: Path, manifest_ids: set[str]) -> None:
     metadata = pd.read_csv(dataset / "sample_metadata.tsv", sep="\t")
-    missing_columns = sorted(REQUIRED_METADATA_COLUMNS - set(metadata.columns))
+    required = REQUIRED_METADATA_COLUMNS
+    if is_cami_metadata(metadata) and not has_synthetic_clinical_design(metadata):
+        required = required - {'Participant_ID', 'Case', 'lung_status'}
+    missing_columns = sorted(required - set(metadata.columns))
     if missing_columns:
         raise SystemExit(f"Metadata is missing required columns: {', '.join(missing_columns)}")
     metadata_ids = set(metadata["sample_id"].dropna().astype(str))
@@ -212,12 +280,20 @@ def build_config(
     config_section(config, "mito")["contaminant_fasta"] = str(
         (dataset / "references/contaminants.fasta").resolve()
     )
-    for section in ("filter_counts", "three_tier_decontam", "sankey", "metadata_plots", "spieceasi"):
+    for section in ("filter_counts", "control_decontam", "sankey", "metadata_plots", "spieceasi"):
         config_section(config, section)["metadata"] = metadata
     config_section(config, "voc_correlation")["voc_table"] = str((dataset / "chemistry.tsv").resolve())
     palette = str((project_dir / "examples/metadata_palette.template.tsv").resolve())
     config_section(config, "metadata_plots")["palette_file"] = palette
     config_section(config, "sankey")["palette_file"] = palette
+    metadata_file = dataset / 'sample_metadata.tsv'
+    if metadata_file.is_file() and is_cami_metadata(pd.read_csv(metadata_file, sep='\t')):
+        config = configure_cami_profile(config, project_dir, has_synthetic_clinical_design(pd.read_csv(metadata_file, sep='\t')))
+    manifest_file = dataset / "manifest.json"
+    if manifest_file.is_file() and json.loads(manifest_file.read_text()).get("name") == "aspire-quickstart":
+        # Exercise every power-analysis path with a short installation grid.
+        # Truth-recovery thresholds and all other analysis settings are shared.
+        config_section(config, "power_analysis").update(n_simulations=10, n_perm=49)
     return config
 
 
@@ -257,9 +333,21 @@ def main() -> None:
     portable_manifest, manifest_ids = write_portable_manifest(dataset, portable_manifest)
     validate_tabular_inputs(dataset, manifest_ids)
     config = build_config(template, dataset, output, runtime, project_dir, args.threads)
+    metadata_frame = pd.read_csv(dataset / 'sample_metadata.tsv', sep='\t')
+    if is_cami_metadata(metadata_frame):
+        metadata_frame['Color'] = metadata_frame['Type_Group'].map(CAMI_COLORS)
+        if metadata_frame['Color'].isna().any():
+            raise SystemExit('Unrecognized CAMI Type_Group; cannot assign a consistent palette')
+        metadata_frame['source_sample'] = metadata_frame['source_sample'].fillna(metadata_frame['sample_id'])
+        colored_metadata = args.config_out.with_suffix('.metadata.tsv').resolve()
+        colored_metadata.parent.mkdir(parents=True, exist_ok=True)
+        write_if_changed(colored_metadata, metadata_frame.to_csv(sep='\t', index=False))
+        for section in ('filter_counts','control_decontam','sankey','metadata_plots','spieceasi'):
+            config_section(config,section)['metadata'] = str(colored_metadata)
+        print('Study profile: airway–oral comparison; TECH blanks and BIO skin prevalence filtering')
     config_section(config, "paths")["manifest"] = str(portable_manifest)
     args.config_out.parent.mkdir(parents=True, exist_ok=True)
-    args.config_out.write_text(yaml.safe_dump(config, sort_keys=False))
+    write_if_changed(args.config_out, yaml.safe_dump(config, sort_keys=False))
     tier_counts = ", ".join(
         f"{tier} ({len(config.get(tier, {}))} sections)" for tier in CONFIG_TIERS
     )

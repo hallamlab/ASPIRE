@@ -13,24 +13,28 @@ git clone https://github.com/hallamlab/ASPIRE.git
 cd ASPIRE
 ```
 
+The control workflow runs **full taxonomy → independent TECH/BIO prevalence tests
+→ union removal → reference screening → combined ASV filtering → metadata tables**.
+Only biological samples face the 5,000-read inclusion cutoff; nonzero controls
+are retained for testing. The mock uses **0.1% relative abundance in at least one
+retained biological sample** plus **5% nonzero prevalence across biological
+samples**, separately from decontam's score thresholds.
+
 ### Run the workflow test
 
-Download and extract the [public mock dataset (Zenodo DOI: 10.5281/zenodo.22906294)](https://doi.org/10.5281/zenodo.22906294). The data is downloaded separately; configuration and validation scripts are included in the repository. Edit the two paths below, then run from the ASPIRE directory:
+Run the bundled **aspire-quickstart** fixture: approximately **2.5 MB**, 46
+libraries and 218,000 read pairs. The wrapper builds the data, runs the full
+benchmarked workflow and executes its validator:
 
 ```bash
-DATASET=/absolute/path/to/mock_dataset
-RESULTS=/absolute/path/to/aspire_mock_output
-
-./examples/configure_mock_run.sh \
-  --dataset "$DATASET" \
-  --output "$RESULTS" \
-  --config-out mock_run.generated.yml
-./run_asv_pipeline.sh mock_run.generated.yml --no-resume
-./examples/validate_mock_run.sh --dataset "$DATASET" --results "$RESULTS"
+./examples/run_quickstart.sh --output "$PWD/aspire-quickstart" --threads 4
 ```
 
+The separate [**aspire-cami-mock** manuscript demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html)
+contains 50 synthetic patients and 179 libraries. Both use the same full validator.
+
 Success ends with `All mock-run checks passed.` Open
-`<RESULTS>/summary/report/ASPIRE_run_report.html` to review accounting, module outputs and execution logs. See [remote report viewing](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html#view-reports-on-a-remote-server) if running over SSH.
+`aspire-quickstart/results/summary/report/ASPIRE_run_report.html` to review accounting, module outputs and execution logs. See [remote report viewing](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html#view-reports-on-a-remote-server) if running over SSH.
 
 ### Run your own study
 
@@ -48,7 +52,7 @@ Use the same command to resume. See the [user guide](https://hallamlab-aspire.re
 
 ## Workflow
 
-[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg?v=6cbea7b6e524)](docs/assets/workflow-brief.svg)
+[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg?v=tech-bio-20261006)](docs/assets/workflow-brief.svg)
 
 [Vector SVG](docs/assets/workflow-brief.svg) · [PDF](docs/assets/workflow-brief.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
 

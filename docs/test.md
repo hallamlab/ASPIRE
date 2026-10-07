@@ -1,7 +1,8 @@
-# Workflow test
-
-Use this small test to check your installation and try the workflow before running a larger dataset. It is intended for any user.
+# Quickstart and installation test
 
 ```{include} ../examples/MOCK_DATASET_TESTING.md
 :start-line: 1
 ```
+
+Recorded validation: {download}`log <../examples/quickstart/validation.txt>` ·
+{download}`fixture identity and settings <../examples/quickstart/validation.json>`.

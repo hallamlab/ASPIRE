@@ -77,6 +77,8 @@ class MockTestConfigTest(unittest.TestCase):
             reparsed = yaml.safe_load(yaml.safe_dump(config, sort_keys=False))
             self.assertEqual(MODULE.config_section(reparsed, "indicspecies")["perms"], 999)
             self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["sample_sizes_cancer"], "4,6,8,10")
+            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["n_simulations"], 100)
+            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["n_perm"], 199)
 
     def test_truth_mapping_accepts_trimmed_inferred_sequences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -116,3 +118,67 @@ class MockTestConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CamiShowcaseTests(unittest.TestCase):
+    def test_cami_profile_uses_body_sites_and_established_colors(self):
+        import pandas as pd
+        project=Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);dataset=root/'dataset';dataset.mkdir()
+            pd.DataFrame([
+                dict(sample_id=site+'1',source_sample=site+'_source',body_site=site,
+                     study_role='biological_control' if site=='Skin' else 'comparison',
+                     Type_Group=site,batch='plate_1',DNA_conc=20,
+                     is_negative_control=False,is_positive_control=False)
+                for site in ('Airways','Oral','Skin')
+            ]).to_csv(dataset/'sample_metadata.tsv',sep='\t',index=False)
+            pd.DataFrame({'sample_id':['Airways1','Oral1','Skin1'],'acetone':[1.,2.,3.]}).to_csv(dataset/'chemistry.tsv',sep='\t',index=False)
+            MODULE.validate_tabular_inputs(dataset,{'Airways1','Oral1','Skin1'})
+            cfg=MODULE.build_config(project/'examples/mock.local.yml',dataset,root/'output',root/'runtime',project,4)
+            section=lambda name: MODULE.config_section(cfg,name)
+            self.assertEqual(section('table_filter')['min_sample_reads'],5000)
+            self.assertEqual(section('filter_counts')['min_prevalence_fraction'],0.05)
+            self.assertEqual(section('filter_counts')['min_relative_abundance_pct'],0.1)
+            self.assertNotIn('subtraction_groups', section('metadata_plots'))
+            self.assertEqual(section('metadata_plots')['keep_types'],['Airways','Oral'])
+            self.assertFalse(section('voc_correlation')['patient_inference'])
+            self.assertFalse(section('diversity')['patient_aware']['enabled'])
+            for name in ('power_analysis','lung_status_analysis','taxonomy_patient_aware'):
+                self.assertFalse(section(name)['enabled'])
+            self.assertTrue(section('control_decontam')['enabled'])
+            self.assertEqual(section('control_decontam')['biological_labels'], ['Airways','Oral'])
+            self.assertEqual(section('control_decontam')['bio_control_labels'], ['Skin'])
+            self.assertEqual(section('control_decontam')['technical_labels'], ['Control'])
+            self.assertTrue(section('control_decontam')['bio_control_enabled'])
+            self.assertTrue(section('control_decontam')['technical_enabled'])
+            self.assertEqual(section('batch_correction')['biological_covariates'],'Type_Group')
+            self.assertIn('Oral=#6A3D9A',section('diversity')['group1_palette'])
+            palette=pd.read_csv(section('metadata_plots')['palette_file'],sep='\t').set_index('value').color.to_dict()
+            self.assertEqual(palette['Skin'],'#CC79A7')
+            self.assertEqual(palette['Airways'],'#009E73')
+            serialized=yaml.safe_dump(cfg)
+            for stale in ('Bronchial Brush','Cancer=#','Control=#8C8C8C,Cancer','biological_covariates: Type_Group,Case'):
+                self.assertNotIn(stale,serialized)
+
+    def test_clinical_cami_enables_patient_and_lung_modules(self):
+        project=Path(__file__).parents[1]
+        cfg=yaml.safe_load((project/'examples/mock.local.yml').read_text())
+        import pandas as pd
+        clinical=MODULE.has_synthetic_clinical_design(pd.DataFrame({'synthetic_clinical':[True,False]}))
+        self.assertIs(type(clinical),bool)
+        cfg=MODULE.configure_cami_profile(cfg,project,clinical=clinical)
+        yaml.safe_dump(cfg)
+        section=lambda name:MODULE.config_section(cfg,name)
+        for name in ('power_analysis','lung_status_analysis','taxonomy_patient_aware'):
+            self.assertTrue(section(name)['enabled'])
+        self.assertTrue(section('diversity')['patient_aware']['enabled'])
+        self.assertTrue(section('voc_correlation')['patient_inference'])
+        self.assertEqual(section('voc_correlation')['patient_col'],'Participant_ID')
+        self.assertEqual(section('lung_status_analysis')['sample_types'],'Airways')
+        self.assertEqual(section('lung_status_analysis')['case_col'],'Case')
+        self.assertEqual(section('diversity')['patient_aware']['contralateral_value'],'Contralateral')
+        self.assertEqual(section('metadata_plots')['keep_types'],['Airways','Oral'])
+        self.assertNotIn('subtraction_groups', section('metadata_plots'))
+        self.assertEqual(section('indicspecies')['group_orders']['Case'],['Control','Cancer'])
+        self.assertIn('Oral=#6A3D9A',section('diversity')['group1_palette'])

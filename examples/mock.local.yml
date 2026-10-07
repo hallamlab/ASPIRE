@@ -3,9 +3,9 @@
 # for every ASPIRE study. Generate portable paths with configure_mock_run.sh.
 core:
   paths:
-    input_dir: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/fastq
-    output_dir: /home/ryan/Projects/UBC/LMP/ASPIRE_mock_output
-    runtime_dir: /home/ryan/Projects/UBC/LMP/ASPIRE_mock_output/.aspire
+    input_dir: /abs/path/mock_dataset/fastq
+    output_dir: /abs/path/mock_output
+    runtime_dir: /abs/path/mock_output/.aspire
     keep_runtime_dir: true
     work_dir: null
     conda_cache_dir: null
@@ -33,9 +33,10 @@ core:
     min_overlap: 5
     trunc_quality: 5
     allow_stagger: true
+  # Initial abundance/nonzero step inside FILTER_ASVS. Depth is bypassed when control_decontam is enabled.
   table_filter:
-    min_sample_sum: 5000
-    min_asv_sum: 0
+    min_sample_reads: 5000
+    min_relative_abundance_pct: 0
     script: processes/filter_table/filter_ASV_table.py
   filter:
     max_ee: 1.0
@@ -72,66 +73,59 @@ core:
     stats_tsv: ASV_SILVA_stats.full-length.vsearch.tsv
     uppercase_fasta: ASVs.upper.fasta
     threads: 4
+  control_decontam:
+    enabled: true
+    metadata: /abs/path/mock_dataset/sample_metadata.tsv
+    metadata_sample_col: sample_id
+    # Biological inclusion only: controls are NEVER filtered at this depth.
+    min_biological_reads: 5000
+    class_col: Type_Group
+    biological_labels: [Bronchial Brush, BAL]
+    technical_labels: [Control]
+    bio_control_labels: [Scope Flush]
+    positive_labels: [Positive]
+    # Disable the unused arm when only TECH or only BIO controls are supplied.
+    technical_enabled: true
+    bio_control_enabled: false
+    # Remove ASVs with decontam prevalence score < threshold in either arm.
+    technical_score_threshold: 0.1
+    bio_control_score_threshold: 0.1
 standard:
   mito:
     enabled: true
     run_mitomaster: false
-    mito_fasta: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/references/mitochondria.fasta
-    contaminant_fasta: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/references/contaminants.fasta
+    mito_fasta: /abs/path/mock_dataset/references/mitochondria.fasta
+    contaminant_fasta: /abs/path/mock_dataset/references/contaminants.fasta
+  # Group, taxonomy and reference filters in FILTER_ASVS, immediately before metadata plots.
   filter_counts:
     enabled: true
-    metadata: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/sample_metadata.tsv
+    metadata: /abs/path/mock_dataset/sample_metadata.tsv
     output: ASV_target.tsv
     group_col: Type_Group
     sample_id_col: sample_id
     min_group_size: 2
-    abundance_threshold: 0.5
+    min_relative_abundance_pct: 0.1  # Percent within a sample (0.001 as a fraction).
+    min_prevalence_fraction: 0.05  # Nonzero presence in biological samples; 0.05 = 5%.
     min_consensus: 0.05
     save_intermediates: true
   general_stats:
     enabled: true
   metadata_plots:
     enabled: true
-    metadata: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/sample_metadata.tsv
+    metadata: /abs/path/mock_dataset/sample_metadata.tsv
     sample_col: sample_id
     type_col: Type_Group
     color_col: Color
     palette_file: metadata_palette.template.tsv
     run_micro: true
     run_mito: true
-    subtraction_groups:
-    - Control
     group_order:
     - Bronchial Brush
     - BAL
 optional:
-  three_tier_decontam:
-    enabled: true
-    output_dir: three_tier_decontam
-    metadata: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/sample_metadata.tsv
-    metadata_sample_col: sample_id
-    sample_col: sample_id
-    negative_control_col: is_negative_control
-    positive_control_col: is_positive_control
-    negative_control_labels:
-    - PBS
-    - PBS_twz
-    - Negative_96
-    - Negative_man
-    positive_control_labels: []
-    concentration_col: DNA_conc
-    type_col: Type_Group
-    sample_types:
-    - Bronchial Brush
-    - BAL
-    pooled_threshold: 0.1
-    within_type_threshold: 0.1
-    aggressive_threshold: 0.5
-    combine_mode: min
-    biological_plausibility: true
   sankey:
     enabled: true
-    metadata: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/sample_metadata.tsv
+    metadata: /abs/path/mock_dataset/sample_metadata.tsv
     sample_col: sample_id
     group1_col: Type_Group
     color_col: Color
@@ -269,7 +263,7 @@ optional:
     patient_col: Participant_ID
     case_col: Case
     sample_types: Bronchial Brush
-    voc_table: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/chemistry.tsv
+    voc_table: /abs/path/mock_dataset/chemistry.tsv
     voc_sample_col: sample_id
     sample_id_mode: exact
     use_legacy_voc_subset: false
@@ -345,7 +339,7 @@ optional:
     prefix: spieceasi
     network_enabled: true
     modules_enabled: true
-    metadata: /home/ryan/Projects/UBC/DECOI/results/dataset/mock_dataset/sample_metadata.tsv
+    metadata: /abs/path/mock_dataset/sample_metadata.tsv
     color_col: Color
     focus_group1_label: Bronchial Brush
     group_orders:
@@ -361,8 +355,8 @@ optional:
     network_modes:
     - all
     transpose: true
-    min_rel_abund: 0.001
-    min_prevalence: 0.05
+    min_relative_abundance_fraction: 0.001
+    min_prevalence_fraction: 0.05
     remove_zero_var: true
     method: glasso
     lambda_min_ratio: 0.01

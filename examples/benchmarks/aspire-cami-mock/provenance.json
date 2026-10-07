@@ -1,0 +1,102 @@
+{
+  "name": "aspire-cami-mock",
+  "validation_date": "2026-10-07",
+  "validation_checks": 29,
+  "study": "CAMI2_synthetic_patient_airway_oral_skin",
+  "seed": 42,
+  "libraries": 179,
+  "sample_classes": {
+    "Airways": 75,
+    "Oral": 50,
+    "Skin": 50,
+    "Control": 4
+  },
+  "patients": 50,
+  "raw_asvs": 568,
+  "raw_reads": 7309193,
+  "final_asvs": 221,
+  "final_biological_samples": 125,
+  "final_reads": 3912205,
+  "task_statuses": {
+    "COMPLETED": 603,
+    "CACHED": 148
+  },
+  "nextflow_version": "N E X T F L O W\n      version 25.10.0 build 10289\n      created 22-10-2025 16:26 UTC (12:26 EDT)\n      cite doi:10.1038/nbt.3820\n      http://nextflow.io",
+  "sha256": {
+    "dataset/manifest.json": "9036642290c7952a9cd9f5eb0f87d847b2c8c0d3649f453bf1bcb3c30cdb1c3d",
+    "dataset/fastq_manifest.tsv": "bf6f10ff0be1281529358abaf891dc138d62cc44db57d342faba5f4e6a2ce2f1",
+    "dataset/sample_metadata.tsv": "eb0aa5e560bc78693a4caf1ff7d191aec94fd59a4842f1d52aa2fe9dd36dbfda",
+    "dataset/ground_truth_feature_registry.tsv": "838b7c21f68fe96ba26dcc570dcfcfcf44e7240a638af78af7487112a78f715d",
+    "results/summary/tables/run_config.yml": "1413ddbb16c0330dca94e35cb0db24ce0c28ff6cf54287d9e40440141f7a1828",
+    "results/intermediates/ASVs/ASV_counts.tsv": "22cc4bb7b23762e5bc520a7f8293e4a8238bd147007bf459d082e1f5ec96e3d3",
+    "results/modules/non_target_filtering/tables/ASV_target.tsv": "2977971448916edb2cdfb871040d238fe2a6c6df0605f9e2fe88062cffe42356",
+    "pipeline/asv_pipeline.nf": "31a7765ad492fe49f227c5cc60f9f0438948097e4dbf8b70787050912cbc2ae5",
+    "pipeline/processes/voc_correlation/plot_voc_corr.py": "b52623ae12dcb3fb3e02f9a00987717942581b57dd1179ade7631b41469256be"
+  },
+  "simulation_versions": {
+    "python": "3.11.16",
+    "platform": "Linux-6.8.0-86-generic-x86_64-with-glibc2.39",
+    "insilicoseq": "iss version 2.0.1",
+    "R": "Rscript (R) version 4.3.3 (2024-02-29)",
+    "cutadapt": "5.2"
+  },
+  "simulation_dimensions": {
+    "samples": 179,
+    "biological_asvs": 692,
+    "final_features": 701,
+    "total_read_pairs": 8802765
+  },
+  "comparison_to_initial_run": {
+    "ASV_counts.tsv": "Exact counts and sample order match after sequence-identity mapping",
+    "ASV_target.tsv": "Exact counts and sample order match after sequence-identity mapping",
+    "asv_voc_spearman_long.tsv": {
+      "rows": 554,
+      "same_tested_pairs": true,
+      "differences": {
+        "rho": {
+          "changed_rows_at_1e_10_tolerance": 7,
+          "max_absolute_change": 0.000950459687691101
+        },
+        "p_value": {
+          "changed_rows_at_1e_10_tolerance": 5,
+          "max_absolute_change": 0.008363376272446765
+        },
+        "q_value": {
+          "changed_rows_at_1e_10_tolerance": 7,
+          "max_absolute_change": 0.006695596898571798
+        },
+        "significant": {
+          "changed_rows_at_1e_10_tolerance": 0,
+          "max_absolute_change": 0.0
+        }
+      }
+    },
+    "patient_asv_voc_permutation_long.tsv": {
+      "rows": 2340,
+      "same_tested_pairs": true,
+      "differences": {
+        "rho": {
+          "changed_rows_at_1e_10_tolerance": 6,
+          "max_absolute_change": 0.005097324196811415
+        },
+        "p_value": {
+          "changed_rows_at_1e_10_tolerance": 6,
+          "max_absolute_change": 0.009000000000000001
+        },
+        "q_value": {
+          "changed_rows_at_1e_10_tolerance": 53,
+          "max_absolute_change": 0.0187123843295363
+        },
+        "significant": {
+          "changed_rows_at_1e_10_tolerance": 0,
+          "max_absolute_change": 0.0
+        }
+      }
+    },
+    "selected_batch_corrected_pseudocounts": {
+      "cells": 26875,
+      "changed_cells": 5,
+      "max_absolute_change": 1
+    }
+  }
+}

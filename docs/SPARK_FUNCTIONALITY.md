@@ -9,7 +9,7 @@ dataset is the executable demonstration dataset.
 |---|---|---|---|
 | Read QC, merging, filtering, denoising, chimera removal, count matrix | core workflow | `asv_pipeline.nf`; `FASTP_QC` through `CREATE_COUNT_MATRIX` | FASTQ QC, filtered reads, ASV FASTA and count matrix |
 | SILVA/SINA taxonomy and non-target screening | `sina`, `taxonomy`, `mito`, `filter_counts` | `processes/sina_trim`, `processes/taxonomy`, `processes/mitomaster`, `processes/mito_decontam`, `processes/filter_counts` | taxonomy tables, mitochondrial/non-target calls, final microbial table |
-| Three-tier SPARK contamination screen | `optional.three_tier_decontam.enabled` | `processes/three_tier_decontam/pipeline` | pooled and within-type decontam scores, biological-plausibility flags, filtered long/wide tables |
+| Current control contamination screen | `core.control_decontam.enabled` | `processes/control_decontam` | biological-only depth QC, independent TECH/BIO prevalence scores, union removal and audit |
 | Read/sample retention and ASV overlap | `general_stats`, `sankey`, `plot_upset`, `metadata_plots` | corresponding processes listed in `README.md` | retention summaries, Sankey, UpSet and Venn outputs |
 | Collector curves | `collectors_curve.enabled` | `processes/collectors_curve/collectors_curve.py` | curve figures and richness summaries |
 | Shannon, Bray-Curtis, PERMANOVA and PERMDISP | `optional.diversity.enabled`; `optional.diversity.patient_aware.enabled` | `processes/diversity_analysis`; `processes/bray_patient_aware` | diversity tables/figures and patient-blocked tests |
@@ -52,5 +52,6 @@ completed null ensemble.
 
 The public fixture intentionally contains no protected patient data. DECOI adds
 four labelled synthetic extraction blanks, synthetic DNA concentrations, and
-the corresponding control truth table so the optional three-tier prevalence and
-within-type frequency models can also be exercised end to end.
+the corresponding control truth table to exercise TECH prevalence testing end to
+end. DNA concentrations are not used by the current prevalence module. The CAMI mock also uses skin as BIO controls; the older paired-airway mock
+has no BIO controls and runs TECH only.

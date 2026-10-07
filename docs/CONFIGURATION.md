@@ -8,6 +8,41 @@ value. Copy the template for a production run and retain the resolved copy with
 the results. Private study YAMLs are intentionally excluded from the repository
 because they contain machine-specific paths and study provenance.
 
+## Filtering parameter names and units
+
+Names ending in `_pct` use a percentage from 0 to 100. Names ending in
+`_fraction` use a fraction from 0 to 1. A decontam `_score_threshold` is a
+classification-score cutoff, not an abundance or sample-prevalence percentage.
+
+| Parameter | Current mock value | Exact meaning |
+|---|---:|---|
+| `core.control_decontam.min_biological_reads` | 5000 | Include biological samples with at least this many raw post-QC ASV counts. Nonzero controls are exempt. |
+| `core.control_decontam.technical_score_threshold` | 0.1 | Flag ASVs with TECH decontam prevalence score strictly below 0.1. |
+| `core.control_decontam.bio_control_score_threshold` | 0.1 | Flag ASVs with BIO decontam prevalence score strictly below 0.1. |
+| `core.table_filter.min_sample_reads` | 5000 | Fallback sample-depth cutoff only when control decontamination is disabled. |
+| `core.table_filter.min_relative_abundance_pct` | 0 | Initial abundance filter inside FILTER_ASVS; zero disables abundance exclusion. All-zero ASVs are still removed. |
+| `standard.filter_counts.min_relative_abundance_pct` | 0.1 | Keep an ASV reaching 0.1% in at least one retained biological sample, using microbial totals after non-target removal. |
+| `standard.filter_counts.min_prevalence_fraction` | 0.05 | Fraction of retained biological samples with nonzero counts; an ASV must pass this and the independent RA gate. |
+| `optional.spieceasi.min_relative_abundance_fraction` | 0.001 | Network-specific abundance filter: at least 0.1% in one network-input sample. |
+| `optional.spieceasi.min_prevalence_fraction` | 0.05 | Network-specific prevalence filter: nonzero count in at least 5% of network-input samples. |
+
+The mock applies **5% nonzero prevalence across retained biological samples**
+in `FILTER_ASVS`, before `PLOT_METADATA`. Its separate abundance gate requires
+0.1% RA in at least one biological sample. Both gates must pass. Prevalence uses
+all biological columns remaining after sample-group filtering, including any
+whose counts became zero after feature removal. Controls do not enter this table.
+The general template leaves this additional gate disabled (`0`); enabling a
+positive value requires `core.control_decontam.enabled` to establish the cohort.
+
+Network gates operate on the selected network table, after optional batch
+correction. Force-kept indicator ASVs bypass the network abundance and prevalence
+gates, but still face zero-variance filtering. In a 50-sample network input, a
+5% prevalence gate requires at least three nonzero samples. It does not require
+0.1% abundance in each of those three samples: the two gates are independent.
+Other analysis modules have their own explicitly documented prevalence fractions.
+See [migration notes](decontamination.md#migration-and-historical-reproduction)
+for prior names; defining both names for one setting is an error.
+
 ## How Configuration Is Applied
 
 Run ASPIRE through the supported wrapper:
@@ -41,7 +76,7 @@ flat or inside one tier, never in both places.
 |---|---|---|---|
 | `standard.mito` | filtered ASVs and taxonomy | BLAST databases/FASTAs; MITOMASTER network access when enabled | `non_target_filtering` |
 | `standard.filter_counts` | taxonomy and non-target evidence | metadata | `non_target_filtering` |
-| `optional.three_tier_decontam` | raw count matrix and final microbial tables | control-bearing metadata and DNA concentration | `contamination_filtering` |
+| `core.control_decontam` | raw count matrix and full taxonomy | explicit sample-class metadata | `contamination_filtering` |
 | `standard.metadata_plots` | final microbial/mitochondrial tables | metadata | `metadata_plots` |
 | `optional.batch_correction` | metadata-linked ASV tables | batch and biological-covariate columns | `batch_correction` |
 | `optional.outlier_detection` | metadata-linked ASV table | configured grouping columns | `outlier_detection` |
@@ -56,8 +91,8 @@ flat or inside one tier, never in both places.
 | `optional.asv_mag_link` | filtered ASV sequences | genome-QC, barrnap, and/or genome FASTA inputs | `asv_mag_link` |
 | `optional.master_summary` | metadata-linked ASV tables | enabled branch outputs are incorporated when available | `summary` |
 
-When three-tier decontamination is enabled, its filtered long and wide tables
-replace the corresponding metadata-stage tables for downstream analyses. When
+When control decontamination is enabled, its cleaned biological counts
+enter feature filtering before metadata-stage tables and downstream analyses. When
 batch correction is enabled, its corrected count table replaces those counts
 for the downstream branches that support correction. These are analytical
 choices, not merely extra plots.
@@ -98,10 +133,10 @@ do not follow a consistent convention. Confirm the normalized
 | `core.concat` | `relabel`, `label_sep` | Preserves sample identity when filtered FASTAs are concatenated. |
 | `core.unoise` | `min_size` | Minimum dereplicated abundance supplied to denoising. |
 | `core.swarm` | `distance` | ASV clustering/mapping distance setting. |
-| `core.table_filter` | `min_sample_sum`, `min_asv_sum` | Early technical count filter. `min_sample_sum` is a read count, not a percentage. |
+| `core.table_filter` | `min_sample_reads`, `min_relative_abundance_pct` | Initial step inside `FILTER_ASVS`, after control decontamination. `min_sample_reads` is a read count, bypassed when biological depth QC already ran; `min_relative_abundance_pct` is a per-sample percentage. |
 
-Changing any of these settings changes the inferred ASV cohort and normally
-requires a fresh or appropriately targeted upstream run.
+Read-processing changes can alter inferred ASVs. `core.table_filter` changes
+apply later, inside `FILTER_ASVS`; rerun from that stage for those settings.
 
 ## Alignment and Taxonomy
 
@@ -139,8 +174,9 @@ exact historical classification must be reproduced.
 
 - `metadata`, `sample_id_col`, `group_col`: sample/group mapping.
 - `min_group_size`: minimum group size considered by group-aware filtering.
-- `abundance_threshold`: percentage-scale relative-abundance threshold used by
-  this process; inspect the recorded configuration when comparing runs.
+- `min_relative_abundance_pct`: per-sample percentage; an ASV must meet it in at least
+  one retained biological sample. The mock uses 0.1%, the general template 0.5%.
+  Controls are excluded upstream when control decontamination is enabled.
 - `min_consensus`: minimum taxonomy consensus value.
 - `exclude_taxa`: explicit exact rank/value exclusions such as
   `Species:Homo sapiens` or `Class:Mammalia`.
@@ -152,24 +188,24 @@ exact historical classification must be reproduced.
 The final downstream microbial table is `ASV_target.tsv`. The `.micro.tsv` and
 `.decon.tsv` files are audit intermediates, not authoritative replacements.
 
-### `optional.three_tier_decontam`
+### `core.control_decontam`
 
-This optional branch requires extraction controls in the raw count matrix.
-`metadata` must include the configured sample identifier, negative/positive
-control flags, DNA concentration, and sample type.
+This module now runs two independent cohort-level decontam prevalence tests,
+TECH and BIO, after taxonomy and before biological feature filtering.
+See the [migration notes](decontamination.md#migration-and-historical-reproduction)
+for older configuration files.
 
-- `negative_control_col`, `positive_control_col`: Boolean/control-label fields.
-- `negative_control_labels`, `positive_control_labels`: accepted labels when
-  controls are encoded categorically.
-- `concentration_col`: DNA concentration for frequency modeling.
-- `type_col`, `sample_types`: biological strata used by within-type models.
-- `pooled_threshold`, `within_type_threshold`, `aggressive_threshold`:
-  contaminant score thresholds.
-- `combine_mode`: rule used to combine evidence tiers.
-- `biological_plausibility`: apply the final plausibility screen.
+- `metadata`, `metadata_sample_col`, `class_col`: source metadata and identifiers.
+- `biological_labels`, `technical_labels`, `bio_control_labels`, `positive_labels`:
+  explicit values in the class column, never sample IDs.
+- `min_biological_reads`: biological-only post-QC inclusion cutoff (default 5000);
+  low-depth controls are intentionally exempt.
+- `technical_enabled`, `bio_control_enabled`: independent arm switches.
+- `technical_score_threshold`, `bio_control_score_threshold`: independent prevalence thresholds.
 
-The raw control-bearing table is used for scoring; decisions are applied to the
-host-filtered microbial tables before all downstream analyses.
+The union of the two calls removes ASVs from QC-passing biological samples.
+Retained counts pass unchanged into feature filtering, with biological depth inclusion already complete. Read [decontamination](decontamination.md) for migration,
+class validation, pairing preservation, QC artifacts and score interpretation.
 
 ## Metadata, QC and Visualization
 
@@ -177,9 +213,8 @@ host-filtered microbial tables before all downstream analyses.
 
 `metadata` and `sample_col` establish sample matching. `type_col`, `color_col`,
 `palette_file`, `group_order`, and `include_rank` control annotations.
-`subtraction_group_col` and `subtraction_groups` identify groups subtracted or
-removed before the biological table is finalized. `keep_types` restricts
-retained biological types. `input_table` chooses the count-filter checkpoint;
+Control decontamination supplies biological counts with retained values unchanged. `keep_types` restricts
+retained biological types. `input_table` must be `filtered`; pre-filter tables are audit-only;
 `min_pre_correction_sample_sum` is an additional sample read-count threshold.
 `drop_zero_asvs` removes features that become all zero. `run_micro` and
 `run_mito` select table families.
@@ -237,8 +272,8 @@ families; aligned plot thresholds are configured with `aligned_*` fields.
   established datasets.
 - `correlation_direction`: reported direction for the baseline ASV-VOC output.
 - `isa_correlation_direction`: direction for ISA-focused correlation outputs.
-- `isa_brush_groups`, `isa_all_type_groups`,
-  `isa_exclude_all_types_from_brush`: membership rules for ISA/VOC figures.
+- `isa_focus_groups`, `isa_all_type_groups`,
+  `isa_exclude_all_types_from_focus`: membership rules for ISA/VOC figures.
 - `isa_min_abs_rho`: minimum absolute Spearman magnitude for focused rows and
   columns.
 - `sample_min_abs_z`: minimum absolute sample VOC z-score for focused displays.
@@ -314,7 +349,7 @@ under the same `optional:` tier; old rerun names remain supported.
 
 ### `optional.spieceasi`
 
-`min_rel_abund`, `min_prevalence`, and `remove_zero_var` define the network ASV
+`min_relative_abundance_fraction`, `min_prevalence_fraction`, and `remove_zero_var` define the network ASV
 cohort. `method`, `lambda_min_ratio`, `nlambda`, `rep_num`, `thresh`, `ncores`,
 and `seed` configure inference. `edge_threshold` and `keep_negative` control the
 reported graph. `force_keep_indicator_asvs` should be enabled only when the
@@ -358,7 +393,7 @@ be recorded with the run configuration and Git commit.
 3. Confirm manifest sample IDs against metadata and all external tables.
 4. Confirm primer trimming, read length and expected-error settings.
 5. Pin taxonomy/SINA references when exact reproducibility matters.
-6. Decide explicitly whether MITOMASTER, host filtering, three-tier
+6. Decide explicitly whether MITOMASTER, host filtering, control
    decontamination and batch correction apply.
 7. Disable branches lacking required columns or inputs.
 8. Record the Git commit and preserve the resolved YAML, manifest, report,

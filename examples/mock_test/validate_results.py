@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 
 class Audit:
@@ -93,6 +94,122 @@ def true_values(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().str.lower().isin({"true", "1", "yes"})
 
 
+def validate_control_filtering(metadata: pd.DataFrame, results: Path, audit: Audit, cami: bool) -> None:
+    """Validate class separation, inclusion, statistical union and unchanged counts.
+
+    Use the raw post-QC matrix as the independent source of expected counts;
+    checks never assume that merely detecting an ASV in a control removes it.
+    """
+    directory = results / "modules/contamination_filtering/tables/three_tier_results"
+    settings = json.loads((directory / "settings.json").read_text())
+    qc = read_table(directory / "sample_qc.tsv").set_index(settings["sample_col"], drop=False)
+    raw = read_table(results / "intermediates/ASVs/ASV_counts.tsv", index_col=0)
+    calls = read_table(directory / "contamination_calls.tsv", index_col=0)
+    cleaned = read_table(directory / "ASV_cleaned.tsv", index_col=0)
+    normalize = lambda values: pd.Index(values).astype(str).str.replace("-", "_", regex=False)
+    source = metadata.copy()
+    source.index = normalize(source["sample_id"])
+    source = source.reindex(normalize(qc.index))
+    source.index = qc.index
+    expected_classes = source["Type_Group"].map({"Airways": "biological", "Oral": "biological",
+                                                "Skin": "bio_control", "Control": "technical"}) if cami else qc.decontam_class
+    audit.check(expected_classes.notna().all() and expected_classes.equals(qc.decontam_class),
+                "control_classes", f"class counts={qc.decontam_class.value_counts().to_dict()}")
+    if "source_sample" in source:
+        source["source_sample"] = source["source_sample"].fillna(source["sample_id"])
+    pairing = [c for c in metadata if c in {"Participant_ID", "Procedure_ID", "source_sample"}]
+    pairing_ok = all(c in qc and source[c].fillna("").astype(str).eq(qc[c].fillna("").astype(str)).all()
+                     for c in pairing)
+    audit.check(set(normalize(qc.index)) == set(normalize(metadata.sample_id)) and pairing_ok,
+                "control_metadata", f"QC samples={len(qc)}, pairing columns={pairing}")
+    depths = raw.sum().reindex(qc.index, fill_value=0)
+    eligible = (expected_classes == "biological") & (depths >= settings["min_biological_reads"]) & (depths > 0)
+    bio_ids = qc.index[eligible].tolist()
+    audit.check(depths.eq(qc.post_qc_reads).all() and true_values(qc.biological_pass).eq(eligible).all(),
+                "biological_depth_qc", f"cutoff={settings['min_biological_reads']}, passing={len(bio_ids)}")
+
+    def same_counts(actual, expected):
+        return (set(actual.index) == set(expected.index) and set(actual.columns) == set(expected.columns)
+                and actual.reindex(index=expected.index, columns=expected.columns).eq(expected).all().all())
+
+    audit.check(same_counts(read_table(directory / "biological_qc_counts.tsv", index_col=0), raw.loc[:, bio_ids]),
+                "biological_qc_counts", "QC biological counts equal raw counts")
+    enabled_calls = {}
+    if cami:
+        audit.check(settings["technical"]["enabled"] and settings["bio_control"]["enabled"],
+                    "cami_control_arms", "TECH and BIO must both be enabled")
+    for arm, cls in (("TECH", "technical"), ("BIO", "bio_control")):
+        negatives = qc.index[(expected_classes == cls) & (depths > 0)].tolist()
+        if settings[cls]["enabled"]:
+            arm_counts = read_table(directory / f"{arm}_counts.tsv", index_col=0)
+            arm_meta = read_table(directory / f"{arm}_metadata.tsv").set_index("Sample")
+            selected = bio_ids + negatives
+            audit.check(same_counts(arm_counts, raw.loc[:, selected]) and
+                        set(arm_meta.index[true_values(arm_meta.is_negative)]) == set(negatives),
+                        f"{arm}_cohort", f"biological={len(bio_ids)}, controls={len(negatives)}, low-depth controls={sum(depths.loc[negatives] < settings['min_biological_reads'])}")
+            scores = read_table(directory / f"{arm}_scores.tsv", index_col=0).reindex(calls.index)
+            expected = scores.score.lt(settings[cls]["threshold"]).fillna(False)
+            enabled_calls[arm] = expected
+            audit.check(expected.eq(true_values(scores.contaminant)).all() and
+                        expected.eq(true_values(calls[f"{arm}_contaminant"])).all() and
+                        calls[f"{arm}_score"].fillna(-1).eq(scores.score.fillna(-1)).all(),
+                        f"{arm}_calls", f"threshold={settings[cls]['threshold']}, flagged={int(expected.sum())}")
+        else:
+            enabled_calls[arm] = pd.Series(False, index=calls.index)
+        for klass, ids in ((cls, negatives), ("biological", bio_ids)):
+            prevalence = (raw.loc[:, ids] > 0).mean(axis=1).reindex(calls.index) if ids else pd.Series(float('nan'), index=calls.index)
+            audit.check((calls[f"prevalence_{klass}"].fillna(-1) - prevalence.fillna(-1)).abs().lt(1e-12).all()
+                        and calls[f"n_{klass}"].eq(len(ids)).all(),
+                        f"{arm}_{klass}_prevalence", f"denominator={len(ids)}")
+    tech, bio = enabled_calls["TECH"], enabled_calls["BIO"]
+    category = pd.Series("CLEAN", index=calls.index)
+    category.loc[tech] = "TECH"
+    category.loc[bio] = "BIO"
+    category.loc[tech & bio] = "TECH+BIO"
+    removed = set(calls.index[tech | bio])
+    audit.check(set(calls.index) == set(raw.index) and category.eq(calls.final_category).all()
+                and same_counts(cleaned, raw.loc[~raw.index.isin(removed), bio_ids]),
+                "contamination_union", f"categories={category.value_counts().to_dict()}; retained counts unchanged")
+    reasons = read_table(directory / "removed_asvs_with_taxonomy.tsv", index_col=0)
+    audit.check(set(reasons.index) == removed and reasons.removal_reason.eq(category.reindex(reasons.index)).all(),
+                "contamination_reasons", f"removed ASVs={len(reasons)}")
+    final = read_table(results / "modules/non_target_filtering/tables/ASV_target.tsv", index_col=0)
+    final_sequences = read_fasta(results / "intermediates/ASVs/ASVs_target.fasta.gz")
+    audit.check(set(final.index) <= set(cleaned.index) and set(final.columns) <= set(bio_ids)
+                and same_counts(final, cleaned.reindex(index=final.index, columns=final.columns))
+                and set(final_sequences) == set(final.index),
+                "combined_filter_counts_fasta", f"ASVs={len(final)}, biological samples={len(final.columns)}")
+
+
+    micro = read_table(results / "modules/non_target_filtering/tables/ASV_target.micro.tsv", index_col=0)
+    feature_qc = read_table(results / "modules/non_target_filtering/tables/ASV_target.feature_qc.tsv", index_col=0)
+    config = yaml.safe_load((results / "summary/tables/run_config.yml").read_text())
+    filtering = config.get("standard", {}).get("filter_counts", config.get("filter_counts", {}))
+    min_ra = filtering.get("min_relative_abundance_pct", filtering.get("abundance_threshold", 0.005))
+    min_prev = filtering.get("min_prevalence_fraction", 0)
+    presence = (micro > 0).sum(axis=1)
+    prevalence = presence / len(micro.columns)
+    ra = micro.div(micro.sum().replace(0, float('nan')), axis=1).fillna(0).mul(100).max(axis=1)
+    expected_pass = prevalence.ge(min_prev) & ra.ge(min_ra) & presence.gt(0)
+    q = feature_qc.reindex(micro.index)
+    audit.check(set(micro.columns) == set(final.columns) and set(micro.columns) <= set(bio_ids)
+                and set(micro.index) <= set(cleaned.index)
+                and same_counts(micro, cleaned.reindex(index=micro.index, columns=micro.columns))
+                and set(feature_qc.index) == set(micro.index)
+                and q.n_biological_samples.eq(len(micro.columns)).all()
+                and q.n_nonzero_samples.eq(presence).all()
+                and (q.prevalence_fraction - prevalence).abs().lt(1e-12).all()
+                and (q.max_relative_abundance_pct - ra).abs().lt(1e-10).all()
+                and q.min_prevalence_fraction.eq(min_prev).all()
+                and q.min_relative_abundance_pct.eq(min_ra).all()
+                and true_values(q.passes_prevalence).eq(prevalence.ge(min_prev)).all()
+                and true_values(q.passes_relative_abundance).eq(ra.ge(min_ra)).all()
+                and true_values(q.passes_feature_filters).eq(expected_pass).all()
+                and true_values(q.retained_final).eq(pd.Series(micro.index.isin(final.index), index=micro.index)).all()
+                and set(final.index) <= set(micro.index[expected_pass]),
+                "biological_prevalence_abundance", f"RA>={min_ra}%; nonzero prevalence>={min_prev}; biological denominator={len(micro.columns)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", required=True, type=Path)
@@ -112,9 +229,19 @@ def main() -> None:
         "summary/tables/module_output_manifest.tsv",
         "summary/tables/nextflow_artifact_manifest.tsv",
         "intermediates/ASVs/ASVs.fasta.gz",
+        "intermediates/ASVs/ASV_counts.tsv",
+        "intermediates/ASVs/ASVs_target.fasta.gz",
+        "intermediates/ASVs/filter_audit.tsv",
         "modules/non_target_filtering/tables/ASV_target.tsv",
+        "modules/non_target_filtering/tables/ASV_target.micro.tsv",
+        "modules/non_target_filtering/tables/ASV_target.feature_qc.tsv",
+        "summary/tables/run_config.yml",
         "modules/non_target_filtering/tables/mitomap/nontarget.master.tsv",
         "modules/taxonomy/tables/ASV_SILVA_tax.full-length.vsearch.tsv",
+        "modules/voc_correlation/tables/selected_sample_metadata.tsv",
+        "modules/voc_correlation/tables/sample_voc_matrix.tsv",
+        "modules/voc_correlation/tables/patient_voc_matrix.tsv",
+        "modules/voc_correlation/plots/asv_voc_clustermap.svg",
         "modules/voc_correlation/tables/asv_voc_spearman_long.tsv",
         "modules/voc_correlation/tables/patient_asv_voc_permutation_long.tsv",
         "modules/voc_correlation/tables/patient_inference_summary.json",
@@ -123,6 +250,11 @@ def main() -> None:
         "modules/network_analysis/tables/network_topology_summary.tsv",
         "modules/network_analysis/tables/network_topology_null_draws.tsv",
         "modules/contamination_filtering/tables/ASV_final_three_tier.tsv",
+        "modules/contamination_filtering/tables/three_tier_results/settings.json",
+        "modules/contamination_filtering/tables/three_tier_results/sample_qc.tsv",
+        "modules/contamination_filtering/tables/three_tier_results/contamination_calls.tsv",
+        "modules/contamination_filtering/tables/three_tier_results/removed_asvs_with_taxonomy.tsv",
+        "modules/contamination_filtering/plots/three_tier_results/read_depth_by_class.svg",
         "modules/contamination_filtering/tables/three_tier_results/filtered/filter_summary.txt",
         "modules/non_target_filtering/plots/mitomap/nontarget_non_target_cumulative.svg",
         "modules/outlier_detection/plots/outliers_Case_summary.svg",
@@ -138,6 +270,13 @@ def main() -> None:
         "logs/launch_command.txt",
         "logs/nextflow_version.txt",
     )
+    metadata = read_table(dataset / "sample_metadata.tsv")
+    cami = {'source_sample', 'body_site', 'study_role'} <= set(metadata.columns) and {
+        'Airways','Oral','Skin'} <= set(metadata.body_site.dropna())
+    clinical = 'synthetic_clinical' in metadata and metadata['synthetic_clinical'].fillna(False).astype(str).str.lower().isin(['true','1']).any()
+    if cami and not clinical:
+        required_files = tuple(p.replace('outliers_Case_summary', 'outliers_batch_summary')
+                               for p in required_files if '/patient_' not in p)
     missing_files = [relative for relative in required_files if not (results / relative).is_file()]
     if missing_files:
         raise SystemExit("Completed output is missing required files:\n  " + "\n  ".join(missing_files))
@@ -149,6 +288,8 @@ def main() -> None:
         "outlier_detection", "power_analysis", "sankey", "taxonomy",
         "umap_clustering", "upset", "voc_correlation",
     }
+    if cami and not clinical:
+        required_modules -= {'lung_status_analysis', 'power_analysis'}
     missing_modules = sorted(name for name in required_modules if not (modules / name).is_dir())
     audit.check(not missing_modules, "publication_layout", f"missing modules={missing_modules or 'none'}")
 
@@ -161,6 +302,7 @@ def main() -> None:
         "sample_accounting",
         f"manifest={len(supplied)}, metadata={len(metadata_ids)}, published={len(published)}",
     )
+    validate_control_filtering(metadata, results, audit, cami)
 
     truth = read_table(dataset / "ground_truth_reference_filters.tsv")
     nontarget = read_table(modules / "non_target_filtering/tables/mitomap/nontarget.master.tsv")
@@ -190,7 +332,7 @@ def main() -> None:
     audit.check(bool(id_map), "truth_id_mapping", f"mapped inferred ASVs={len(id_map)}")
 
     indicator_dir = modules / "indicator_analysis/tables"
-    indicator_files = [indicator_dir / "Type_Group_indicator_species_summary.tsv", indicator_dir / "Case_indicator_species_summary.tsv"]
+    indicator_files = [indicator_dir / "Type_Group_indicator_species_summary.tsv", indicator_dir / ("batch_indicator_species_summary.tsv" if cami and not clinical else "Case_indicator_species_summary.tsv")]
     significant = 0
     significant_ids: set[str] = set()
     for path in indicator_files:
@@ -226,20 +368,21 @@ def main() -> None:
     )
 
     edge_path = modules / "network_analysis/tables/spieceasi_edge_list.csv"
-    patient_voc = read_table(modules / "voc_correlation/tables/patient_asv_voc_permutation_long.tsv")
-    patient_summary = json.loads((modules / "voc_correlation/tables/patient_inference_summary.json").read_text())
-    tested = patient_voc.loc[patient_voc.status.eq("tested")]
-    untested = patient_voc.loc[patient_voc.status.ne("tested")]
-    audit.check(
-        set(patient_voc.normalization) == {"relative_abundance", "clr"}
-        and patient_voc.n_patients.le(patient_summary["patients"]).all()
-        and tested.p_value.between(0, 1, inclusive="right").all()
-        and tested.q_value.between(0, 1).all()
-        and tested.rho.abs().le(1 + 1e-12).all()
-        and untested.p_value.isna().all(),
-        "voc_patient_inference",
-        f"patients={patient_summary['patients']}, tested={len(tested)}, insufficient={len(untested)}; significance is not required",
-    )
+    if not cami or clinical:
+        patient_voc = read_table(modules / "voc_correlation/tables/patient_asv_voc_permutation_long.tsv")
+        patient_summary = json.loads((modules / "voc_correlation/tables/patient_inference_summary.json").read_text())
+        tested = patient_voc.loc[patient_voc.status.eq("tested")]
+        untested = patient_voc.loc[patient_voc.status.ne("tested")]
+        audit.check(
+            set(patient_voc.normalization) == {"relative_abundance", "clr"}
+            and patient_voc.n_patients.le(patient_summary["patients"]).all()
+            and tested.p_value.between(0, 1, inclusive="right").all()
+            and tested.q_value.between(0, 1).all()
+            and tested.rho.abs().le(1 + 1e-12).all()
+            and untested.p_value.isna().all(),
+            "voc_patient_inference",
+            f"patients={patient_summary['patients']}, tested={len(tested)}, insufficient={len(untested)}; significance is not required",
+        )
 
     edges = pd.read_csv(edge_path) if edge_path.is_file() else pd.DataFrame()
     module_path = modules / "network_analysis/tables/spieceasi_modules_all.tsv"

@@ -1,0 +1,18 @@
+{
+  "name": "aspire-quickstart",
+  "validation_date": "2026-10-07",
+  "validation_checks": 29,
+  "seed": 20261007,
+  "patients": 12,
+  "libraries": 46,
+  "read_pairs": 218000,
+  "final_biological_samples": 30,
+  "final_asvs": 24,
+  "threads": 8,
+  "power_simulations": 10,
+  "power_permutations": 49,
+  "dataset_checksums_sha256": "5b846764d20601168b4f3d29cf06866cb2ebc3ef2889f23d1717dbdadbe3cfc6",
+  "builder_sha256": "550f2d14b2eff03821ad20afb50dff9ba89dae3f2ebccb9fc610c8078f027a1b",
+  "voc_script_sha256": "b52623ae12dcb3fb3e02f9a00987717942581b57dd1179ade7631b41469256be",
+  "pipeline_sha256": "31a7765ad492fe49f227c5cc60f9f0438948097e4dbf8b70787050912cbc2ae5"
+}

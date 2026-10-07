@@ -21,7 +21,7 @@ serialized mamba slot indicate active environment creation, not a deadlock.
 
 - `No usable entries detected in manifest`: check tab separation, sample IDs, and FASTQ paths.
 - `metadata file not found`: set the branch-specific metadata path or disable that branch.
-- Host taxa still appear downstream: confirm `standard.filter_counts.exclude_taxa` is set and rerun from `standard:FILTER_COUNTS` or at least from `standard:PLOT_METADATA` if the final `ASV_target.tsv` is already corrected.
+- Host taxa still appear downstream: confirm `standard.filter_counts.exclude_taxa` is set and rerun from `standard:FILTER_ASVS` or at least from `standard:PLOT_METADATA` if the final `ASV_target.tsv` is already corrected.
 - VOC direction did not change outputs: rerun from `VOC_CORRELATION`.
 - Sankey complains about intermediates: set `standard.filter_counts.save_intermediates: true`.
 - BLAST database errors: set `standard.mito.mito_db` and `standard.mito.biof_db` to valid database prefixes or compatible FASTA paths.

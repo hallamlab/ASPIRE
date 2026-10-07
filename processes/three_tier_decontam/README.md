@@ -1,11 +1,9 @@
 # SPARK three-tier decontamination
 
-This directory supports two related modes. The integrated Nextflow
-`THREE_TIER_DECONTAM` process is optional, YAML-configurable, and runs between
-`PLOT_METADATA` and every downstream analysis. It learns statistical flags from
-the raw control-bearing count matrix, applies them to the final microbial long
-and wide tables, and publishes its full audit under the configured
-`three_tier_decontam.output_dir`.
+The integrated `CONTROL_DECONTAM` process now uses the independent TECH/BIO
+prevalence implementation in `../control_decontam/`, before feature filtering.
+See [current workflow documentation](../../docs/decontamination.md).
+The scripts in this directory are retained for historical reproduction only.
 
 The standalone wrapper below is the stricter manuscript-resumption process. It
 starts from an existing authoritative ASPIRE output and never modifies that

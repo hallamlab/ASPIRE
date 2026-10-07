@@ -334,20 +334,20 @@ def isa_source_category(source: object) -> str:
     return "other"
 
 
-def isa_group_is_brush_specific(
+def isa_group_is_focus_specific(
     label: object,
-    brush_groups: set[str],
+    focus_groups: set[str],
     all_type_groups: set[str],
     exclude_all_types: bool,
 ) -> bool:
-    """Keep brush-containing singleton/mixed ISA groups, but not universal groups."""
+    """Keep focus-group singleton/mixed ISA memberships, optionally excluding universal groups."""
     for grouped_label in parse_csv_list(str(label)):
         parts = {
             canonicalize_sample_type(part)
             for part in str(grouped_label).split("+")
             if str(part).strip()
         }
-        if not parts.intersection(brush_groups):
+        if not parts.intersection(focus_groups):
             continue
         if exclude_all_types and all_type_groups and parts.issuperset(all_type_groups):
             continue
@@ -397,7 +397,7 @@ def asv_display_label(asv_id: str, taxonomy_df: pd.DataFrame) -> str:
     return asv_id
 
 
-def load_brush_metadata(
+def load_selected_metadata(
     asv_meta_path: str,
     metadata_sample_col: str,
     patient_col: str,
@@ -623,7 +623,7 @@ def build_sample_voc_matrix(
     common = pd.Index(meta[sample_id_col]).intersection(voc_df.index).intersection(voc_meta.index)
     plot_meta = meta.set_index(sample_id_col).loc[common].copy()
     plot_meta["subclass2"] = voc_meta.loc[common, "subclass2"].fillna("missing").astype(str).values
-    plot_meta["brush_side"] = voc_meta.loc[common, "Type"].fillna("missing").astype(str).values
+    plot_meta["type_annotation"] = voc_meta.loc[common, "Type"].fillna("missing").astype(str).values
     plot_meta["sample_label"] = [
         f"{sample_id} ({patient_id})"
         for sample_id, patient_id in zip(plot_meta.index.astype(str), plot_meta["patient_id"].astype(str), strict=False)
@@ -634,7 +634,7 @@ def build_sample_voc_matrix(
     color_df = pd.DataFrame({
         "Case": [CASE_STATUS_PALETTE.get(value, "#7A7A7A") for value in plot_meta["case_status"]],
         "subclass2": [VOC_SUBCLASS2_PALETTE.get(value, VOC_SUBCLASS2_PALETTE["missing"]) for value in plot_meta["subclass2"]],
-        "Type": [BRUSH_SIDE_PALETTE.get(value, BRUSH_SIDE_PALETTE["missing"]) for value in plot_meta["brush_side"]],
+        "Type": [BRUSH_SIDE_PALETTE.get(value, BRUSH_SIDE_PALETTE["missing"]) for value in plot_meta["type_annotation"]],
     }, index=matrix.index)
     return matrix, plot_meta.reset_index(drop=True), color_df
 
@@ -648,7 +648,7 @@ def sample_voc_legend_blocks(plot_meta: pd.DataFrame) -> list[tuple[str, list[tu
     return [
         ("Case", observed_legend_items(plot_meta["case_status"], CASE_STATUS_PALETTE)),
         ("subclass2", observed_legend_items(plot_meta["subclass2"], VOC_SUBCLASS2_PALETTE)),
-        ("Type", observed_legend_items(plot_meta["brush_side"], BRUSH_SIDE_PALETTE)),
+        ("Type", observed_legend_items(plot_meta["type_annotation"], BRUSH_SIDE_PALETTE)),
     ]
 
 
@@ -716,10 +716,16 @@ def save_clustermap(
     row_color_legends: list[tuple[str, list[tuple[str, str]]]] | None = None,
     correlation_direction: str = "both",
     cbar_label: str = "Spearman rho",
+    landscape: bool = False,
 ) -> None:
     if df.empty:
         return
     base_fig_width, fig_height = matrix_figsize(df.shape[0], df.shape[1])
+    if landscape:
+        fig_height = max(5.5, min(20.0, 3.0 + 0.35 * df.shape[0]))
+        label_height = 0.07 * max((len(str(label)) for label in df.columns), default=0)
+        base_fig_width = max(12.0, min(100.0, 4.0 + 0.22 * df.shape[1]),
+                             1.5 * (fig_height + label_height))
     legend_shift_in = 1.0
     fig_width = base_fig_width + legend_shift_in
     font_size_pt = float(plt.rcParams.get("font.size", 12))
@@ -785,7 +791,8 @@ def save_clustermap(
     cbar_ax.set_ylabel(cbar_label, rotation=90, va="center", labelpad=18)
     legend_blocks = row_color_legends or []
     if row_color_legend:
-        legend_title = str(row_colors.name) if isinstance(row_colors, pd.Series) and row_colors.name else "Annotation"
+        annotation = row_colors if row_colors is not None else col_colors
+        legend_title = str(annotation.name) if isinstance(annotation, pd.Series) and annotation.name else "Annotation"
         legend_blocks = [(legend_title, row_color_legend)] + legend_blocks
     for idx, (legend_title, legend_items) in enumerate(legend_blocks):
         add_side_legend(grid.fig, cbar_left, 0.54 - idx * 0.16, legend_title, legend_items)
@@ -793,6 +800,34 @@ def save_clustermap(
     for suffix in FIGURE_FORMATS:
         grid.fig.savefig(output_stem.with_suffix(suffix), dpi=600, bbox_inches="tight", pad_inches=0.35)
     plt.close(grid.fig)
+
+
+def remove_legacy_outputs(outdir: Path) -> None:
+    """Remove known retired output names when updating an existing results directory."""
+    stems = (
+        "brush_metadata", "isa_annotations_bronchial_brush",
+        "isa_bronchial_brush_asv_group_colors", "isa_bronchial_brush_asv_voc_spearman",
+        "isa_bronchial_brush_asv_voc_spearman_long", "isa_bronchial_brush_asv_voc_clustermap",
+        "sample_voc_matrix_brush", "sample_voc_annotations_brush",
+        "sample_voc_brush_clustermap", "sample_voc_matrix_brush_extreme_zscore",
+        "sample_voc_brush_extreme_clustermap", "patient_voc_matrix_brush",
+        "patient_voc_matrix_brush_zscore", "patient_voc_case_status_brush",
+        "patient_voc_case_tests_brush", "patient_case_voc_barplots_brush",
+        "patient_isa_bronchial_brush_asv_voc_spearman",
+        "patient_isa_bronchial_brush_asv_voc_clustermap",
+    )
+    for stem in stems:
+        for suffix in (".tsv", ".pdf", ".png", ".svg"):
+            path = outdir / (stem + suffix)
+            if path.is_file():
+                path.unlink()
+
+
+def save_asv_voc_clustermap(matrix: pd.DataFrame, output_stem: Path, **kwargs) -> None:
+    """Plot VOC rows and ASV columns; carry ASV annotations onto the columns."""
+    kwargs["col_colors"] = kwargs.pop("row_colors", None)
+    displayed = matrix.T.rename_axis(index="VOC", columns="ASV")
+    save_clustermap(displayed, output_stem, landscape=True, **kwargs)
 
 
 def relabel_asv_matrix(matrix: pd.DataFrame, taxonomy_df: pd.DataFrame) -> pd.DataFrame:
@@ -836,7 +871,7 @@ def build_patient_voc_matrix(voc_df: pd.DataFrame, sample_meta: pd.DataFrame) ->
         .reset_index()
     )
     patient_case = patient_case.merge(
-        patient_df.groupby("patient_id").size().rename("n_brush_samples").reset_index(),
+        patient_df.groupby("patient_id").size().rename("n_samples").reset_index(),
         on="patient_id",
         how="left",
     )
@@ -919,7 +954,7 @@ def patient_correlation_results(counts, voc, metadata, candidates, *,
         raise ValueError("Patient inference requires finite, nonnegative ASV counts.")
     meta = metadata.set_index("normalized_sample_id").reindex(counts.index)
     ids = meta.patient_id.astype(str).str.strip()
-    if ids.str.lower().isin(["", "nan", "none", "na"]).any():
+    if meta.patient_id.isna().any() or ids.str.lower().isin(["", "nan", "none", "na"]).any():
         raise ValueError("Patient inference requires a valid patient ID for every matched sample.")
     if meta.assign(patient_id=ids).groupby("patient_id").case_status.nunique().gt(1).any():
         raise ValueError("Conflicting case status within a patient; fix metadata before VOC inference.")
@@ -1117,9 +1152,9 @@ def main() -> None:
     )
     parser.add_argument("--indicspecies-glob", default="*_indicator_species*.tsv")
     parser.add_argument("--isa-q-threshold", type=float, default=0.05)
-    parser.add_argument("--isa-brush-groups", default="Bronchial Brush,Lung Brush")
+    parser.add_argument("--isa-focus-groups", "--isa-brush-groups", dest="isa_focus_groups", default="Bronchial Brush,Lung Brush")
     parser.add_argument("--isa-all-type-groups", default="")
-    parser.add_argument("--isa-exclude-all-types-from-brush", default="true")
+    parser.add_argument("--isa-exclude-all-types-from-focus", "--isa-exclude-all-types-from-brush", dest="isa_exclude_all_types_from_focus", default="true")
     parser.add_argument(
         "--isa-min-abs-rho",
         type=float,
@@ -1146,21 +1181,22 @@ def main() -> None:
 
     CASE_STATUS_PALETTE.update(parse_mapping(args.case_palette))
     GROUP_TYPE_PALETTE.update(parse_mapping(args.isa_palette))
-    isa_brush_groups = {
-        canonicalize_sample_type(item) for item in parse_csv_list(args.isa_brush_groups)
+    isa_focus_groups = {
+        canonicalize_sample_type(item) for item in parse_csv_list(args.isa_focus_groups)
     }
     isa_all_type_groups = {
         canonicalize_sample_type(item) for item in parse_csv_list(args.isa_all_type_groups)
     }
-    isa_exclude_all_types = str(args.isa_exclude_all_types_from_brush).strip().lower() in {
+    isa_exclude_all_types = str(args.isa_exclude_all_types_from_focus).strip().lower() in {
         "true", "1", "yes", "y"
     }
     isa_correlation_direction = args.isa_correlation_direction or args.correlation_direction
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    remove_legacy_outputs(outdir)
 
-    sample_meta, asv_meta = load_brush_metadata(
+    sample_meta, asv_meta = load_selected_metadata(
         asv_meta_path=args.asv_meta,
         metadata_sample_col=args.metadata_sample_col,
         patient_col=args.patient_col,
@@ -1169,7 +1205,7 @@ def main() -> None:
         sample_types_csv=args.sample_types,
         sample_id_mode=args.sample_id_mode,
     )
-    sample_meta.to_csv(outdir / "brush_metadata.tsv", sep="\t", index=False)
+    sample_meta.to_csv(outdir / "selected_sample_metadata.tsv", sep="\t", index=False)
     taxonomy_df = build_taxonomy_table(asv_meta)
 
     asv_counts = load_asv_counts(args.asv_counts, args.sample_id_mode)
@@ -1198,7 +1234,7 @@ def main() -> None:
         .intersection(voc_df.index)
     )
     if len(common_samples) < 3:
-        raise ValueError(f"Only {len(common_samples)} overlapping brush samples between ASV, ASV_meta, and VOC tables.")
+        raise ValueError(f"Only {len(common_samples)} overlapping selected samples between ASV, ASV_meta, and VOC tables.")
 
     sample_meta = sample_meta.set_index("normalized_sample_id").loc[common_samples].rename_axis("normalized_sample_id").reset_index()
     asv_counts_t = asv_counts_t.loc[common_samples]
@@ -1209,22 +1245,22 @@ def main() -> None:
     isa_group_annotations = isa_annotations.loc[isa_annotations["source_category"] == "group"].copy()
     if not isa_group_annotations.empty:
         isa_group_annotations.to_csv(outdir / "isa_annotations_group.tsv", sep="\t", index=False)
-        bronchial_mask = isa_group_annotations["isa_groups"].map(
-            lambda label: isa_group_is_brush_specific(
+        focus_mask = isa_group_annotations["isa_groups"].map(
+            lambda label: isa_group_is_focus_specific(
                 label,
-                brush_groups=isa_brush_groups,
+                focus_groups=isa_focus_groups,
                 all_type_groups=isa_all_type_groups,
                 exclude_all_types=isa_exclude_all_types,
             )
         )
-        bronchial_asv_set = set(isa_group_annotations.loc[bronchial_mask, "ASV"].astype(str))
-        brush_isa_annotations = isa_group_annotations.loc[
-            isa_group_annotations["ASV"].astype(str).isin(bronchial_asv_set)
-            & bronchial_mask
+        focus_asv_set = set(isa_group_annotations.loc[focus_mask, "ASV"].astype(str))
+        focus_isa_annotations = isa_group_annotations.loc[
+            isa_group_annotations["ASV"].astype(str).isin(focus_asv_set)
+            & focus_mask
         ].copy()
-        brush_isa_annotations.to_csv(outdir / "isa_annotations_bronchial_brush.tsv", sep="\t", index=False)
+        focus_isa_annotations.to_csv(outdir / "isa_annotations_focus_group.tsv", sep="\t", index=False)
     else:
-        brush_isa_annotations = isa_group_annotations
+        focus_isa_annotations = isa_group_annotations
 
     all_asv_corr, all_asv_long = correlation_results(
         asv_counts_t, voc_df, "asv", "voc", direction=args.correlation_direction
@@ -1235,7 +1271,7 @@ def main() -> None:
     all_asv_corr_display.to_csv(outdir / "asv_voc_spearman.tsv", sep="\t")
     if not all_asv_long.empty:
         add_asv_labels(all_asv_long, taxonomy_df).to_csv(outdir / "asv_voc_spearman_long.tsv", sep="\t", index=False)
-    save_clustermap(
+    save_asv_voc_clustermap(
         all_asv_corr_display,
         outdir / "asv_voc_clustermap",
         row_colors=all_row_colors,
@@ -1272,7 +1308,7 @@ def main() -> None:
             add_asv_labels(sample_type_isa_long, taxonomy_df).to_csv(
                 outdir / "isa_all_sample_types_asv_voc_spearman_long.tsv", sep="\t", index=False
             )
-        save_clustermap(
+        save_asv_voc_clustermap(
             sample_type_isa_corr_display,
             outdir / "isa_all_sample_types_asv_voc_clustermap",
             row_colors=sample_type_isa_row_colors,
@@ -1281,41 +1317,41 @@ def main() -> None:
             cbar_label=f"Spearman rho ({isa_correlation_direction} only)" if isa_correlation_direction != "both" else "Spearman rho",
         )
 
-    brush_asv_ids = [
+    focus_asv_ids = [
         asv
-        for asv in sorted(set(brush_isa_annotations["ASV"].astype(str)))
+        for asv in sorted(set(focus_isa_annotations["ASV"].astype(str)))
         if asv in asv_counts_t_unfiltered.columns
     ]
-    if brush_asv_ids:
-        brush_asv_counts_t = asv_counts_t_unfiltered[brush_asv_ids]
-        brush_asv_corr, brush_asv_long = correlation_results(
-            brush_asv_counts_t, voc_df, "asv", "voc",
+    if focus_asv_ids:
+        focus_asv_counts_t = asv_counts_t_unfiltered[focus_asv_ids]
+        focus_asv_corr, focus_asv_long = correlation_results(
+            focus_asv_counts_t, voc_df, "asv", "voc",
             direction=isa_correlation_direction, retain_all_left=True
         )
-        brush_asv_corr = filter_matrix_by_abs_threshold(
-            brush_asv_corr, args.isa_min_abs_rho
+        focus_asv_corr = filter_matrix_by_abs_threshold(
+            focus_asv_corr, args.isa_min_abs_rho
         )
-        brush_asv_corr_display = relabel_asv_matrix(brush_asv_corr, taxonomy_df)
-        brush_row_colors, brush_color_key = build_asv_group_colors(list(brush_asv_corr.index.astype(str)), brush_isa_annotations, taxonomy_df)
-        brush_color_key.to_csv(outdir / "isa_bronchial_brush_asv_group_colors.tsv", sep="\t", index=False)
-        brush_asv_corr_display.to_csv(outdir / "isa_bronchial_brush_asv_voc_spearman.tsv", sep="\t")
-        if not brush_asv_long.empty:
-            add_asv_labels(brush_asv_long, taxonomy_df).to_csv(outdir / "isa_bronchial_brush_asv_voc_spearman_long.tsv", sep="\t", index=False)
-        save_clustermap(
-            brush_asv_corr_display,
-            outdir / "isa_bronchial_brush_asv_voc_clustermap",
-            row_colors=brush_row_colors,
-            row_color_legend=legend_items_from_color_key(brush_color_key),
+        focus_asv_corr_display = relabel_asv_matrix(focus_asv_corr, taxonomy_df)
+        focus_row_colors, focus_color_key = build_asv_group_colors(list(focus_asv_corr.index.astype(str)), focus_isa_annotations, taxonomy_df)
+        focus_color_key.to_csv(outdir / "isa_focus_group_asv_group_colors.tsv", sep="\t", index=False)
+        focus_asv_corr_display.to_csv(outdir / "isa_focus_group_asv_voc_spearman.tsv", sep="\t")
+        if not focus_asv_long.empty:
+            add_asv_labels(focus_asv_long, taxonomy_df).to_csv(outdir / "isa_focus_group_asv_voc_spearman_long.tsv", sep="\t", index=False)
+        save_asv_voc_clustermap(
+            focus_asv_corr_display,
+            outdir / "isa_focus_group_asv_voc_clustermap",
+            row_colors=focus_row_colors,
+            row_color_legend=legend_items_from_color_key(focus_color_key),
             correlation_direction=isa_correlation_direction,
             cbar_label=f"Spearman rho ({isa_correlation_direction} only)" if isa_correlation_direction != "both" else "Spearman rho",
         )
 
     sample_voc_matrix, sample_voc_meta, sample_row_colors = build_sample_voc_matrix(voc_df, sample_meta, voc_meta)
-    sample_voc_matrix.to_csv(outdir / "sample_voc_matrix_brush.tsv", sep="\t")
-    sample_voc_meta.to_csv(outdir / "sample_voc_annotations_brush.tsv", sep="\t", index=False)
+    sample_voc_matrix.to_csv(outdir / "sample_voc_matrix.tsv", sep="\t")
+    sample_voc_meta.to_csv(outdir / "sample_voc_annotations.tsv", sep="\t", index=False)
     save_clustermap(
         zscore_columns(sample_voc_matrix),
-        outdir / "sample_voc_brush_clustermap",
+        outdir / "sample_voc_clustermap",
         row_colors=sample_row_colors,
         row_color_legends=sample_voc_legend_blocks(sample_voc_meta),
         correlation_direction="data",
@@ -1324,12 +1360,12 @@ def main() -> None:
     sample_voc_z = zscore_columns(sample_voc_matrix)
     sample_voc_subset = filter_matrix_by_abs_threshold(sample_voc_z, args.sample_min_abs_z)
     if args.sample_min_abs_z > 0 and not sample_voc_subset.empty:
-        sample_voc_subset.to_csv(outdir / "sample_voc_matrix_brush_extreme_zscore.tsv", sep="\t")
+        sample_voc_subset.to_csv(outdir / "sample_voc_matrix_extreme_zscore.tsv", sep="\t")
         subset_meta = sample_voc_meta.set_index("sample_label").reindex(sample_voc_subset.index).reset_index()
         subset_row_colors = sample_row_colors.reindex(sample_voc_subset.index)
         save_clustermap(
             sample_voc_subset,
-            outdir / "sample_voc_brush_extreme_clustermap",
+            outdir / "sample_voc_extreme_clustermap",
             row_colors=subset_row_colors,
             row_color_legends=sample_voc_legend_blocks(subset_meta),
             correlation_direction="data",
@@ -1337,19 +1373,19 @@ def main() -> None:
         )
 
     patient_matrix, patient_case, patient_case_table = build_patient_voc_matrix(voc_df, sample_meta)
-    patient_matrix.to_csv(outdir / "patient_voc_matrix_brush.tsv", sep="\t")
-    zscore_columns(patient_matrix).to_csv(outdir / "patient_voc_matrix_brush_zscore.tsv", sep="\t")
-    patient_case_table.to_csv(outdir / "patient_voc_case_status_brush.tsv", sep="\t", index=False)
+    patient_matrix.to_csv(outdir / "patient_voc_matrix.tsv", sep="\t")
+    zscore_columns(patient_matrix).to_csv(outdir / "patient_voc_matrix_zscore.tsv", sep="\t")
+    patient_case_table.to_csv(outdir / "patient_voc_case_status.tsv", sep="\t", index=False)
     patient_tests = patient_case_voc_tests(patient_matrix, patient_case,
                                         args.patient_permutations, args.patient_seed)
     if not patient_tests.empty:
-        patient_tests.to_csv(outdir / "patient_voc_case_tests_brush.tsv", sep="\t", index=False)
-    save_case_voc_barplots(patient_matrix, patient_case, patient_tests, outdir / "patient_case_voc_barplots_brush")
+        patient_tests.to_csv(outdir / "patient_voc_case_tests.tsv", sep="\t", index=False)
+    save_case_voc_barplots(patient_matrix, patient_case, patient_tests, outdir / "patient_case_voc_barplots")
 
     if args.patient_inference == "true":
         families = {"all_asv": set(asv_counts_t.columns),
                     "isa_all_sample_types": set(sample_type_isa_asv_ids),
-                    "isa_bronchial_brush": set(brush_asv_ids)}
+                    "isa_focus_group": set(focus_asv_ids)}
         candidates = set().union(*families.values())
         inference, relative, clr, summary = patient_correlation_results(
             asv_counts_t_unfiltered, voc_df, sample_meta, candidates,
@@ -1387,7 +1423,7 @@ def main() -> None:
             if matrix.empty or matrix.isna().any().any():
                 continue
             colors, key = build_asv_group_colors(list(matrix.index), isa_group_annotations, taxonomy_df)
-            save_clustermap(relabel_asv_matrix(matrix, taxonomy_df),
+            save_asv_voc_clustermap(relabel_asv_matrix(matrix, taxonomy_df),
                             outdir / f"patient_{name}_asv_voc_clustermap",
                             row_colors=colors, row_color_legend=legend_items_from_color_key(key),
                             correlation_direction="both", cbar_label="Patient-level Spearman rho (relative abundance)")

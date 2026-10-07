@@ -54,6 +54,70 @@ def flattenTieredConfig = { rawConfig ->
             normalized[section] = value
         }
     }
+    // Accept the previous section name, but reject ambiguous dual definitions.
+    if( normalized.containsKey('three_tier_decontam') ) {
+        if( normalized.containsKey('control_decontam') ) {
+            throw new IllegalArgumentException('Use only control_decontam; three_tier_decontam is its legacy alias')
+        }
+        normalized.control_decontam = normalized.remove('three_tier_decontam')
+    }
+    if( normalized.environments instanceof Map && normalized.environments.containsKey('three_tier_decontam') ) {
+        def envs = new LinkedHashMap(normalized.environments)
+        if( envs.containsKey('control_decontam') ) {
+            throw new IllegalArgumentException('Use only environments.control_decontam; duplicate legacy alias found')
+        }
+        envs.control_decontam = envs.remove('three_tier_decontam')
+        normalized.environments = envs
+    }
+    // Canonical parameter names expose units; aliases retain earlier run behavior.
+    def parameterAliases = [
+        voc_correlation: [isa_brush_groups: 'isa_focus_groups', isa_exclude_all_types_from_brush: 'isa_exclude_all_types_from_focus'],
+        table_filter: [min_sample_sum: 'min_sample_reads', min_asv_sum: 'min_relative_abundance_pct'],
+        filter_counts: [abundance_threshold: 'min_relative_abundance_pct'],
+        control_decontam: [technical_threshold: 'technical_score_threshold', bio_control_threshold: 'bio_control_score_threshold'],
+        spieceasi: [min_rel_abund: 'min_relative_abundance_fraction', min_prevalence: 'min_prevalence_fraction'],
+        taxonomy_patient_aware: [min_prevalence: 'min_prevalence_fraction'],
+        measurement_association: [min_prevalence: 'min_prevalence_fraction']
+    ]
+    parameterAliases.each { section, aliases ->
+        if( normalized[section] instanceof Map ) {
+            def values = new LinkedHashMap(normalized[section])
+            aliases.each { legacy, current ->
+                if( values.containsKey(legacy) ) {
+                    if( values.containsKey(current) ) {
+                        throw new IllegalArgumentException("Use only ${section}.${current}; duplicate legacy parameter ${legacy} found")
+                    }
+                    def oldValue = values.remove(legacy)
+                    // Preserve the network CLI's historical percent shorthand.
+                    if( section == 'spieceasi' && oldValue != null ) {
+                        def number = oldValue as double
+                        if( number > 1 && number <= 100 ) oldValue = number / 100
+                    }
+                    values[current] = oldValue
+                }
+            }
+            normalized[section] = values
+        }
+    }
+    def fractionSections = ['filter_counts', 'spieceasi', 'taxonomy_patient_aware', 'measurement_association']
+    fractionSections.each { section ->
+        ['min_prevalence_fraction', 'min_relative_abundance_fraction'].each { key ->
+            if( normalized[section] instanceof Map && normalized[section][key] != null ) {
+                def value = normalized[section][key] as double
+                if( !Double.isFinite(value) || value < 0 || value > 1 ) {
+                    throw new IllegalArgumentException("${section}.${key} must be a fraction between 0 and 1; 0.05 means 5%")
+                }
+            }
+        }
+    }
+    ['table_filter', 'filter_counts'].each { section ->
+        if( normalized[section] instanceof Map && normalized[section].min_relative_abundance_pct != null ) {
+            def value = normalized[section].min_relative_abundance_pct as double
+            if( !Double.isFinite(value) || value < 0 || value > 100 ) {
+                throw new IllegalArgumentException("${section}.min_relative_abundance_pct must be between 0 and 100; 0.1 means 0.1%")
+            }
+        }
+    }
     return normalized
 }
 
@@ -256,14 +320,14 @@ if( !filterCountsEnvFile.exists() ) {
 }
 log.info "Using filter_counts Conda/Mamba env definition: ${filterCountsCondaEnvPath}"
 
-def threeTierEnvConfigPath = config.environments?.three_tier_decontam
-def resolvedThreeTierEnvPath = threeTierEnvConfigPath ? resolveOptionalPath(threeTierEnvConfigPath, configRoot) : null
-def defaultThreeTierEnvPath = new File("${projectDir}/processes/three_tier_decontam/env.yml").canonicalPath
-def threeTierCondaEnvPath = resolvedThreeTierEnvPath ?: defaultThreeTierEnvPath
-if( !file(threeTierCondaEnvPath).exists() ) {
-    exit 1, "three-tier decontamination conda environment YAML not found: ${threeTierCondaEnvPath}"
+def controlDecontamEnvConfigPath = config.environments?.control_decontam
+def resolvedControlDecontamEnvPath = controlDecontamEnvConfigPath ? resolveOptionalPath(controlDecontamEnvConfigPath, configRoot) : null
+def defaultControlDecontamEnvPath = new File("${projectDir}/processes/control_decontam/env.yml").canonicalPath
+def controlDecontamCondaEnvPath = resolvedControlDecontamEnvPath ?: defaultControlDecontamEnvPath
+if( !file(controlDecontamCondaEnvPath).exists() ) {
+    exit 1, "control decontamination conda environment YAML not found: ${controlDecontamCondaEnvPath}"
 }
-log.info "Using three-tier decontamination Conda/Mamba env definition: ${threeTierCondaEnvPath}"
+log.info "Using control decontamination Conda/Mamba env definition: ${controlDecontamCondaEnvPath}"
 
 def generalStatsEnvConfigPath = config.environments?.general_stats
 def resolvedGeneralStatsEnvPath = generalStatsEnvConfigPath ? resolveOptionalPath(generalStatsEnvConfigPath, configRoot) : null
@@ -603,14 +667,14 @@ if( !filterCountsScriptFile.exists() ) {
 }
 def filterCountsScriptPath = filterCountsScriptFile.canonicalPath
 def filterCountsScriptHash = fileMd5(filterCountsScriptFile)
-def threeTierScriptDir = new File("${projectDir}/processes/three_tier_decontam/pipeline")
-def threeTierMetadataScriptPath = new File(threeTierScriptDir, 'build_decontam_metadata.py').canonicalPath
-def threeTierPooledScriptPath = new File(threeTierScriptDir, 'run_decontam.R').canonicalPath
-def threeTierWithinScriptPath = new File(threeTierScriptDir, 'run_decontam_by_sample_type.R').canonicalPath
-def threeTierApplyScriptPath = new File(threeTierScriptDir, 'apply_three_tier_decontam_filter.py').canonicalPath
-for( p in [threeTierMetadataScriptPath, threeTierPooledScriptPath, threeTierWithinScriptPath, threeTierApplyScriptPath] ) {
-    if( !new File(p).exists() ) exit 1, "Three-tier decontamination script not found: ${p}"
-}
+def finalizeFilterScriptPath = "${projectDir}/processes/filter_counts/finalize_filter.py"
+def combinedFilterHash = fileMd5(tableScriptFile.toFile()) + ':' + fileMd5(new File(finalizeFilterScriptPath))
+def controlDecontamDir = new File("${projectDir}/processes/control_decontam").canonicalPath
+def controlDecontamHash = ['control_decontam.py', 'run_prevalence.R', 'plot_qc.R'].collect { name ->
+    def scriptFile = new File(controlDecontamDir, name)
+    if( !scriptFile.exists() ) exit 1, "Control decontamination script not found: ${scriptFile}"
+    fileMd5(scriptFile)
+}.join(':')
 def calcDivScriptFile = new File("${projectDir}/processes/diversity_analysis/calc_div.py")
 if( !calcDivScriptFile.exists() ) {
     exit 1, "calc_div.py not found in project directory"
@@ -936,7 +1000,8 @@ if( filterCountsEnabled && filterCountsMetadataPath && !new File(filterCountsMet
 def filterCountsOutputName = filterCountsConfig.output ?: 'ASV_target.tsv'
 def filterCountsGroupCol = filterCountsConfig.group_col ?: 'Depth'
 def filterCountsMinGroup = filterCountsConfig.min_group_size ? (filterCountsConfig.min_group_size as int) : 3
-def filterCountsAbundance = filterCountsConfig.abundance_threshold != null ? (filterCountsConfig.abundance_threshold as double) : 0.005d
+def filterCountsAbundance = filterCountsConfig.min_relative_abundance_pct != null ? (filterCountsConfig.min_relative_abundance_pct as double) : 0.005d
+def filterCountsMinPrevalence = filterCountsConfig.min_prevalence_fraction != null ? (filterCountsConfig.min_prevalence_fraction as double) : 0d
 def filterCountsSampleCol = filterCountsConfig.sample_id_col ?: 'longID'
 def filterCountsMinConsensus = filterCountsConfig.min_consensus != null ? (filterCountsConfig.min_consensus as double) : 0d
 def filterCountsTaxonCol = filterCountsConfig.taxon_col ?: 'Taxon'
@@ -977,48 +1042,45 @@ if( filterCountsExcludeTaxaRaw instanceof List ) {
 def filterCountsSaveIntermediates = (filterCountsConfig.save_intermediates ?: false) as boolean
 def defaultFilterMitoDir = new File(dirMap.mito, "ASVs").canonicalPath
 def filterCountsMitoDir = filterCountsConfig.mito_output_dir ? resolveOutputRelative(filterCountsConfig.mito_output_dir.toString(), outputDir) : defaultFilterMitoDir
-def threeTierConfig = config.three_tier_decontam ?: [:]
-def threeTierEnabled = threeTierConfig.containsKey('enabled') ? (threeTierConfig.enabled as boolean) : false
-def threeTierMetadataPath = threeTierConfig.metadata ? resolveOptionalPath(threeTierConfig.metadata.toString(), configRoot) : filterCountsMetadataPath
-if( threeTierEnabled && (!threeTierMetadataPath || !new File(threeTierMetadataPath).exists()) ) {
-    exit 1, "three_tier_decontam.enabled requires an existing three_tier_decontam.metadata (or filter_counts.metadata) file"
+def controlDecontamConfig = config.control_decontam ?: [:]
+def controlDecontamEnabled = controlDecontamConfig.containsKey('enabled') ? (controlDecontamConfig.enabled as boolean) : false
+def controlDecontamMetadataPath = controlDecontamConfig.metadata ? resolveOptionalPath(controlDecontamConfig.metadata.toString(), configRoot) : filterCountsMetadataPath
+if( controlDecontamEnabled && (!controlDecontamMetadataPath || !new File(controlDecontamMetadataPath).exists()) ) {
+    exit 1, "control_decontam.enabled requires an existing control_decontam.metadata (or filter_counts.metadata) file"
 }
-def threeTierOutputDir = threeTierConfig.output_dir ?: 'three_tier_decontam'
-def threeTierOutputDirAbs = resolveOutputRelative(threeTierOutputDir.toString(), outputDir)
-def threeTierMetadataSampleCol = threeTierConfig.metadata_sample_col ?: filterCountsSampleCol
-def threeTierSampleCol = threeTierConfig.sample_col ?: 'Sample'
-def threeTierNegativeControlCol = threeTierConfig.negative_control_col ?: 'is_negative_control'
-def threeTierPositiveControlCol = threeTierConfig.positive_control_col ?: 'is_positive_control'
-def threeTierNegativeControlLabelsRaw = threeTierConfig.containsKey('negative_control_labels') ?
-    threeTierConfig.negative_control_labels : ['PBS', 'PBS_twz', 'Negative_96', 'Negative_man']
-def threeTierPositiveControlLabelsRaw = threeTierConfig.containsKey('positive_control_labels') ?
-    threeTierConfig.positive_control_labels : ['Positive_96', 'Positive_man']
-List<String> threeTierNegativeControlLabels = threeTierNegativeControlLabelsRaw instanceof List ? threeTierNegativeControlLabelsRaw.collect { it.toString().trim() }.findAll { it } : threeTierNegativeControlLabelsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-List<String> threeTierPositiveControlLabels = threeTierPositiveControlLabelsRaw instanceof List ? threeTierPositiveControlLabelsRaw.collect { it.toString().trim() }.findAll { it } : threeTierPositiveControlLabelsRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-def threeTierNegativeControlLabelsCsv = threeTierNegativeControlLabels.join(',')
-def threeTierPositiveControlLabelsCsv = threeTierPositiveControlLabels.join(',')
-if( threeTierEnabled && threeTierNegativeControlLabels.isEmpty() ) {
-    exit 1, "three_tier_decontam.negative_control_labels must contain the negative-control sample IDs"
+def controlDecontamOutputDir = controlDecontamConfig.output_dir ?: 'three_tier_decontam'
+def controlDecontamOutputDirAbs = resolveOutputRelative(controlDecontamOutputDir.toString(), outputDir)
+def controlDecontamMetadataSampleCol = controlDecontamConfig.metadata_sample_col ?: filterCountsSampleCol
+// Keep historical audit paths stable for downstream consumers.
+// Class labels are METADATA VALUES, never filename/sample-ID patterns.
+def controlDecontamClassCol = controlDecontamConfig.class_col ?: 'sample_class'
+def controlDecontamMinBiologicalReads = controlDecontamConfig.min_biological_reads != null ? controlDecontamConfig.min_biological_reads : 5000
+def controlDecontamTechnicalEnabled = controlDecontamConfig.technical_enabled != null ? (controlDecontamConfig.technical_enabled as boolean) : true
+def controlDecontamBioControlEnabled = controlDecontamConfig.bio_control_enabled != null ? (controlDecontamConfig.bio_control_enabled as boolean) : true
+def controlDecontamTechnicalThreshold = controlDecontamConfig.technical_score_threshold != null ? controlDecontamConfig.technical_score_threshold : 0.1
+def controlDecontamBioControlThreshold = controlDecontamConfig.bio_control_score_threshold != null ? controlDecontamConfig.bio_control_score_threshold : 0.1
+if( controlDecontamEnabled && !controlDecontamTechnicalEnabled && !controlDecontamBioControlEnabled ) {
+    exit 1, "Enable at least one of control_decontam.technical_enabled / bio_control_enabled"
 }
-def threeTierConcentrationCol = threeTierConfig.concentration_col ?: 'DNA_conc'
-def threeTierTypeCol = threeTierConfig.type_col ?: 'Type_Group'
-def threeTierSampleTypesRaw = threeTierConfig.sample_types ?: ['BAL', 'Bronchial Brush', 'Oral Rinse']
-List<String> threeTierSampleTypes = threeTierSampleTypesRaw instanceof List ?
-    threeTierSampleTypesRaw.collect { it.toString().trim() }.findAll { it } :
-    threeTierSampleTypesRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
-if( threeTierEnabled && threeTierSampleTypes.isEmpty() ) {
-    exit 1, "three_tier_decontam.sample_types must contain at least one sample type"
+if( controlDecontamEnabled && ['negative_control_labels', 'positive_control_labels', 'negative_control_col', 'positive_control_col', 'concentration_col', 'type_col', 'sample_types', 'sample_col', 'pooled_threshold', 'within_type_threshold', 'aggressive_threshold', 'combine_mode', 'biological_plausibility'].any { controlDecontamConfig.containsKey(it) } ) {
+    exit 1, "Legacy three-tier configuration detected. Migrate to metadata class_col/class labels and technical_score_threshold/bio_control_score_threshold; see docs/decontamination.md."
 }
-def threeTierSampleTypesCsv = threeTierSampleTypes.join(',')
-def threeTierPooledThreshold = threeTierConfig.pooled_threshold != null ? (threeTierConfig.pooled_threshold as double) : 0.1d
-def threeTierWithinTypeThreshold = threeTierConfig.within_type_threshold != null ? (threeTierConfig.within_type_threshold as double) : 0.1d
-def threeTierAggressiveThreshold = threeTierConfig.aggressive_threshold != null ? (threeTierConfig.aggressive_threshold as double) : 0.5d
-def threeTierCombineMode = (threeTierConfig.combine_mode ?: 'min').toString().trim().toLowerCase()
-if( !(threeTierCombineMode in ['min', 'fisher']) ) {
-    exit 1, "Invalid three_tier_decontam.combine_mode '${threeTierCombineMode}'. Allowed: min, fisher"
+if( filterCountsEnabled && filterCountsMinPrevalence > 0 && !controlDecontamEnabled ) {
+    exit 1, "filter_counts.min_prevalence_fraction requires control_decontam.enabled so controls cannot enter the biological prevalence denominator"
 }
-def threeTierBiologicalPlausibility = threeTierConfig.containsKey('biological_plausibility') ?
-    (threeTierConfig.biological_plausibility as boolean) : true
+def controlDecontamSettings = groovy.json.JsonOutput.toJson([
+    sample_col: controlDecontamMetadataSampleCol,
+    class_col: controlDecontamClassCol,
+    min_biological_reads: controlDecontamMinBiologicalReads,
+    labels: [
+        biological: controlDecontamConfig.biological_labels != null ? controlDecontamConfig.biological_labels : ['biological'],
+        technical: controlDecontamConfig.technical_labels != null ? controlDecontamConfig.technical_labels : ['technical'],
+        bio_control: controlDecontamConfig.bio_control_labels != null ? controlDecontamConfig.bio_control_labels : ['bio_control'],
+        positive: controlDecontamConfig.positive_labels != null ? controlDecontamConfig.positive_labels : ['positive']
+    ],
+    technical: [enabled: controlDecontamTechnicalEnabled, threshold: controlDecontamTechnicalThreshold],
+    bio_control: [enabled: controlDecontamBioControlEnabled, threshold: controlDecontamBioControlThreshold]
+])
 if( mitoEnabled ) {
     ensureBlastReferenceExists(mitoBlastDbPath, mitoBlastFastaPath, 'mitochondrial')
     ensureBlastReferenceExists(mitoBiofDbPath, mitoBiofFastaPath, 'contaminant')
@@ -1076,8 +1138,12 @@ if( sankeyEnabled && !generalStatsEnabled ) {
 }
 def analysisCfg = parseMetadataAndBasicAnalysisConfig(config, configRoot, outputDir, filterCountsEnabled as boolean, generalStatsEnabled as boolean, pipelineThreads as int, dirMap)
 analysisCfg.each { key, value -> binding.setVariable(key as String, value) }
-if( threeTierEnabled && !binding.getVariable('metadataPlotsEnabled') ) {
-    exit 1, "three_tier_decontam.enabled requires metadata_plots.enabled to be true"
+if( controlDecontamEnabled ) {
+    // The new module is authoritative for biological inclusion and counts.
+    // Metadata plotting must never subtract controls or impose a second cutoff.
+    binding.setVariable('metadataPlotsSubtractionGroups', [])
+    binding.setVariable('metadataPlotsMinPreCorrectionSampleSum', 0)
+    log.info "Control prevalence decontamination enabled: disabling metadata control subtraction and secondary depth filtering"
 }
 
 def indicatorCfg = parseIndicatorAndNetworkConfig(config, configRoot, outputDir, pipelineThreads as int, analysisCfg)
@@ -1187,8 +1253,8 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     }
     def metadataPlotsMitoThreshold = metadataPlotsConfig.mito_threshold_line != null ? (metadataPlotsConfig.mito_threshold_line as double) : 1000d
     def metadataPlotsInputTable = (metadataPlotsConfig.input_table ?: 'filtered').toString().trim().toLowerCase()
-    if( !(metadataPlotsInputTable in ['filtered', 'pre_filter_micro']) ) {
-        exit 1, "metadata_plots.input_table must be one of: filtered, pre_filter_micro"
+    if( metadataPlotsInputTable != 'filtered' ) {
+        exit 1, "metadata_plots.input_table must be filtered: FILTER_ASVS now supplies the complete filtered table; pre_filter_micro remains an audit output only"
     }
     def metadataPlotsMinPreCorrectionSampleSum = metadataPlotsConfig.min_pre_correction_sample_sum != null ? (metadataPlotsConfig.min_pre_correction_sample_sum as double) : 0d
     boolean metadataPlotsDropZeroAsvs = metadataPlotsConfig.containsKey('drop_zero_asvs') ? (metadataPlotsConfig.drop_zero_asvs as boolean) : false
@@ -1798,16 +1864,16 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     }
     def vocCorrelationCasePalette = vocCorrelationConfig.case_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationCaseCol] ?: '')
     def vocCorrelationIsaPalette = vocCorrelationConfig.isa_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationTypeCol] ?: '')
-    def vocCorrelationIsaBrushGroupsRaw = vocCorrelationConfig.isa_brush_groups ?: ['Bronchial Brush', 'Lung Brush']
-    def vocCorrelationIsaBrushGroups = vocCorrelationIsaBrushGroupsRaw instanceof List ?
-        vocCorrelationIsaBrushGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
-        vocCorrelationIsaBrushGroupsRaw.toString().trim()
+    def vocCorrelationIsaFocusGroupsRaw = vocCorrelationConfig.isa_focus_groups ?: ['Bronchial Brush', 'Lung Brush']
+    def vocCorrelationIsaFocusGroups = vocCorrelationIsaFocusGroupsRaw instanceof List ?
+        vocCorrelationIsaFocusGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        vocCorrelationIsaFocusGroupsRaw.toString().trim()
     def vocCorrelationIsaAllTypeGroupsRaw = vocCorrelationConfig.isa_all_type_groups ?: metadataKeepTypes
     def vocCorrelationIsaAllTypeGroups = vocCorrelationIsaAllTypeGroupsRaw instanceof List ?
         vocCorrelationIsaAllTypeGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
         vocCorrelationIsaAllTypeGroupsRaw.toString().trim()
-    boolean vocCorrelationIsaExcludeAllTypes = vocCorrelationConfig.containsKey('isa_exclude_all_types_from_brush') ?
-        (vocCorrelationConfig.isa_exclude_all_types_from_brush as boolean) : true
+    boolean vocCorrelationIsaExcludeAllTypes = vocCorrelationConfig.containsKey('isa_exclude_all_types_from_focus') ?
+        (vocCorrelationConfig.isa_exclude_all_types_from_focus as boolean) : true
     def vocCorrelationIsaMinAbsRho = vocCorrelationConfig.isa_min_abs_rho != null ?
         (vocCorrelationConfig.isa_min_abs_rho as double) : 0.0d
     if( vocCorrelationIsaMinAbsRho < 0d || vocCorrelationIsaMinAbsRho > 1d ) {
@@ -1875,7 +1941,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def measurementAssociationGroupPalette = measurementAssociationConfig.group_palette ? measurementAssociationConfig.group_palette.toString().trim() : ''
     def measurementAssociationMaxAsvs = measurementAssociationConfig.max_asvs ? (measurementAssociationConfig.max_asvs as int) : 300
     def measurementAssociationMinTotal = measurementAssociationConfig.min_total != null ? (measurementAssociationConfig.min_total as double) : 0.0d
-    def measurementAssociationMinPrevalence = measurementAssociationConfig.min_prevalence != null ? (measurementAssociationConfig.min_prevalence as double) : 0.0d
+    def measurementAssociationMinPrevalence = measurementAssociationConfig.min_prevalence_fraction != null ? (measurementAssociationConfig.min_prevalence_fraction as double) : 0.0d
     def measurementAssociationTopCorrelations = measurementAssociationConfig.top_correlations ? (measurementAssociationConfig.top_correlations as int) : 100
     def measurementAssociationDirection = measurementAssociationConfig.correlation_direction ? measurementAssociationConfig.correlation_direction.toString().trim().toLowerCase() : 'both'
     if( !(measurementAssociationDirection in ['positive','negative','both']) ) {
@@ -2031,8 +2097,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def spieceasiOutputDirAbs = new File(outputDir, spieceasiOutputDir).canonicalPath
     def spieceasiPrefix = spieceasiConfig.prefix ?: 'spieceasi'
     boolean spieceasiTranspose = spieceasiConfig.containsKey('transpose') ? (spieceasiConfig.transpose as boolean) : true
-    def spieceasiMinRelAbund = spieceasiConfig.min_rel_abund != null ? (spieceasiConfig.min_rel_abund as double) : 0d
-    def spieceasiMinPrevalence = spieceasiConfig.min_prevalence != null ? (spieceasiConfig.min_prevalence as double) : 0.25d
+    def spieceasiMinRelAbund = spieceasiConfig.min_relative_abundance_fraction != null ? (spieceasiConfig.min_relative_abundance_fraction as double) : 0d
+    def spieceasiMinPrevalence = spieceasiConfig.min_prevalence_fraction != null ? (spieceasiConfig.min_prevalence_fraction as double) : 0.25d
     boolean spieceasiRemoveZeroVar = spieceasiConfig.containsKey('remove_zero_var') ? (spieceasiConfig.remove_zero_var as boolean) : true
     boolean spieceasiForceKeepIndicatorAsvs = spieceasiConfig.containsKey('force_keep_indicator_asvs') ? (spieceasiConfig.force_keep_indicator_asvs as boolean) : true
     def spieceasiMethod = spieceasiConfig.method ?: 'glasso'
@@ -2430,7 +2496,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     boolean taxonomyPatientAwareRunComparison = taxonomyPatientAwareConfig.containsKey('run_comparison') ?
         (taxonomyPatientAwareConfig.run_comparison as boolean) :
         (!config.taxonomy_group_association || taxonomyPatientAwareComparisonGroups.toString().trim().length() > 0)
-    def taxonomyPatientAwareMinPrevalence = taxonomyPatientAwareConfig.min_prevalence != null ? (taxonomyPatientAwareConfig.min_prevalence as double) : 0.10d
+    def taxonomyPatientAwareMinPrevalence = taxonomyPatientAwareConfig.min_prevalence_fraction != null ? (taxonomyPatientAwareConfig.min_prevalence_fraction as double) : 0.10d
     boolean taxonomyPatientAwareExcludeContralateral = taxonomyPatientAwareConfig.containsKey('exclude_contralateral_in_cancer') ? (taxonomyPatientAwareConfig.exclude_contralateral_in_cancer as boolean) : true
     def taxonomyPatientAwareContralateralCol = taxonomyPatientAwareConfig.contralateral_col ? taxonomyPatientAwareConfig.contralateral_col.toString().trim() : 'lung_status'
     def taxonomyPatientAwareCancerSiteCol = taxonomyPatientAwareConfig.cancer_site_col ? taxonomyPatientAwareConfig.cancer_site_col.toString().trim() : 'Cancer_Site'
@@ -2520,7 +2586,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationVocCols: vocCorrelationVocCols,
         vocCorrelationDirection: vocCorrelationDirection,
         vocCorrelationIsaDirection: vocCorrelationIsaDirection,
-        vocCorrelationIsaBrushGroups: vocCorrelationIsaBrushGroups,
+        vocCorrelationIsaFocusGroups: vocCorrelationIsaFocusGroups,
         vocCorrelationIsaAllTypeGroups: vocCorrelationIsaAllTypeGroups,
         vocCorrelationIsaExcludeAllTypes: vocCorrelationIsaExcludeAllTypes,
         vocCorrelationIsaMinAbsRho: vocCorrelationIsaMinAbsRho,
@@ -2796,7 +2862,7 @@ workflow {
     def coreStage = core(raw_reads)
     def standardStage = standard(
         coreStage.concat_counts,
-        coreStage.filtered,
+        coreStage.prepared,
         coreStage.taxonomy_table
     )
     if( metadataPlotsEnabled ) {
@@ -2804,13 +2870,12 @@ workflow {
             standardStage.asv_meta,
             standardStage.asv_final,
             standardStage.metadata_micro,
-            coreStage.raw_counts_three_tier,
             standardStage.fastq_stats,
             standardStage.filtered_stats,
             coreStage.raw_counts_sankey,
             standardStage.filtered_decon,
             standardStage.filtered_micro,
-            coreStage.filtered_fasta,
+            standardStage.filtered_fasta,
             coreStage.taxonomy_table
         )
     }
@@ -2843,19 +2908,24 @@ workflow core {
     def count_matrix_stage = CREATE_COUNT_MATRIX(concat_for_counts, nochi_input)
     def count_matrix_channel = count_matrix_stage.count_matrix
     def asv_counts_for_sankey = count_matrix_channel.map { tuple -> tuple[0] }
-    def asv_counts_for_three_tier = count_matrix_channel.map { tuple -> tuple[0] }
-    def filtered_stage = FILTER_TABLE(count_matrix_channel)
-    def filtered_channel = filtered_stage.filtered
-    def filtered_fasta_for_taxonomy = filtered_channel.map { tuple -> tuple[1] }
-    def sina_stage = SINA_TRIM(filtered_fasta_for_taxonomy)
+    // Assign taxonomy to ALL inferred ASVs, including control-only ASVs.
+    def all_asv_fasta = count_matrix_channel.map { parts -> parts[1] }
+    def sina_stage = SINA_TRIM(all_asv_fasta)
     def taxonomy_stage = TAXONOMY(sina_stage.trimmed_fasta)
+    def counts_for_feature_filter = count_matrix_channel
+    if( controlDecontamEnabled ) {
+        def decontam_stage = CONTROL_DECONTAM(
+            count_matrix_channel,
+            taxonomy_stage.taxonomy_table,
+            Channel.value(file(controlDecontamMetadataPath))
+        )
+        counts_for_feature_filter = decontam_stage.cleaned
+    }
 
     emit:
     concat_counts = concat_for_counts
     raw_counts_sankey = asv_counts_for_sankey
-    raw_counts_three_tier = asv_counts_for_three_tier
-    filtered = filtered_channel
-    filtered_fasta = filtered_fasta_for_taxonomy
+    prepared = counts_for_feature_filter
     taxonomy_table = taxonomy_stage.taxonomy_table
 }
 
@@ -2867,7 +2937,7 @@ workflow standard {
 
     main:
     def runMitoStages = mitoEnabled || filterCountsEnabled
-    def filter_counts_stage = null
+    def nontargetForFiltering = Channel.value(file(emptyModulesPath))
     if( runMitoStages ) {
         def blast_database_stage = PREPARE_BLAST_DATABASES(
             mitoBlastFastaPath ?: mitoBlastDbPath,
@@ -2875,13 +2945,12 @@ workflow standard {
         )
         def mitomaster_stage = MITOMASTER(filtered_channel, blast_database_stage.databases)
         def mito_summary = MITO_DECONTAM(mitomaster_stage.mito_artifacts, taxonomy_table)
-        if( filterCountsEnabled ) {
-            filter_counts_stage = FILTER_COUNTS(filtered_channel, taxonomy_table, mito_summary.nontarget_table)
-        }
+        nontargetForFiltering = mito_summary.nontarget_table
     }
-    if( metadataPlotsEnabled && filter_counts_stage == null ) {
+    if( metadataPlotsEnabled && !filterCountsEnabled ) {
         exit 1, "metadata_plots.enabled requires filter_counts outputs but filter_counts stage was not executed"
     }
+    def filter_counts_stage = FILTER_ASVS(filtered_channel, taxonomy_table, nontargetForFiltering)
     def general_stats_stage = null
     if( generalStatsEnabled ) {
         general_stats_stage = GENERAL_STATS(concat_for_counts)
@@ -2891,14 +2960,14 @@ workflow standard {
     emptyStandard = Channel.value(file(emptyModulesPath))
     fastqStats = general_stats_stage != null ? general_stats_stage.fastq_stats : emptyStandard
     filteredStats = general_stats_stage != null ? general_stats_stage.filtered_stats : emptyStandard
-    filteredDecon = filter_counts_stage != null ? filter_counts_stage.filtered_decon : emptyStandard
-    filteredMicro = filter_counts_stage != null ? filter_counts_stage.filtered_micro : emptyStandard
-    filteredMito = filter_counts_stage != null ? filter_counts_stage.filtered_mito : emptyStandard
+    filteredDecon = filterCountsEnabled ? filter_counts_stage.filtered_decon : emptyStandard
+    filteredMicro = filterCountsEnabled ? filter_counts_stage.filtered_micro : emptyStandard
+    filteredMito = filterCountsEnabled ? filter_counts_stage.filtered_mito : emptyStandard
     metadataMicro = emptyStandard
     baseAsvMeta = emptyStandard
     baseAsvFinal = emptyStandard
     if( metadataPlotsEnabled ) {
-        def metadataMicroInput = metadataPlotsInputTable == 'pre_filter_micro' ? filter_counts_stage.filtered_micro : filter_counts_stage.filtered_counts
+        def metadataMicroInput = filter_counts_stage.filtered_counts
         def metadataStage = PLOT_METADATA(fastqStats, metadataMicroInput, filteredMito, taxonomy_table)
         metadataMicro = metadataStage.metadata_micro
         baseAsvMeta = metadataStage.asv_meta_micro
@@ -2914,6 +2983,7 @@ workflow standard {
     metadata_micro = metadataMicro
     asv_meta = baseAsvMeta
     asv_final = baseAsvFinal
+    filtered_fasta = filter_counts_stage.filtered_fasta
 }
 
 workflow optional {
@@ -2921,7 +2991,6 @@ workflow optional {
     base_asv_meta
     base_asv_final
     metadata_micro
-    raw_asv_counts
     fastq_stats
     filtered_stats
     raw_counts_sankey
@@ -2933,16 +3002,6 @@ workflow optional {
     main:
     baseAsvMeta = base_asv_meta.map { it }
     baseAsvFinal = base_asv_final.map { it }
-    if( threeTierEnabled ) {
-        three_tier_stage = THREE_TIER_DECONTAM(
-            raw_asv_counts,
-            baseAsvMeta,
-            baseAsvFinal,
-            Channel.value(file(threeTierMetadataPath))
-        )
-        baseAsvMeta = three_tier_stage.filtered_long.map { it }
-        baseAsvFinal = three_tier_stage.filtered_wide.map { it }
-    }
 
     metaMicroForBatch = metadata_micro.map { it }
     metaMicroForOutlier = metadata_micro.map { it }
@@ -3306,6 +3365,9 @@ workflow RUN_METADATA_ANALYSES {
     raw_asv_counts
 
     main:
+    if( controlDecontamEnabled ) {
+        exit 1, "Control decontamination must run from raw ASV counts in the core workflow; RUN_METADATA_ANALYSES accepts already-filtered tables. Use the full workflow with resume."
+    }
     metadata_stage = PLOT_METADATA(
         fastq_stats,
         filtered_micro,
@@ -3315,16 +3377,6 @@ workflow RUN_METADATA_ANALYSES {
 
     baseAsvMeta = metadata_stage.asv_meta_micro.map { it }
     baseAsvFinal = metadata_stage.asv_final_micro.map { it }
-    if( threeTierEnabled ) {
-        three_tier_stage = THREE_TIER_DECONTAM(
-            raw_asv_counts,
-            baseAsvMeta,
-            baseAsvFinal,
-            Channel.value(file(threeTierMetadataPath))
-        )
-        baseAsvMeta = three_tier_stage.filtered_long.map { it }
-        baseAsvFinal = three_tier_stage.filtered_wide.map { it }
-    }
 
     metaMicroForBatch = metadata_stage.metadata_micro.map { it }
     metaMicroForOutlier = metadata_stage.metadata_micro.map { it }
@@ -4035,32 +4087,6 @@ gzip -n ASVs.fasta
 """
 }
 
-process FILTER_TABLE {
-    conda "${condaEnvPath}"
-    publishDir dirMap.asv, mode: 'copy', pattern: '*'
-
-    input:
-    tuple path(count_table), path(asv_fasta)
-
-    output:
-    tuple path("ASV_filtered.tsv"), path("ASVs_filtered.fasta.gz"), emit: filtered
-
-    script:
-    def tableCfg = config.table_filter ?: [:]
-    """
-set -euo pipefail
-gzip -cd "${asv_fasta}" > ASVs.fasta
-python "${tableScriptFile}" \\
-       "${count_table}" \\
-       ASV_filtered.tsv \\
-       ${tableCfg.min_sample_sum ?: 5000} \\
-       ${tableCfg.min_asv_sum ?: 0.01} \\
-       ASVs.fasta \\
-       ASVs_filtered.fasta
-gzip -n ASVs_filtered.fasta
-"""
-}
-
 process TAXONOMY {
     cpus taxonomyThreads
     conda "${taxonomyCondaEnvPath}"
@@ -4228,7 +4254,7 @@ python "${mitoCheckerScriptPath}" \\
 """
 }
 
-process FILTER_COUNTS {
+process FILTER_ASVS {
     cpus pipelineThreads
     conda "${filterCountsCondaEnvPath}"
     publishDir dirMap.asv, mode: 'copy', pattern: '*', saveAs: { filename ->
@@ -4243,14 +4269,19 @@ process FILTER_COUNTS {
 
     output:
     path("${filterCountsOutputName}"), emit: filtered_counts
+    path("${filterCountsOutputName}".replace('.tsv','.feature_qc.tsv')), optional: true, emit: feature_qc
     path("${filterCountsOutputName}".replace('.tsv','.micro.tsv')), optional: true, emit: filtered_micro
-    path("${filterCountsOutputName}".replace('.tsv','.mito.tsv')), emit: filtered_mito
+    path("${filterCountsOutputName}".replace('.tsv','.mito.tsv')), optional: true, emit: filtered_mito
     path("${filterCountsOutputName}".replace('.tsv','.decon.tsv')), optional: true, emit: filtered_decon
 
-    when:
-    filterCountsEnabled
+    path("ASV_filtered.tsv"), emit: initial_filtered
+    path("ASVs_filtered.fasta.gz"), emit: initial_fasta
+    path("ASVs_target.fasta.gz"), emit: filtered_fasta
+    path("filter_audit.tsv"), emit: audit
+    path("filter_removed_asvs.tsv"), emit: removed_asvs
 
     script:
+    def tableCfg = config.table_filter ?: [:]
     def metadataArg = filterCountsMetadataPath ? """  --metadata "${filterCountsMetadataPath}" \\\n""" : ''
     def groupArg = filterCountsGroupCol ? """  --group-col "${filterCountsGroupCol}" \\\n""" : ''
     def saveInterArg = filterCountsSaveIntermediates ? "  --save-intermediates \\\n" : ''
@@ -4260,12 +4291,21 @@ process FILTER_COUNTS {
         filterCountsExcludeTaxa.collect { item -> """  --exclude-taxon "${item}" \\\n""" }.join('') : ''
 """
 set -euo pipefail
+echo "Combined filter helpers: ${combinedFilterHash}"
+gzip -cd "${asv_fasta}" > input_ASVs.fasta
+python "${tableScriptFile}" \\
+  "${count_table}" ASV_filtered.tsv \\
+  ${controlDecontamEnabled ? 0 : (tableCfg.min_sample_reads != null ? tableCfg.min_sample_reads : 5000)} \\
+  ${tableCfg.min_relative_abundance_pct != null ? tableCfg.min_relative_abundance_pct : 0.01} \\
+  input_ASVs.fasta ASVs_filtered.fasta
+if [[ "${filterCountsEnabled}" == "true" ]]; then
 echo "filter_nontarget.py md5: ${filterCountsScriptHash}"
 python "${filterCountsScriptPath}" \\
-  --count-table "${count_table}" \\
+  --count-table ASV_filtered.tsv \\
   --nontarget-table "${nontarget_table}" \\
   --taxonomy-table "${taxonomy_table}" \\
 ${metadataArg}${groupArg}  --min-group-size ${filterCountsMinGroup} \\
+  --min-prevalence-fraction ${filterCountsMinPrevalence} \\
   --abundance-threshold ${filterCountsAbundance} \\
   --sample-id-col "${filterCountsSampleCol}" \\
   --min-consensus ${filterCountsMinConsensus} \\
@@ -4275,6 +4315,14 @@ ${metadataArg}${groupArg}  --min-group-size ${filterCountsMinGroup} \\
 ${mitoColsArg}${excludeTaxaArg}  --mito-output-dir "." \\
   --output "${filterCountsOutputName}" \\
 ${saveInterArg}
+else
+  cp ASV_filtered.tsv "${filterCountsOutputName}"
+fi
+python "${finalizeFilterScriptPath}" \\
+  --input-counts "${count_table}" --table-counts ASV_filtered.tsv \\
+  --counts "${filterCountsOutputName}" --fasta ASVs_filtered.fasta \\
+  --output-fasta ASVs_target.fasta
+gzip -n ASVs_filtered.fasta ASVs_target.fasta
 """
 }
 
@@ -4521,92 +4569,45 @@ link_if_exists "${asvFinalMitoFile}" "ASV_final.mito.tsv"
 }
 
 /*
- * Optional SPARK manuscript three-tier decontamination.
- *
- * Statistical scores are learned from the pre-filter count matrix, where the
- * negative controls still exist.  The resulting ASV decisions are then applied
- * to the final host-filtered long and wide microbial tables.  Those filtered
- * tables replace the ordinary PLOT_METADATA tables for every downstream module.
+ * Cohort-level TECH/BIO prevalence filtering before biological feature filters.
+ * The historical configuration section and output paths are retained for continuity.
  */
-process THREE_TIER_DECONTAM {
-    cpus pipelineThreads
-    conda "${threeTierCondaEnvPath}"
-    publishDir "${threeTierOutputDirAbs}", mode: 'copy', overwrite: true
-
-    when:
-    threeTierEnabled
+process CONTROL_DECONTAM {
+    cpus 1
+    conda "${controlDecontamCondaEnvPath}"
+    publishDir "${controlDecontamOutputDirAbs}", mode: 'copy', pattern: 'three_tier_results'
+    publishDir "${controlDecontamOutputDirAbs}", mode: 'copy', pattern: 'ASV_final_three_tier.tsv'
 
     input:
-    path(raw_counts)
-    path(analyzed_long)
-    path(analyzed_wide)
+    tuple path(raw_counts), path(asv_fasta)
+    path(taxonomy_table)
     path(metadata_source)
 
     output:
-    path("ASV_meta_three_tier.tsv"), emit: filtered_long
-    path("ASV_final_three_tier.tsv"), emit: filtered_wide
+    tuple path("ASV_final_three_tier.tsv"), path("decontam_ASVs.fasta.gz"), emit: cleaned
     path("three_tier_results"), emit: audit
-    path("three_tier_decontam.done"), emit: done
 
     script:
-    def plausibilityArg = threeTierBiologicalPlausibility ? '' : '--disable-biological-plausibility'
+    def technicalCommand = controlDecontamTechnicalEnabled ? """
+Rscript "${controlDecontamDir}/run_prevalence.R" --counts three_tier_results/TECH_counts.tsv --metadata three_tier_results/TECH_metadata.tsv --threshold ${controlDecontamTechnicalThreshold} --output three_tier_results/TECH_scores.tsv | tee three_tier_results/TECH_run.log
+""" : ''
+    def bioControlCommand = controlDecontamBioControlEnabled ? """
+Rscript "${controlDecontamDir}/run_prevalence.R" --counts three_tier_results/BIO_counts.tsv --metadata three_tier_results/BIO_metadata.tsv --threshold ${controlDecontamBioControlThreshold} --output three_tier_results/BIO_scores.tsv | tee three_tier_results/BIO_run.log
+""" : ''
     """
 set -euo pipefail
-
-mkdir -p three_tier_results/pooled three_tier_results/within_type three_tier_results/filtered
-
-python "${threeTierMetadataScriptPath}" \
-  --counts "${raw_counts}" \
-  --metadata-in "${metadata_source}" \
-  --metadata-out three_tier_results/decontam_metadata.tsv \
-  --sample-col-in "${threeTierMetadataSampleCol}" \
-  --sample-col-out "${threeTierSampleCol}" \
-  --negative-control-labels "${threeTierNegativeControlLabelsCsv}" \
-  --positive-control-labels "${threeTierPositiveControlLabelsCsv}" \
-  --negative-control-col "${threeTierNegativeControlCol}" \
-  --positive-control-col "${threeTierPositiveControlCol}" \
-  --concentration-col "${threeTierConcentrationCol}" \
-  --type-col "${threeTierTypeCol}"
-
-Rscript "${threeTierPooledScriptPath}" \
-  --counts "${raw_counts}" \
-  --metadata three_tier_results/decontam_metadata.tsv \
-  --sample-col "${threeTierSampleCol}" \
-  --neg-col "${threeTierNegativeControlCol}" \
-  --conc-col "${threeTierConcentrationCol}" \
-  --exclude-positives-col "${threeTierPositiveControlCol}" \
-  --threshold-default "${threeTierPooledThreshold}" \
-  --threshold-aggressive "${threeTierAggressiveThreshold}" \
-  --outdir three_tier_results/pooled
-
-Rscript "${threeTierWithinScriptPath}" \
-  --counts "${raw_counts}" \
-  --metadata three_tier_results/decontam_metadata.tsv \
-  --sample-col "${threeTierSampleCol}" \
-  --neg-col "${threeTierNegativeControlCol}" \
-  --conc-col "${threeTierConcentrationCol}" \
-  --pos-col "${threeTierPositiveControlCol}" \
-  --type-col "${threeTierTypeCol}" \
-  --sample-types "${threeTierSampleTypesCsv}" \
-  --threshold-default "${threeTierWithinTypeThreshold}" \
-  --threshold-aggressive "${threeTierAggressiveThreshold}" \
-  --combine-mode "${threeTierCombineMode}" \
-  --pooled three_tier_results/pooled/decontam_per_asv_scores.tsv \
-  --outdir three_tier_results/within_type
-
-python "${threeTierApplyScriptPath}" \
-  --pooled-scores three_tier_results/pooled/decontam_per_asv_scores.tsv \
-  --within-type-scores three_tier_results/within_type/decontam_by_sample_type_per_asv.tsv \
-  --analyzed-long "${analyzed_long}" \
-  --analyzed-wide "${analyzed_wide}" \
-  --prev-threshold "${threeTierPooledThreshold}" \
-  --freq-threshold "${threeTierWithinTypeThreshold}" \
-  ${plausibilityArg} \
-  --outdir three_tier_results/filtered
-
-cp three_tier_results/filtered/ASV_master_long_filtered.tsv ASV_meta_three_tier.tsv
-cp three_tier_results/filtered/ASV_master_count_wide_filtered.tsv ASV_final_three_tier.tsv
-touch three_tier_decontam.done
+echo 'Control decontamination scripts: ${controlDecontamHash}'
+cat > decontam_settings.json <<'ASPIRE_DECONTAM_SETTINGS'
+${controlDecontamSettings}
+ASPIRE_DECONTAM_SETTINGS
+mkdir -p three_tier_results
+python "${controlDecontamDir}/control_decontam.py" prepare --counts "${raw_counts}" --metadata "${metadata_source}" --config decontam_settings.json --outdir three_tier_results | tee three_tier_results/prepare.log
+Rscript "${controlDecontamDir}/plot_qc.R" three_tier_results/sample_qc.tsv three_tier_results
+${technicalCommand}
+${bioControlCommand}
+python "${controlDecontamDir}/control_decontam.py" finalize --taxonomy "${taxonomy_table}" --outdir three_tier_results | tee three_tier_results/finalize.log
+cp three_tier_results/ASV_cleaned.tsv ASV_final_three_tier.tsv
+cp "${asv_fasta}" decontam_ASVs.fasta.gz
 """
 }
 
@@ -5553,9 +5554,9 @@ ${legacySubsetArg}${vocColsArgs}  --spieceasi-min-rel-abund ${spieceasiMinRelAbu
   --case-palette "${vocCorrelationCasePalette}" \\
   --isa-palette "${vocCorrelationIsaPalette}" \\
   --isa-q-threshold ${indicspeciesQThreshold} \\
-  --isa-brush-groups "${vocCorrelationIsaBrushGroups}" \\
+  --isa-focus-groups "${vocCorrelationIsaFocusGroups}" \\
   --isa-all-type-groups "${vocCorrelationIsaAllTypeGroups}" \\
-  --isa-exclude-all-types-from-brush "${vocCorrelationIsaExcludeAllTypes}" \\
+  --isa-exclude-all-types-from-focus "${vocCorrelationIsaExcludeAllTypes}" \\
   --isa-min-abs-rho ${vocCorrelationIsaMinAbsRho} \\
   --sample-min-abs-z ${vocCorrelationSampleMinAbsZ} \\
   --patient-inference ${vocPatientInference} \\

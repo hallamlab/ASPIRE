@@ -33,9 +33,10 @@ core:
     min_overlap: 5
     trunc_quality: 5
     allow_stagger: true
+  # Initial abundance/nonzero step inside FILTER_ASVS. Depth is bypassed when control_decontam is enabled.
   table_filter:
-    min_sample_sum: 5000
-    min_asv_sum: 0
+    min_sample_reads: 5000
+    min_relative_abundance_pct: 0
     script: processes/filter_table/filter_ASV_table.py
   filter:
     max_ee: 1.0
@@ -74,6 +75,23 @@ core:
     stats_tsv: ASV_SILVA_stats.full-length.vsearch.tsv
     uppercase_fasta: ASVs.upper.fasta
     threads: 6
+  control_decontam:
+    enabled: false
+    metadata: null
+    metadata_sample_col: Sample
+    # Biological inclusion only: controls are NEVER filtered at this depth.
+    min_biological_reads: 5000
+    class_col: sample_class
+    biological_labels: [biological]
+    technical_labels: [technical]
+    bio_control_labels: [bio_control]
+    positive_labels: [positive]
+    # Disable the unused arm when only TECH or only BIO controls are supplied.
+    technical_enabled: true
+    bio_control_enabled: true
+    # Remove ASVs with decontam prevalence score < threshold in either arm.
+    technical_score_threshold: 0.1
+    bio_control_score_threshold: 0.1
 standard:
   mito:
     enabled: true
@@ -104,13 +122,15 @@ standard:
     biof_db: /abs/path/blastdb/ssu_pipeline_contaminants
     mito_fasta: null
     contaminant_fasta: null
+  # Group, taxonomy and reference filters in FILTER_ASVS, immediately before metadata plots.
   filter_counts:
     enabled: true
     metadata: /abs/path/metadata.tsv
     output: ASV_target.tsv
     group_col: Type_Group
     min_group_size: 3
-    abundance_threshold: 0.5
+    min_relative_abundance_pct: 0.5
+    min_prevalence_fraction: 0  # Nonzero presence in biological samples; 0.05 = 5%.
     sample_id_col: Sample
     min_consensus: 0.0
     exclude_taxa:
@@ -134,11 +154,6 @@ standard:
     type_col: Type_Group
     color_col: Color
     palette_file: null
-    subtraction_group_col: Type_Group
-    subtraction_groups:
-    - Scope Flush
-    - Skin Brush
-    - Control
     keep_types:
     - Oral Rinse
     - BAL
@@ -160,33 +175,6 @@ standard:
       replacement: outlier
       preserve_source: true
 optional:
-  three_tier_decontam:
-    enabled: false
-    output_dir: three_tier_decontam
-    metadata: null
-    metadata_sample_col: Sample
-    sample_col: Sample
-    negative_control_col: is_negative_control
-    positive_control_col: is_positive_control
-    negative_control_labels:
-    - PBS
-    - PBS_twz
-    - Negative_96
-    - Negative_man
-    positive_control_labels:
-    - Positive_96
-    - Positive_man
-    concentration_col: DNA_conc
-    type_col: Type_Group
-    sample_types:
-    - BAL
-    - Bronchial Brush
-    - Oral Rinse
-    pooled_threshold: 0.1
-    within_type_threshold: 0.1
-    aggressive_threshold: 0.5
-    combine_mode: min
-    biological_plausibility: true
   sankey:
     enabled: true
     metadata: /abs/path/metadata.tsv
@@ -455,14 +443,14 @@ optional:
     use_legacy_voc_subset: true
     correlation_direction: positive
     isa_correlation_direction: both
-    isa_brush_groups:
+    isa_focus_groups:
     - Bronchial Brush
     - Lung Brush
     isa_all_type_groups:
     - Oral Rinse
     - BAL
     - Bronchial Brush
-    isa_exclude_all_types_from_brush: true
+    isa_exclude_all_types_from_focus: true
     isa_min_abs_rho: 0.35
     sample_min_abs_z: 2.5
     patient_inference: true
@@ -500,7 +488,7 @@ optional:
     count_col: count
     tax_levels: Phylum,Family
     sample_types: Oral Rinse,BAL,Bronchial Brush
-    min_prevalence: 0.1
+    min_prevalence_fraction: 0.1
     exclude_contralateral_in_cancer: true
     contralateral_col: lung_status
     cancer_site_col: Cancer_Site
@@ -628,8 +616,8 @@ optional:
     group2_palette: Non-Cancer=#FFFFFF,Cancer=#A50026,Cancer+Non-Cancer=#000000,not_indicator=#D3D3D3
     focus_group1_label: Bronchial Brush
     transpose: true
-    min_rel_abund: 0.005
-    min_prevalence: 0.05
+    min_relative_abundance_fraction: 0.005
+    min_prevalence_fraction: 0.05
     remove_zero_var: true
     force_keep_indicator_asvs: true
     method: glasso
@@ -718,7 +706,7 @@ optional:
     group_palette: null
     max_asvs: 300
     min_total: 0.0
-    min_prevalence: 0.0
+    min_prevalence_fraction: 0.0
     top_correlations: 100
     correlation_direction: both
     ordination_methods: cca,rda,dbrda
@@ -793,7 +781,7 @@ environments:
   mitomaster: processes/mitomaster/env.yml
   mito_checker: processes/mito_decontam/env.yml
   filter_counts: processes/shared_envs/asv_pipeline.yml
-  three_tier_decontam: processes/three_tier_decontam/env.yml
+  control_decontam: processes/control_decontam/env.yml
   general_stats: processes/general_stats/env.yml
   sankey: processes/sankey/env.yml
   plot_metadata: processes/plot_metadata/env.yml

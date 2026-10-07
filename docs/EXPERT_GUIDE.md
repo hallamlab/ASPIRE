@@ -38,7 +38,7 @@ rerun while allowing unaffected upstream work to remain cached:
 
 ```bash
 ./run_asv_pipeline.sh --list-stages
-./run_asv_pipeline.sh my_study.yml --rerun-from standard:FILTER_COUNTS
+./run_asv_pipeline.sh my_study.yml --rerun-from standard:FILTER_ASVS
 ```
 
 The live ANSI dashboard uses the real `core:PROCESS`, `standard:PROCESS`, and
@@ -67,11 +67,11 @@ changed. Common examples:
 | Change | Suggested stage |
 |---|---|
 | FASTQ trimming or merge parameters | `FASTP_QC` or `MERGE_READS` |
-| technical sample/ASV threshold | `FILTER_TABLE` |
+| per-sample ASV relative-abundance threshold | `FILTER_ASVS` |
 | taxonomy reference | `TAXONOMY` |
-| host/non-target rules | `FILTER_COUNTS` |
-| control subtraction or metadata cohort | `PLOT_METADATA` |
-| three-tier thresholds | `THREE_TIER_DECONTAM` |
+| host/non-target rules | `FILTER_ASVS` |
+| plot annotations or displayed biological types | `PLOT_METADATA` |
+| biological inclusion cutoff, sample classes, TECH/BIO thresholds | `CONTROL_DECONTAM` |
 | ISA settings | `INDICSPECIES` |
 | VOC correlation/plot thresholds | `VOC_CORRELATION` |
 | network cohort or inference settings | `SPIECEASI` |
@@ -154,7 +154,7 @@ configured.
 - Review read/sample loss before interpreting group differences.
 - Treat `.micro.tsv`, `.decon.tsv`, and raw matrices as audit intermediates;
   identify the configured final downstream table.
-- Review control classifications and read loss when three-tier decontamination
+- Review control classifications and read loss when control decontamination
   is enabled.
 - Review effect sizes and adjusted p-values, not only nominal significance.
 - Treat network edges and ASV-VOC correlations as associations.

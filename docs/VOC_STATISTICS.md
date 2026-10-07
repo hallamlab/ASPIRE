@@ -45,7 +45,7 @@ analysis. Output files are published under `modules/voc_correlation/`.
    Patient averages are rounded to 14 decimal places before ranking to stabilize
    floating-point ties; identical repeated values must not gain distinct ranks.
 6. Apply BH correction over all tested union ASV–VOC pairs separately for primary
-   and CLR analyses, before any plot selection. ISA/global/bronchial subsets
+   and CLR analyses, before any plot selection. ISA/global/focus-group subsets
    inherit these q-values; they do not receive separate, smaller FDR families.
    CLR is a sensitivity analysis, not an additional route to claiming discovery.
 
@@ -78,7 +78,30 @@ SPARK-compatible local configuration use 9999. These settings never change SPARK
 upstream analyses. `patient_inference: false` disables additional ASV inference,
 but cancer–control tests still use the corrected permutation method.
 
-New files:
+## Published files and figures
+
+Output names describe the selected cohort and analysis scope. The ASV–VOC
+correlation plots have **VOC rows and ASV columns**, with ASV annotation strips
+above the columns and a landscape layout. Both axes use average-linkage
+clustering with correlation distance; constant vectors use Euclidean distance.
+An axis with a single member is displayed without clustering. Matrix TSVs retain
+ASV rows and VOC columns, and the numerical correlation results are unchanged by
+plot orientation.
+
+- `selected_sample_metadata.tsv`: metadata for the configured sample types.
+- `asv_voc_spearman{,_long}.tsv`, `asv_voc_clustermap.{pdf,png,svg}`: global
+  sample-level associations.
+- `isa_focus_group_asv_voc_*`, `isa_annotations_focus_group.tsv`: associations
+  and annotations for `isa_focus_groups`; `isa_all_type_groups` and
+  `isa_exclude_all_types_from_focus` define universal-group exclusion.
+- `sample_voc_matrix.tsv`, `sample_voc_annotations.tsv`,
+  `sample_voc_clustermap.{pdf,png,svg}`: sample-level VOC abundance and annotations.
+- `patient_voc_matrix.tsv`, `patient_voc_matrix_zscore.tsv`,
+  `patient_voc_case_status.tsv`, `patient_case_voc_barplots.{pdf,png,svg}`:
+  patient-level abundance summaries and case-group comparisons.
+
+Patient-level association outputs:
+
 
 - `patient_asv_voc_permutation_long.tsv`: ASV, VOC, normalization, patient counts,
   rho, p, q, test status, permutations, family membership, taxonomy labels.
@@ -86,10 +109,10 @@ New files:
   side; agreement, insufficient observations and normalization-sensitive support.
 - `patient_asv_relative_abundance.tsv`, `patient_asv_clr.tsv`: patient averages
   across the full ASV universe, before pair-specific missing-VOC exclusions.
-- `patient_{all_asv,isa_all_sample_types,isa_bronchial_brush}_asv_voc_spearman.tsv`
+- `patient_{all_asv,isa_all_sample_types,isa_focus_group}_asv_voc_spearman.tsv`
   and corresponding `*_clustermap.{pdf,png,svg}`: focused primary displays.
 - `patient_inference_summary.json`: denominators, gates, settings and test counts.
-- `patient_voc_case_tests_brush.tsv`: updated case tests, including method and
+- `patient_voc_case_tests.tsv`: updated case tests, including method and
   number of permutations. With no testable VOCs, no case-test table is produced;
   any case barplot is descriptive and has no inferential annotation.
 

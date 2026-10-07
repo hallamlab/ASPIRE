@@ -6,21 +6,19 @@
 
 [Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf)
 
-The figure follows the appnote’s overall theme—read/ASV processing, taxonomy and background removal, metadata and quality assessment, community diversity, indicators/networks, and ASV–VOC integration—while expanding those areas into detailed modules and retaining the additional optional branches. Numbered rows
-are not a serial execution schedule. Optional analyses run only when enabled
-and their dependencies are available. The [process reference](PROCESS_REFERENCE.md)
-lists the exact task names, inputs and outputs.
-
-The arrows connecting numbered modules show conceptual progression; they do not require independent analysis branches to execute serially.
+The core path is read QC and ASV construction → full taxonomy → optional
+`CONTROL_DECONTAM` → reference screening → `FILTER_ASVS` → `PLOT_METADATA`.
+Independent downstream analyses can overlap when dependencies and resources allow.
+The [process reference](PROCESS_REFERENCE.md) lists task identifiers and outputs.
 
 ## Conceptual workflow
 
 [![Workflow 1](assets/diagrams/workflow-1.svg)](assets/diagrams/workflow-1.svg)
 
-[Zoom diagram](assets/diagrams/workflow-1.svg) · [Mermaid source](diagrams/workflow-1.mmd)
+[Mermaid source](diagrams/workflow-1.mmd)
 
-Three-tier filtering scores contaminants from the raw control-bearing counts,
-then filters the microbial analysis tables. Batch correction and proposed group
+Control prevalence filtering applies biological-only depth QC, runs separate
+TECH/BIO tests, and removes their union before microbial feature filtering. Batch correction and proposed group
 labels are separately configurable. Network edges and ASV–VOC correlations are
 associations, rather than evidence of causal relationships.
 
@@ -40,7 +38,7 @@ or passing native Nextflow options.
 
 [![Workflow 3](assets/diagrams/workflow-3.svg)](assets/diagrams/workflow-3.svg)
 
-[Zoom diagram](assets/diagrams/workflow-3.svg) · [Mermaid source](diagrams/workflow-3.mmd)
+[Mermaid source](diagrams/workflow-3.mmd)
 
 The diagrams summarize the analytical table path. Individual descriptive
 products can use their own declared metadata or intermediate inputs; consult
@@ -49,10 +47,15 @@ ASV-to-genome linkage uses the filtered ASV sequences and supplied genome
 references; network overlays combine those links with the selected analytical
 network. Exact file paths and checksums are recorded in the output inventories.
 
-## Brief appnote panel
+## Compact workflow overview
 
 [![ASPIRE compact workflow overview](assets/diagrams/workflow-brief.svg)](assets/workflow-brief.svg)
 
 [Brief SVG](assets/workflow-brief.svg) · [Brief PDF](assets/workflow-brief.pdf)
 
-The brief panel follows the appnote methods: read/ASV processing, taxonomy and background removal, metadata and quality assessment, community diversity, indicators/networks, and ASV–VOC integration. It highlights the statistical methods; the complete figure includes additional optional branches such as genome linkage. These are conceptual groups: three-tier decontamination runs after metadata-table construction, and SINA trimming follows ASV inference in the code.
+The brief panel shows the same TECH/BIO sequence as the complete figure.
+Biological depth QC precedes contamination removal; final microbial abundance
+filtering precedes metadata construction. The mock's 0.1% relative-abundance
+threshold applies within biological samples, alongside a 5% nonzero-prevalence
+requirement across those samples. Control presence alone never
+causes removal: the configured decontam prevalence-score threshold must be met.

@@ -7,5 +7,9 @@ indicator_analysis	At least one FDR-significant Type_Group or Case indicator mat
 voc_correlation	At least one implanted positive ASV-VOC pair is recovered with rho >= 0.30	Demonstrates truth-aligned microbiome-VOC analysis
 network_analysis	The inferred graph has at least 10 edges, a multi-node module, and at least three edges within implanted modules	Rejects an uninformative or truth-discordant network
 network_topology	Topology node/edge counts agree with the inferred graph and the configured degree-preserving null ensemble completes	Exercises the SPARK supplementary network topology and null-model analysis
-plot_contract	Every plot-producing showcase module emits at least one SVG	Confirms editable publication figures
+plot_contract	Every benchmarked plot-producing module emits at least one SVG	Confirms editable publication figures
 manifest_integrity	Every module file listed in module_output_manifest.tsv exists and matches its SHA-256	Detects incomplete or altered publication outputs
+control_cohorts	Airways/Oral pass biological depth QC; Skin is BIO and blanks are TECH, with no control depth cutoff	Validates the sample design and independent prevalence cohorts
+contamination_union	Cleaned counts equal raw QC biological counts after TECH/BIO union removal, with complete reason codes	Detects changed retained counts, misclassified controls and incorrect feature removal
+combined_filter_counts_fasta	Final microbial table is a count-preserving subset of cleaned biological counts and matches final FASTA	Validates both feature-filtering layers and sequence synchronization
+biological_prevalence_abundance	ASV feature audit matches nonzero prevalence and independent per-sample RA in biological inputs	Controls excluded from denominators; both configured gates must pass

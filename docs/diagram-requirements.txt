@@ -1,1 +1,2 @@
 playwright==1.63.0
+CairoSVG==2.9.1
