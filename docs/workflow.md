@@ -4,7 +4,7 @@
 [![Complete ASPIRE workflow](assets/workflow.svg)](assets/workflow.svg)
 ```
 
-[Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf)
+[Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf) · [Brief overview](index.md)
 
 Figures follow the shared [MP nodal style](WORKFLOW_STYLE.md): numbered module squares, compute diamonds and data circles. Process names sit above diamonds; the main software tools or libraries sit below them.
 

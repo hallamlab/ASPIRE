@@ -48,6 +48,20 @@ do not shrink the entire figure to accommodate longer paragraphs. Full and
 brief figures use the same grammar. Biological plot palettes are separate
 study settings and are not replaced by these workflow colors.
 
+## Documentation progression
+
+1. Put the brief nodal overview on the documentation landing page and link
+   directly to the detailed workflow page.
+2. Lead that detailed page with a separate, expanded nodal figure in the same
+   visual style. Provide a full-size SVG link and a PDF where exported.
+3. Place the supporting architecture, dependency and data-flow diagrams below
+   the large figure, followed by process explanations and citations.
+4. Keep a link back to the brief overview beside the detailed figure’s downloads.
+
+The brief and detailed figures must be distinct levels of detail. Supporting
+Mermaid diagrams complement the expanded nodal figure rather than substitute
+for it. Apply this progression to new documentation guides as well.
+
 ## Sources, exports and review
 
 Maintain an editable SVG or a deterministic generator as the source of truth.
