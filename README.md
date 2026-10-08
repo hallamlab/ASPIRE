@@ -56,7 +56,7 @@ Enable [Cutadapt primer trimming](docs/primer-trimming.md) to detect and remove 
 
 ## Workflow
 
-[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg?v=primer-cohort-20261008)](docs/assets/workflow-brief.svg)
+[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg?v=mp-nodal-20261008)](docs/assets/workflow-brief.svg)
 
 [Vector SVG](docs/assets/workflow-brief.svg) · [PDF](docs/assets/workflow-brief.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
 

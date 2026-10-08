@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Generate the current TECH/BIO workflow SVG/PDF figures from one source.
+"""Build ASPIRE's MP-style nodal SVG/PDF workflows.
 
-Requires CairoSVG from docs/diagram-requirements.txt for vector PDF export.
+The visual contract is docs/WORKFLOW_STYLE.md. Keep scientific content in ROWS;
+keep the numbered module spine, node grammar and palette in the renderer.
+Requires CairoSVG from docs/diagram-requirements.txt.
 """
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -10,52 +12,64 @@ import cairosvg
 ROOT = Path(__file__).resolve().parents[1]
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
+COLORS = {'data': ('#F5F5F5', '#666666'), 'input': ('#DAE8FC', '#6C8EBF'),
+          'output': ('#D5E8D4', '#82B366')}
 
+# title, input, compute nodes, output, explanatory annotation
 FULL = [
-    ('Optional primer removal', 'PRIMER_TRIM (Cutadapt) → PRIMER_TRIM_CHECK',
-     'Detect paired primers; audit discarded pairs; require one amplicon family.'),
-    ('Read quality control', 'FASTP_QC → MERGE_READS → FILTER_READS → RELABEL_FILTERED',
-     'All biological samples and controls share read processing.'),
-    ('ASV construction', 'CONCAT_FASTAS → DEREPLICATE → DENOISE → CHIMERA_CHECK → CREATE_COUNT_MATRIX',
-     'Preserve original ASV counts and sequences, including control-only ASVs.'),
-    ('Alignment and full taxonomy', 'SINA_TRIM → TAXONOMY',
-     'Assign taxonomy to all inferred ASVs before biological feature filtering.'),
-    ('CONTROL_DECONTAM · optional, metadata-defined', 'Biological samples: ≥5,000 post-QC reads; nonzero controls: no depth cutoff',
-     'TECH: biological + blanks. BIO: same biological cohort + sample controls.',
-     'Independent prevalence scores < configured cutoffs → union ASV removal.',
-     'Retained counts unchanged. Positive controls: QC only. Unused arms can be disabled.'),
-    ('Reference screening', 'PREPARE_BLAST_DATABASES → MITOMASTER → MITO_DECONTAM',
-     'Local host / mitochondrial evidence; external MITOMASTER lookup is optional.'),
-    ('FILTER_ASVS · combined biological feature filtering', 'Initial abundance / nonzero → group and non-target → abundance / taxonomy → final nonzero',
-     'Mock: ≥0.1% RA in any biological sample AND nonzero counts in ≥5% of biological samples.',
-     'No second depth cutoff after CONTROL_DECONTAM. Final counts and FASTA agree.'),
-    ('PLOT_METADATA · final biological tables', 'ASV_target.tsv → synchronized long / wide tables and metadata',
-     'CAMI: Airways and Oral only; Skin BIO controls and TECH blanks excluded.'),
-    ('Optional analysis-table preparation', 'Group diagnostics / validated labels → batch correction and count selection',
-     'Diversity retains all final biological samples; configured study-group exclusions apply to other analyses.'),
-    ('ANALYSIS_COHORT · optional study-group selection', 'Synchronize metadata, counts, long ASV tables and CLR sample rows; publish a selection audit',
-     'Diagnostic cohort selection precedes group diagnostics; downstream selection follows batch preparation.'),
-    ('Optional analysis branches · dependencies govern execution', 'Diversity / ordination · indicators · patient / paired contrasts · group-effect power',
-     'ASV–VOC associations · SPIEC-EASI → modules / topology → annotated networks',
-     'Final filtered FASTA + genome references → ASV–MAG links and network overlays.'),
-    ('Publish results and provenance', 'Module tables / plots → master summaries → HTML report and checksum inventories',
-     'GENERAL_STATS runs as a parallel QC branch; audit intermediates remain available.'),
+    ('Primer removal\n& read QC', 'Paired reads\nand manifest',
+     ['Primer trimming\nCutadapt · optional', 'Read QC\nfastp', 'Merge / filter\nVSEARCH'], 'Processed\nreads',
+     'Paired-primer audit and amplicon-family check precede shared QC for biological samples and controls.'),
+    ('ASV\nconstruction', 'Processed\nreads',
+     ['Dereplicate', 'Denoise', 'Chimera check\nand counts'], 'Raw ASVs\nand counts',
+     'Preserve original counts and control-only ASVs for the control prevalence tests.'),
+    ('Alignment\n& taxonomy', 'All inferred ASVs\nand references',
+     ['Align sequences\nSINA', 'Assign taxonomy\nQIIME 2'], 'Full ASV\ntaxonomy',
+     'Taxonomy covers the raw ASV set before biological feature filtering.'),
+    ('Control\ndecontamination', 'Raw counts and\nsample classes',
+     ['Biological\ndepth QC', 'TECH / BIO\nprevalence tests', 'Union of\nflagged ASVs'], 'Decontaminated\nbiological counts',
+     'Optional · Biological depth cutoff is configurable; nonzero TECH / BIO controls retain their original counts.'),
+    ('Non-target\nscreening', 'ASVs and\nreference sequences',
+     ['MITOMASTER\noptional API', 'Local BLAST\nreference screen'], 'Non-target\nevidence',
+     'Configured API retry and failure policies publish availability audits alongside local reference results.'),
+    ('Biological\nfeature filtering', 'Biological counts\nand taxonomy',
+     ['Abundance and\nprevalence', 'Host / unassigned\ntaxon exclusions'], 'Final microbial\ncounts and FASTA',
+     'Mock: ≥0.1% relative abundance in any biological sample AND nonzero counts in ≥5% of biological samples.'),
+    ('Metadata\n& preparation', 'Final counts\nand metadata',
+     ['Metadata-linked\nlong / wide tables', 'Group diagnostics\nselected cohort', 'Batch preparation\nfull cohort'], 'Synchronized\nanalysis tables',
+     'Metadata plots retain all final biological samples; batch correction is optional.'),
+    ('Diversity\n& cohort selection', 'Prepared\nbiological tables',
+     ['Full cohort\ndiversity', 'Select study groups\nfor other analyses'], 'Diversity and\nselected tables',
+     'Parallel uses of prepared tables: excluded groups remain in diversity; sample-selection audits accompany other analyses.'),
+    ('Associations\n& study design', 'Selected tables\nand optional VOCs',
+     ['Indicators and\npatient contrasts', 'ASV–VOC\nassociations', 'Patient-count\npower simulations'], 'Association tables\nand figures',
+     'Optional branches share synchronized inputs; VOC clustermaps cluster VOC rows and ASV columns.'),
+    ('Networks\n& genome links', 'Selected tables\nand optional genomes',
+     ['SPIEC-EASI\ninference', 'Modules and\nnull topology', 'ASV–MAG links\nand overlays'], 'Networks and\nlinkage tables',
+     'Genome linkage uses final filtered ASV sequences and supplied references; enabled branches follow their dependencies.'),
+    ('Reports\n& provenance', 'Module outputs\nand QC audits',
+     ['Master summaries', 'All-library Sankey\nand HTML report', 'Logs and\nchecksum inventory'], 'Published results\nand run record',
+     'The Sankey includes TECH / BIO controls and explicit dropout bands; kept nodes remain above removed nodes.'),
 ]
 BRIEF = [
-    ('Reads → ASVs → full taxonomy', 'Shared QC for biological samples, BIO controls and TECH blanks',
-     'Optional Cutadapt → fastp / VSEARCH → ASV count matrix → SINA / QIIME 2 taxonomy'),
-    ('Optional TECH / BIO control decontamination', '≥5,000 post-QC reads for biological samples; retain all nonzero controls',
-     'Independent prevalence tests → union ASV removal; retained counts unchanged',
-     'Positive controls stay in QC. Either control arm may be disabled.'),
-    ('Reference screening → FILTER_ASVS', 'Host / mitochondrial evidence → biological abundance and taxonomy filters',
-     'Mock: ≥0.1% RA in any biological sample AND nonzero counts in ≥5% of biological samples',
-     'This percentage is separate from decontam’s prevalence-score cutoffs.'),
-    ('Metadata → selected analysis tables', 'PLOT_METADATA receives the final filtered biological count table',
-     'Optional cohort selection for other analyses; diversity retains all final biological samples'),
-    ('Optional analyses and integration', 'Diversity · indicators · patient contrasts · power · participant-level ASV–VOC tests',
-     'SPIEC-EASI networks / topology / modules · filtered ASV-to-genome linkage'),
-    ('Results, QC and provenance', 'Tables · editable figures · removal audits · HTML report · logs and checksums',
-     'CAMI cohort: Airways / Oral biological; Skin BIO controls; Control TECH blanks'),
+    ('Reads\n& ASVs', 'Reads, metadata\nand references',
+     ['Optional Cutadapt\nthen shared QC', 'ASV construction', 'Full taxonomy'], 'Raw ASVs\nand taxonomy',
+     'Biological samples and controls share primer processing and read QC.'),
+    ('Control\ndecontamination', 'Raw counts and\nsample classes',
+     ['Biological-only\ndepth QC', 'TECH / BIO\nprevalence', 'Union ASV\nremoval'], 'Biological\ncounts',
+     'Optional · Each control arm is configurable; nonzero controls are exempt from the biological depth cutoff.'),
+    ('Microbial\nfeature selection', 'Counts, taxonomy\nand references',
+     ['Non-target\nscreening', 'Abundance /\nprevalence filters', 'Taxonomy\nexclusions'], 'Final microbial\ncounts and FASTA',
+     'The mock uses 0.1% abundance in at least one biological sample and 5% nonzero biological prevalence.'),
+    ('Metadata\n& cohorts', 'Final counts\nand metadata',
+     ['Linked metadata\nand preparation', 'Full-cohort\ndiversity', 'Study groups for\nother analyses'], 'Diversity and\nselected tables',
+     'Configured group exclusions apply to other analyses; metadata plots and diversity retain those groups.'),
+    ('Analyses\n& integration', 'Selected tables;\nVOCs / genomes',
+     ['Indicators /\npatient tests', 'Associations\nand power', 'Networks /\ngenome links'], 'Analysis tables\nand figures',
+     'Optional analyses run according to their input dependencies and available study data.'),
+    ('Results\n& provenance', 'Module outputs\nand QC audits',
+     ['All-library\nSankey', 'Integrated\nHTML report', 'Logs and\nchecksums'], 'Auditable\nrun outputs',
+     'Explicit control-dropout bands accompany the retained-sample and retained-read accounting.'),
 ]
 
 
@@ -66,37 +80,86 @@ def element(parent, tag, text=None, **attrs):
 
 
 def build(name, rows):
-    width = 1400
-    height = 155 + sum(80 + 29 * (len(row) - 1) for row in rows) + 55
-    svg = ET.Element(f'{{{NS}}}svg', dict(width=str(width), height=str(height), viewBox=f'0 0 {width} {height}', role='img', **{'aria-labelledby': 'title desc'}))
-    element(svg, 'title', 'ASPIRE: TECH/BIO control decontamination workflow', id='title')
-    element(svg, 'desc', 'Full taxonomy precedes control prevalence filtering, reference screening, combined ASV filtering and metadata tables. Optional analyses follow the selected biological tables.', id='desc')
-    element(svg, 'rect', width=width, height=height, fill='white')
-    element(svg, 'style', 'text{font-family:Arial,Helvetica,sans-serif;fill:#172b3a}.heading{font-weight:bold}')
+    width, gap = 1500, 175
+    height = 335 + gap * len(rows) + (60 if rows is FULL else 0)
+    svg = ET.Element(f'{{{NS}}}svg', dict(width=str(width), height=str(height), viewBox=f'0 0 {width} {height}', role='img', **{'aria-labelledby': 'title desc', 'data-workflow-style': 'mp-nodal-v1'}))
+    element(svg, 'title', 'ASPIRE: amplicon analysis workflow', id='title')
+    element(svg, 'desc', 'Numbered conceptual modules use the MetaPathways nodal style. Shared read processing and full taxonomy precede control decontamination and final feature filtering. Diversity keeps the full biological cohort; selected groups feed other analyses. Module numbers are not a serial execution schedule.', id='desc')
+    element(svg, 'rect', width=width, height=height, fill='#FFFFFF')
+    element(svg, 'style', 'text{font-family:"Times New Roman",Times,serif;fill:#111111}.wire{fill:none;stroke:#111111;stroke-width:1.5;marker-end:url(#arrow)}')
     defs = element(svg, 'defs')
-    marker = element(defs, 'marker', id='arrow', viewBox='0 0 10 10', refX=9, refY=5, markerWidth=7, markerHeight=7, orient='auto')
-    element(marker, 'path', d='M 0 0 L 10 5 L 0 10 z', fill='#526d82')
-    element(svg, 'text', 'ASPIRE · TECH/BIO workflow', x=width//2, y=48, font_size=32, text_anchor='middle', **{'class': 'heading'})
-    element(svg, 'text', 'YAML configuration · Nextflow / Mamba · resumable execution · audited outputs', x=width//2, y=83, font_size=22, text_anchor='middle')
-    y=115
-    for i, row in enumerate(rows):
-        h=57 + 29 * (len(row)-1)
-        color = '#e7f3ed' if ('control decontamination' in row[0] or 'CONTROL_DECONTAM' in row[0]) else '#edf3f8'
-        element(svg, 'rect', x=35, y=y, width=width-70, height=h, rx=10, fill=color, stroke='#70889a')
-        element(svg, 'text', row[0], x=58, y=y+33, font_size=24, **{'class':'heading'})
-        for j, line in enumerate(row[1:]):
-            element(svg, 'text', line, x=58, y=y+65+j*29, font_size=20)
-        y+=h
-        if i<len(rows)-1:
-            element(svg, 'path', d=f'M {width//2} {y+3} V {y+21}', stroke='#526d82', stroke_width=2, marker_end='url(#arrow)')
-        y+=23
-    element(svg, 'text', 'Arrows show the main data path; enabled analyses may run concurrently. Control decontamination can be bypassed.', x=width//2, y=y+19, font_size=19, text_anchor='middle')
-    target=ROOT/'docs/assets'/f'{name}.svg'
+    marker = element(defs, 'marker', id='arrow', viewBox='0 0 10 10', refX=10, refY=5, markerWidth=7, markerHeight=7, orient='auto')
+    element(marker, 'path', d='M0 0 L10 5 L0 10z', fill='#111111')
+
+    def text(x, y, value, size=22, anchor='middle'):
+        parent = element(svg, 'text', x=x, y=y, font_size=size, text_anchor=anchor)
+        for i, line in enumerate(value.split('\n')):
+            element(parent, 'tspan', line, x=x, dy=0 if i == 0 else size * 1.15)
+
+    def panel(x, y, w, h, fill, stroke):
+        element(svg, 'rect', x=x, y=y, width=w, height=h, rx=16, fill=fill, stroke=stroke, stroke_width=1.5)
+
+    def node(x, y, kind):
+        fill, stroke = COLORS.get(kind, COLORS['data'])
+        if kind == 'module':
+            element(svg, 'rect', x=x-13, y=y-13, width=26, height=26, fill='#F5F5F5', stroke='#111111', stroke_width=3, **{'data-node': kind})
+        elif kind == 'compute':
+            element(svg, 'path', d=f'M{x} {y-13} L{x+13} {y} L{x} {y+13} L{x-13} {y}Z', fill=fill, stroke=stroke, stroke_width=3, **{'data-node': kind})
+        else:
+            element(svg, 'circle', cx=x, cy=y, r=12, fill=fill, stroke=stroke, stroke_width=3, **{'data-node': kind})
+
+    def wire(x1, y1, x2, y2, arrow=True):
+        attrs = {'class': 'wire'} if arrow else dict(fill='none', stroke='#111111', stroke_width=1.5)
+        element(svg, 'path', d=f'M{x1} {y1} L{x2} {y2}', **attrs)
+
+    panel(20, 20, 1460, 80, '#CCCCCC', '#666666')
+    text(750, 54, 'ASPIRE • Amplicon analysis with Nextflow', 29)
+    text(750, 83, 'Mamba environments • Resource controls • Resumable execution • Audited outputs', 21)
+    panel(20, 120, 770, 130, *COLORS['input'])
+    text(42, 152, 'Inputs', 25, 'start')
+    text(42, 181, 'Paired amplicon reads, sample manifest, metadata and references\nConfigured biological / TECH / BIO sample classes\nOptional: VOC measurements and genome references', 21, 'start')
+    panel(820, 120, 660, 100, '#CCCCCC', '#666666')
+    for x, kind in zip([880, 1010, 1140, 1270, 1400], ['module', 'compute', 'data', 'input', 'output']):
+        text(x, 150, kind.title(), 21)
+        node(x, 183, kind)
+
+    for i, (title, source, steps, output, note) in enumerate(rows):
+        y = 345 + i * gap + (60 if rows is FULL and i > 7 else 0)
+        text(140, y-8, title, 27)
+        node(290, y, 'module')
+        text(290, y+7, str(i+1), 20)
+        node(430, y, 'input')
+        text(430, y-66, source, 21)
+        node(1370, y, 'output')
+        text(1370, y-66, output, 21)
+        wire(304.5, y, 416.5, y)
+        xs = [650, 920, 1160] if len(steps) == 3 else [730, 1070]
+        # Diversity and selected-cohort analysis are parallel consumers.
+        if title == 'Diversity\n& cohort selection':
+            for yy, label in zip([y-25, y+35], steps):
+                node(900, yy, 'compute')
+                text(900, yy-48 if yy < y else yy+30, label, 21)
+                element(svg, 'path', d=f'M443.5 {y} H550 V{yy} H885', **{'class': 'wire'})
+                element(svg, 'path', d=f'M915 {yy} H1260 V{y} H1356.5', **{'class': 'wire'})
+            text(900, y+107, 'Full cohort and selected cohort are exported separately; sample-selection audits record exclusions.', 19)
+        else:
+            last = 443.5
+            for x, label in zip(xs, steps):
+                node(x, y, 'compute')
+                text(x, y-66, label, 21)
+                wire(last, y, x-15, y)
+                last = x+15
+            wire(last, y, 1356.5, y)
+            text(900, y+49, note, 18)
+        if i < len(rows)-1:
+            wire(290, y+14.5, 290, y+gap+(60 if rows is FULL and i == 7 else 0)-14.5)
+    text(750, height-20, 'Numbered modules group related operations; arrows summarize flow and enabled branches follow their dependencies.', 19)
+    target = ROOT / 'docs/assets' / f'{name}.svg'
     ET.ElementTree(svg).write(target, encoding='unicode')
     cairosvg.svg2pdf(url=str(target), write_to=str(target.with_suffix('.pdf')))
     print(f'Built {target.relative_to(ROOT)} and PDF')
 
 
 if __name__ == '__main__':
-    build('workflow',FULL)
-    build('workflow-brief',BRIEF)
+    build('workflow', FULL)
+    build('workflow-brief', BRIEF)

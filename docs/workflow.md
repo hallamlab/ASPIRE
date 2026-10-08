@@ -6,7 +6,9 @@
 
 [Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf)
 
-The core path is read QC and ASV construction → full taxonomy → optional
+Figures follow the shared [MP nodal style](WORKFLOW_STYLE.md): numbered module squares, compute diamonds and data circles.
+
+The core path is optional primer removal → read QC and ASV construction → full taxonomy → optional
 `CONTROL_DECONTAM` → reference screening → `FILTER_ASVS` → `PLOT_METADATA`.
 Independent downstream analyses can overlap when dependencies and resources allow.
 The [process reference](PROCESS_REFERENCE.md) lists task identifiers and outputs.
