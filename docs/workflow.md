@@ -59,3 +59,14 @@ filtering precedes metadata construction. The mock's 0.1% relative-abundance
 threshold applies within biological samples, alongside a 5% nonzero-prevalence
 requirement across those samples. Control presence alone never
 causes removal: the configured decontam prevalence-score threshold must be met.
+
+## Optional primer removal
+
+Enable [Cutadapt primer trimming](primer-trimming.md) to detect and remove paired primers before fastp. Set all four fixed fastp clipping values to zero when enabling this module. The primer audit records retained and discarded pairs, and a cohort check requires a single amplicon family before ASV construction.
+
+Configured `optional.analysis_cohort.exclude_groups` values are retained in
+metadata plots and diversity but removed from the other sample-based optional
+analyses. The selector publishes an audit and synchronizes metadata, counts,
+long tables and CLR rows. Grouping diagnostics use the selected raw cohort;
+batch preparation retains the full biological cohort for consistent diversity
+inputs, followed by downstream cohort selection.

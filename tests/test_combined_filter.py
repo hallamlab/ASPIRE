@@ -1,6 +1,7 @@
 """Preserve both filtering layers and count/sequence agreement."""
 from pathlib import Path
 import subprocess
+import importlib.util
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CombinedFilterTest(unittest.TestCase):
+    def test_unassigned_blank_and_missing_taxonomy_are_removed(self):
+        spec = importlib.util.spec_from_file_location('taxonomy_filter', ROOT/'processes/filter_counts/filter_nontarget.py')
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        labels = ['Unassigned', ' unASSIGNED ', '', None, 'd__; p__; g__',
+                  'd__Unassigned; p__unknown', 'd__Bacteria; g__unclassified',
+                  'd__Archaea', 'd__Eukaryota; p__Vertebrata; c__Mammalia']
+        ids = [f'ASV{i}' for i in range(len(labels))]
+        counts = pd.DataFrame({'S1': range(1, len(ids)+2)}, index=ids+['absent'])
+        taxonomy = pd.DataFrame({'Taxon': labels, 'Consensus': 1.0}, index=ids)
+        actual = module.filter_by_taxonomy(counts, taxonomy, 'Taxon', 'Consensus', .05,
+                                          module.parse_exclude_taxa(['Class:Mammalia']))
+        pd.testing.assert_frame_equal(actual, counts.loc[['ASV6', 'ASV7']])
+
     def test_both_layers_and_final_fasta(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)

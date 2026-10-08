@@ -14,7 +14,7 @@ try {
 }
 
 def inlineKeys = [
-    'paths','resources','fastp','merge','filter','unoise',
+    'paths','resources','primer_trimming','fastp','merge','filter','unoise',
     'table_filter','filename_patterns','environments','config_root',
     'pipeline_config','core','standard','optional'
 ]
@@ -217,6 +217,66 @@ def fastpTrimValues = [
     front_r2: fastpConfigMap.trim_front_r2 != null ? (fastpConfigMap.trim_front_r2 as int) : 0,
     tail_r2 : fastpConfigMap.trim_tail_r2  != null ? (fastpConfigMap.trim_tail_r2  as int) : 0
 ]
+def primerConfig = config.primer_trimming ?: [:]
+if( !(primerConfig instanceof Map) ) {
+    exit 1, "primer_trimming must be a YAML mapping"
+}
+def primerTrimmingEnabled = primerConfig.containsKey('enabled') ? (primerConfig.enabled as boolean) : false
+def primerDefaults = [
+    sample_reads: 5000, max_prefix: 12, min_pair_fraction: 0.5,
+    min_family_fraction: 0.01, min_family_reads: 5, error_rate: 0.1,
+    end_overlap: 12, minimum_length: 1, screen_error_rate: 0.0,
+    primers: [
+        [name: '515F_806R', forward: 'GTGYCAGCMGCCGCGGTAA', reverse: 'GGACTACNVGGGTWTCTAAT'],
+        [name: '515F_926R', forward: 'GTGYCAGCMGCCGCGGTAA', reverse: 'CCGYCAATTYMTTTRAGTTT']
+    ]
+]
+def primerSettings = new LinkedHashMap(primerDefaults)
+primerConfig.each { key, value ->
+    if( key != 'enabled' ) {
+        if( !primerDefaults.containsKey(key) ) { exit 1, "Unknown primer_trimming parameter: ${key}" }
+        primerSettings[key] = value
+    }
+}
+if( primerConfig.containsKey('enabled') && !(primerConfig.enabled instanceof Boolean) ) {
+    exit 1, "primer_trimming.enabled must be true or false (unquoted YAML boolean)"
+}
+['sample_reads', 'max_prefix', 'min_family_reads', 'end_overlap', 'minimum_length'].each { key ->
+    def value = primerSettings[key]
+    def minimum = key == 'max_prefix' ? 0 : 1
+    if( !(value instanceof Number) || value != value.intValue() || value < minimum || (key == 'max_prefix' && value > 100) ) {
+        exit 1, "primer_trimming.${key} must be an integer >= ${minimum}" + (key == 'max_prefix' ? ' and <= 100' : '')
+    }
+}
+['min_pair_fraction', 'min_family_fraction', 'error_rate', 'screen_error_rate'].each { key ->
+    def value = primerSettings[key]
+    def isErrorRate = key in ['error_rate', 'screen_error_rate']
+    if( !(value instanceof Number) || !Double.isFinite(value.doubleValue()) || value > (isErrorRate ? 0.25 : 1) || (isErrorRate ? value < 0 : value <= 0) ) {
+        exit 1, "primer_trimming.${key} must be " + (isErrorRate ? 'between 0 and 0.25' : 'greater than 0 and at most 1')
+    }
+}
+def primerNames = [] as Set
+if( !(primerSettings.primers instanceof List) || primerSettings.primers.isEmpty() ) {
+    exit 1, "primer_trimming.primers must be a nonempty list of name/forward/reverse mappings"
+}
+primerSettings.primers.each { entry ->
+    if( !(entry instanceof Map) || entry.keySet() != (['name', 'forward', 'reverse'] as Set) ||
+        !(entry.name instanceof String) || !(entry.name ==~ /[A-Za-z0-9][A-Za-z0-9_-]*/) || !primerNames.add(entry.name) ||
+        !['forward', 'reverse'].every { key -> entry[key] instanceof String && entry[key].toUpperCase() ==~ /[ACGTRYSWKMBDHVN]{8,100}/ } ) {
+        exit 1, "Invalid primer_trimming.primers entry: require a unique alphanumeric/_/- name and 8–100-base IUPAC forward/reverse sequences"
+    }
+}
+primerSettings.threads = sampleThreads
+def primerSettingsJson = groovy.json.JsonOutput.toJson(primerSettings)
+def primerRunner = new File("${projectDir}/processes/primer_trimming/primer_trimming.py")
+def primerUtility = new File("${projectDir}/scripts/trim_amplicon_primers.py")
+def primerEnvPath = resolvePath(config.environments?.primer_trimming ?: "${projectDir}/processes/primer_trimming/env.yml")
+if( primerTrimmingEnabled && fastpTrimValues.values().any { it != 0 } ) {
+    exit 1, "primer_trimming.enabled requires all four core.fastp.trim_* values to be zero to prevent double trimming"
+}
+if( primerTrimmingEnabled && allowSingleEnd ) {
+    exit 1, "primer_trimming currently requires paired-end inputs"
+}
 if( config.merge && !(config.merge instanceof Map) ) {
     log.warn "Ignoring non-map merge configuration (${config.merge.getClass()?.simpleName})"
 }
@@ -588,6 +648,9 @@ def manifestPath = writeNormalizedManifest(
     new File(dirMap.metadata, 'run_manifest.tsv'),
     configuredManifestPath
 )
+if( primerTrimmingEnabled && sampleRecords.any { !it.paired } ) {
+    exit 1, "primer_trimming requires both FASTQ mates for every manifest sample"
+}
 log.info "Discovered ${sampleRecords.size()} input items from ${configuredManifestPath ? "manifest ${configuredManifestPath}" : inputDir}. Normalized manifest: ${manifestPath}. Sample threads=${sampleThreads}, default threads=${pipelineThreads}"
 
 Channel
@@ -629,6 +692,7 @@ if( !mitomasterScriptFile.exists() ) {
     exit 1, "mitomaster.py not found in project directory"
 }
 def mitomasterScriptPath = mitomasterScriptFile.canonicalPath
+def mitomasterScriptHash = fileMd5(mitomasterScriptFile)
 def mitoCheckerScriptFile = new File("${projectDir}/processes/mito_decontam/mito_checker.py")
 if( !mitoCheckerScriptFile.exists() ) {
     exit 1, "mito_checker.py not found in project directory"
@@ -656,6 +720,7 @@ if( !outlierCheckerScriptFile.exists() ) {
     exit 1, "outlier_checker.py not found in project directory"
 }
 def outlierCheckerScriptPath = outlierCheckerScriptFile.canonicalPath
+def outlierCheckerScriptHash = fileMd5(outlierCheckerScriptFile)
 def collectorsCurveScriptFile = new File("${projectDir}/processes/collectors_curve/collectors_curve.py")
 if( !collectorsCurveScriptFile.exists() ) {
     exit 1, "collectors_curve.py not found in project directory"
@@ -710,6 +775,7 @@ if( !plotIndicspeciesScriptFile.exists() ) {
     exit 1, "plot_indicspecies.py not found in project directory"
 }
 def plotIndicspeciesScriptPath = plotIndicspeciesScriptFile.canonicalPath
+def plotIndicspeciesScriptHash = fileMd5(plotIndicspeciesScriptFile)
 def plotIndicspeciesAlignedScriptFile = new File("${projectDir}/processes/indicspecies_aligned_plots/plot_indicspecies_aligned.py")
 if( !plotIndicspeciesAlignedScriptFile.exists() ) {
     exit 1, "plot_indicspecies_aligned.py not found in project directory"
@@ -971,6 +1037,10 @@ def mitoChunkSize = mitoConfig.chunk_size ? (mitoConfig.chunk_size as int) : 10
 def mitomasterWorkers = mitoConfig.mitomaster_workers ? (mitoConfig.mitomaster_workers as int) : 8
 def mitomasterRetries = mitoConfig.mitomaster_retries ? (mitoConfig.mitomaster_retries as int) : 4
 def mitomasterTimeout = mitoConfig.mitomaster_timeout ? (mitoConfig.mitomaster_timeout as int) : 90
+def mitomasterFailurePolicy = mitoConfig.mitomaster_failure_policy ?: 'fail'
+if( !(mitomasterFailurePolicy in ['fail', 'continue']) ) {
+    exit 1, 'mito.mitomaster_failure_policy must be fail or continue'
+}
 def mitomasterHeaderMode = mitoConfig.mitomaster_header_mode ?: 'first'
 def mitoRunMitomaster = mitoConfig.containsKey('run_mitomaster') ? (mitoConfig.run_mitomaster as boolean) : true
 def mitoBlastThreads = mitoConfig.blast_threads ? (mitoConfig.blast_threads as int) : pipelineThreads
@@ -1266,6 +1336,20 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     boolean metadataForceMicroOnly = metadataPlotsRunMicro && !metadataPlotsRunMito
     boolean metadataForceMitoOnly = metadataPlotsRunMito && !metadataPlotsRunMicro
 
+    def analysisCohortConfig = config.analysis_cohort ?: [:]
+    def analysisCohortExcluded = analysisCohortConfig.exclude_groups ?: []
+    if( !(analysisCohortExcluded instanceof List) ) {
+        exit 1, "analysis_cohort.exclude_groups must be a YAML list"
+    }
+    boolean analysisCohortEnabled = !analysisCohortExcluded.isEmpty()
+    def analysisCohortSettingsJson = groovy.json.JsonOutput.toJson([
+        sample_col: analysisCohortConfig.sample_col ?: metadataPlotsSampleCol,
+        group_col: analysisCohortConfig.group_col ?: metadataPlotsTypeCol,
+        exclude_groups: analysisCohortExcluded
+    ])
+    def analysisCohortScript = new File("${projectDir}/processes/analysis_cohort/select_cohort.py")
+    def analysisCohortScriptHash = fileMd5(analysisCohortScript)
+
     def batchCorrectionConfig = config.batch_correction ?: [:]
     boolean batchCorrectionEnabled = metadataPlotsEnabled && (batchCorrectionConfig.containsKey('enabled') ? (batchCorrectionConfig.enabled as boolean) : true)
     def batchCorrectionOutputDir = batchCorrectionConfig.output_dir ?: 'batch_correction'
@@ -1523,6 +1607,10 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     boolean diversityPatientAwareRequireCompleteTypes = diversityPatientAwareConfig.containsKey('require_complete_types') ?
         (diversityPatientAwareConfig.require_complete_types as boolean) : false
     return [
+        analysisCohortEnabled: analysisCohortEnabled,
+        analysisCohortSettingsJson: analysisCohortSettingsJson,
+        analysisCohortScript: analysisCohortScript,
+        analysisCohortScriptHash: analysisCohortScriptHash,
         metadataPlotsMetadataPath: metadataPlotsMetadataPath,
         metadataPlotsSubDir: metadataPlotsSubDir,
         metadataPlotsSampleCol: metadataPlotsSampleCol,
@@ -1874,6 +1962,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationIsaAllTypeGroupsRaw.toString().trim()
     boolean vocCorrelationIsaExcludeAllTypes = vocCorrelationConfig.containsKey('isa_exclude_all_types_from_focus') ?
         (vocCorrelationConfig.isa_exclude_all_types_from_focus as boolean) : true
+    def vocCorrelationIsaDistinctArg = vocCorrelationConfig.isa_exclude_nondistinct == true ? "--isa-exclude-nondistinct" : ""
     def vocCorrelationIsaMinAbsRho = vocCorrelationConfig.isa_min_abs_rho != null ?
         (vocCorrelationConfig.isa_min_abs_rho as double) : 0.0d
     if( vocCorrelationIsaMinAbsRho < 0d || vocCorrelationIsaMinAbsRho > 1d ) {
@@ -2589,6 +2678,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationIsaFocusGroups: vocCorrelationIsaFocusGroups,
         vocCorrelationIsaAllTypeGroups: vocCorrelationIsaAllTypeGroups,
         vocCorrelationIsaExcludeAllTypes: vocCorrelationIsaExcludeAllTypes,
+        vocCorrelationIsaDistinctArg: vocCorrelationIsaDistinctArg,
         vocCorrelationIsaMinAbsRho: vocCorrelationIsaMinAbsRho,
         vocCorrelationSampleMinAbsZ: vocCorrelationSampleMinAbsZ,
         vocPatientInference: vocPatientInference,
@@ -2876,7 +2966,10 @@ workflow {
             standardStage.filtered_decon,
             standardStage.filtered_micro,
             standardStage.filtered_fasta,
-            coreStage.taxonomy_table
+            coreStage.taxonomy_table,
+            standardStage.filtered_counts,
+            coreStage.sankey_control_audit,
+            coreStage.sankey_cleaned_counts
         )
     }
 }
@@ -2887,6 +2980,11 @@ workflow core {
 
     main:
     def rawReadsForAsv = raw_reads_input
+    if( primerTrimmingEnabled ) {
+        def primers = PRIMER_TRIM(rawReadsForAsv, Channel.value(file(primerRunner)), Channel.value(file(primerUtility)), primerSettingsJson)
+        def checked = PRIMER_TRIM_CHECK(primers.summary.collect(), Channel.value(file(primerRunner)))
+        rawReadsForAsv = primers.reads.combine(checked.done).map { meta, r1, r2, audit -> tuple(meta, r1, r2) }
+    }
     def fastp_result = FASTP_QC(rawReadsForAsv)
     def reads_after_qc = fastp_result.reads
     def reads_after_merge = MERGE_READS(reads_after_qc)
@@ -2913,6 +3011,8 @@ workflow core {
     def sina_stage = SINA_TRIM(all_asv_fasta)
     def taxonomy_stage = TAXONOMY(sina_stage.trimmed_fasta)
     def counts_for_feature_filter = count_matrix_channel
+    def sankeyControlAudit = Channel.value(file(emptyModulesPath))
+    def sankeyCleanedCounts = Channel.value(file(emptyModulesPath))
     if( controlDecontamEnabled ) {
         def decontam_stage = CONTROL_DECONTAM(
             count_matrix_channel,
@@ -2920,11 +3020,15 @@ workflow core {
             Channel.value(file(controlDecontamMetadataPath))
         )
         counts_for_feature_filter = decontam_stage.cleaned
+        sankeyControlAudit = decontam_stage.audit
+        sankeyCleanedCounts = decontam_stage.cleaned.map { parts -> parts[0] }
     }
 
     emit:
     concat_counts = concat_for_counts
     raw_counts_sankey = asv_counts_for_sankey
+    sankey_control_audit = sankeyControlAudit
+    sankey_cleaned_counts = sankeyCleanedCounts
     prepared = counts_for_feature_filter
     taxonomy_table = taxonomy_stage.taxonomy_table
 }
@@ -2979,6 +3083,7 @@ workflow standard {
     filtered_stats = filteredStats
     filtered_decon = filteredDecon
     filtered_micro = filteredMicro
+    filtered_counts = filter_counts_stage.filtered_counts
     filtered_mito = filteredMito
     metadata_micro = metadataMicro
     asv_meta = baseAsvMeta
@@ -2998,6 +3103,9 @@ workflow optional {
     filtered_micro
     filtered_fasta
     taxonomy_table
+    final_filtered_counts
+    control_audit
+    cleaned_counts
 
     main:
     baseAsvMeta = base_asv_meta.map { it }
@@ -3041,6 +3149,14 @@ workflow optional {
     asvFinalForLungStatus = baseAsvFinal.map { it }
     asvFinalForMasterSummary = baseAsvFinal.map { it }
 
+    if( analysisCohortEnabled && groupingDiagnosticsEnabled ) {
+        diagnostic_cohort_stage = ANALYSIS_COHORT_DIAGNOSTICS(
+            metaMicroForGroupingDiagnostics, asvFinalForGroupingDiagnostics
+        )
+        metaMicroForGroupingDiagnostics = diagnostic_cohort_stage.metadata
+        asvFinalForGroupingDiagnostics = diagnostic_cohort_stage.counts
+    }
+
     grouping_diagnostics_stage = null
     if( groupingDiagnosticsEnabled ) {
         grouping_diagnostics_stage = GROUPING_DIAGNOSTICS(
@@ -3079,10 +3195,6 @@ workflow optional {
         asvMetaForMasterSummary = group_label_augmentation_stage.asv_meta_augmented.map { it }
     }
 
-    if( plotUpsetEnabled ) {
-        PLOT_UPSET(metaMicroForPlotUpset)
-    }
-
     batch_stage = null
     asvClrForOutlier = null
     if( batchCorrectionEnabled ) {
@@ -3105,7 +3217,7 @@ workflow optional {
         asvFinalForLungStatus = batch_stage.asv_selected_counts_int.map { it }
         asvFinalForMasterSummary = batch_stage.asv_selected_counts_int.map { it }
         umapResultsForTrajectory = batch_stage.umap_results
-        if( bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
+        if( analysisCohortEnabled || bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
             corrected_asv_meta_stage = ASV_META_FROM_CORRECTED(
                 asvMetaSeedForCorrection,
                 batch_stage.asv_selected_counts_int
@@ -3120,6 +3232,47 @@ workflow optional {
             asvMetaForLungStatus = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForMasterSummary = corrected_asv_meta_stage.asv_meta_corrected.map { it }
         }
+    }
+    if( analysisCohortEnabled ) {
+        analysis_cohort_stage = ANALYSIS_COHORT(
+            metaMicroForIndicspecies,
+            asvFinalForIndicspecies,
+            asvMetaForVocCorrelation,
+            batchCorrectionEnabled ? asvClrForOutlier : Channel.value(file(emptyModulesPath))
+        )
+        metaMicroForOutlier = analysis_cohort_stage.metadata.map { it }
+        metaMicroForPlotUpset = analysis_cohort_stage.metadata.map { it }
+        metaMicroForCollectors = analysis_cohort_stage.metadata.map { it }
+        metaMicroForIndicspecies = analysis_cohort_stage.metadata.map { it }
+        metaMicroForIndicspeciesPlots = analysis_cohort_stage.metadata.map { it }
+        metaMicroForClustermaps = analysis_cohort_stage.metadata.map { it }
+        metaMicroForNetwork = analysis_cohort_stage.metadata.map { it }
+        metaMicroForMeasurementAssociation = analysis_cohort_stage.metadata.map { it }
+        asvMetaForBubbleplotter = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForUmap = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForClustermaps = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForVocCorrelation = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForMeasurementAssociation = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForPowerAnalysis = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForTaxonomyPatientAware = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForLungStatus = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForMasterSummary = analysis_cohort_stage.asv_metadata.map { it }
+        asvFinalForCollectors = analysis_cohort_stage.counts.map { it }
+        asvFinalForIndicspecies = analysis_cohort_stage.counts.map { it }
+        asvFinalForSpieceasi = analysis_cohort_stage.counts.map { it }
+        asvFinalForNetwork = analysis_cohort_stage.counts.map { it }
+        asvFinalForVocCorrelation = analysis_cohort_stage.counts.map { it }
+        asvFinalForMeasurementAssociation = analysis_cohort_stage.counts.map { it }
+        asvFinalForPowerAnalysis = analysis_cohort_stage.counts.map { it }
+        asvFinalForTaxonomyPatientAware = analysis_cohort_stage.counts.map { it }
+        asvFinalForLungStatus = analysis_cohort_stage.counts.map { it }
+        asvFinalForMasterSummary = analysis_cohort_stage.counts.map { it }
+        if( batchCorrectionEnabled ) {
+            asvClrForOutlier = analysis_cohort_stage.clr
+        }
+    }
+    if( plotUpsetEnabled ) {
+        PLOT_UPSET(metaMicroForPlotUpset)
     }
     if( bubbleplotterEnabled ) {
         BUBBLEPLOTTER(asvMetaForBubbleplotter)
@@ -3325,7 +3478,10 @@ workflow optional {
             filtered_stats,
             raw_counts_sankey,
             filtered_decon,
-            filtered_micro
+            filtered_micro,
+            final_filtered_counts,
+            control_audit,
+            cleaned_counts
         )
     }
     if( masterSummaryEnabled ) {
@@ -3416,6 +3572,14 @@ workflow RUN_METADATA_ANALYSES {
     asvFinalForLungStatus = baseAsvFinal.map { it }
     asvFinalForMasterSummary = baseAsvFinal.map { it }
 
+    if( analysisCohortEnabled && groupingDiagnosticsEnabled ) {
+        diagnostic_cohort_stage = ANALYSIS_COHORT_DIAGNOSTICS(
+            metaMicroForGroupingDiagnostics, asvFinalForGroupingDiagnostics
+        )
+        metaMicroForGroupingDiagnostics = diagnostic_cohort_stage.metadata
+        asvFinalForGroupingDiagnostics = diagnostic_cohort_stage.counts
+    }
+
     grouping_diagnostics_stage = null
     if( groupingDiagnosticsEnabled ) {
         grouping_diagnostics_stage = GROUPING_DIAGNOSTICS(
@@ -3454,10 +3618,6 @@ workflow RUN_METADATA_ANALYSES {
         asvMetaForMasterSummary = group_label_augmentation_stage.asv_meta_augmented.map { it }
     }
 
-    if( plotUpsetEnabled ) {
-        PLOT_UPSET(metaMicroForPlotUpset)
-    }
-
     batch_stage = null
     asvClrForOutlier = null
     if( batchCorrectionEnabled ) {
@@ -3480,7 +3640,7 @@ workflow RUN_METADATA_ANALYSES {
         asvFinalForLungStatus = batch_stage.asv_selected_counts_int.map { it }
         asvFinalForMasterSummary = batch_stage.asv_selected_counts_int.map { it }
         umapResultsForTrajectory = batch_stage.umap_results
-        if( bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
+        if( analysisCohortEnabled || bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
             corrected_asv_meta_stage = ASV_META_FROM_CORRECTED(
                 asvMetaSeedForCorrection,
                 batch_stage.asv_selected_counts_int
@@ -3495,6 +3655,47 @@ workflow RUN_METADATA_ANALYSES {
             asvMetaForLungStatus = corrected_asv_meta_stage.asv_meta_corrected.map { it }
             asvMetaForMasterSummary = corrected_asv_meta_stage.asv_meta_corrected.map { it }
         }
+    }
+    if( analysisCohortEnabled ) {
+        analysis_cohort_stage = ANALYSIS_COHORT(
+            metaMicroForIndicspecies,
+            asvFinalForIndicspecies,
+            asvMetaForVocCorrelation,
+            batchCorrectionEnabled ? asvClrForOutlier : Channel.value(file(emptyModulesPath))
+        )
+        metaMicroForOutlier = analysis_cohort_stage.metadata.map { it }
+        metaMicroForPlotUpset = analysis_cohort_stage.metadata.map { it }
+        metaMicroForCollectors = analysis_cohort_stage.metadata.map { it }
+        metaMicroForIndicspecies = analysis_cohort_stage.metadata.map { it }
+        metaMicroForIndicspeciesPlots = analysis_cohort_stage.metadata.map { it }
+        metaMicroForClustermaps = analysis_cohort_stage.metadata.map { it }
+        metaMicroForNetwork = analysis_cohort_stage.metadata.map { it }
+        metaMicroForMeasurementAssociation = analysis_cohort_stage.metadata.map { it }
+        asvMetaForBubbleplotter = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForUmap = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForClustermaps = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForVocCorrelation = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForMeasurementAssociation = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForPowerAnalysis = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForTaxonomyPatientAware = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForLungStatus = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForMasterSummary = analysis_cohort_stage.asv_metadata.map { it }
+        asvFinalForCollectors = analysis_cohort_stage.counts.map { it }
+        asvFinalForIndicspecies = analysis_cohort_stage.counts.map { it }
+        asvFinalForSpieceasi = analysis_cohort_stage.counts.map { it }
+        asvFinalForNetwork = analysis_cohort_stage.counts.map { it }
+        asvFinalForVocCorrelation = analysis_cohort_stage.counts.map { it }
+        asvFinalForMeasurementAssociation = analysis_cohort_stage.counts.map { it }
+        asvFinalForPowerAnalysis = analysis_cohort_stage.counts.map { it }
+        asvFinalForTaxonomyPatientAware = analysis_cohort_stage.counts.map { it }
+        asvFinalForLungStatus = analysis_cohort_stage.counts.map { it }
+        asvFinalForMasterSummary = analysis_cohort_stage.counts.map { it }
+        if( batchCorrectionEnabled ) {
+            asvClrForOutlier = analysis_cohort_stage.clr
+        }
+    }
+    if( plotUpsetEnabled ) {
+        PLOT_UPSET(metaMicroForPlotUpset)
     }
     if( bubbleplotterEnabled ) {
         BUBBLEPLOTTER(asvMetaForBubbleplotter)
@@ -3762,6 +3963,49 @@ workflow RUN_FROM_FINAL_CHECKPOINT {
             networkTopologyDone
         )
     }
+}
+
+process PRIMER_TRIM {
+    tag { meta.sample_id }
+    cpus sampleThreads
+    conda "${primerEnvPath}"
+    publishDir "${outputDir}/primer_trimmed", mode: 'copy', pattern: 'reads', saveAs: { filename -> meta.sample_id }
+    publishDir "${outputDir}/primer_trimming", mode: 'copy', pattern: 'audit', saveAs: { filename -> meta.sample_id }
+    publishDir "${outputDir}/primer_trimming", mode: 'copy', pattern: '*.primer_summary.json'
+
+    input:
+    tuple val(meta), path(r1), path(r2)
+    path runner
+    path utility
+    val settings
+
+    output:
+    tuple val(meta), path("reads/trimmed/${meta.sample_id}_R1.fastq.gz"), path("reads/trimmed/${meta.sample_id}_R2.fastq.gz"), emit: reads
+    path("${meta.sample_id}.primer_summary.json"), emit: summary
+    path('reads'), emit: read_audit
+    path('audit'), emit: audit
+
+    script:
+    """
+cat > primer_settings.json <<'ASPIRE_PRIMER_SETTINGS'
+${settings}
+ASPIRE_PRIMER_SETTINGS
+python "${runner}" run --sample "${meta.sample_id}" --r1 "${r1}" --r2 "${r2}" --settings primer_settings.json --utility "${utility}"
+"""
+}
+
+process PRIMER_TRIM_CHECK {
+    conda "${primerEnvPath}"
+    publishDir "${outputDir}/primer_trimming", mode: 'copy'
+    input:
+    path summaries
+    path runner
+    output:
+    path('primer_cohort.json'), emit: done
+    script:
+    """
+python "${runner}" check --summaries *.primer_summary.json --output primer_cohort.json
+"""
 }
 
 process FASTP_QC {
@@ -4172,6 +4416,8 @@ process MITOMASTER {
 
     output:
     tuple path("mitomaster_output.tsv"), path("mito_ncbi.blast6.tsv"), path("ssu_pipeline_contaminants.blast6.tsv"), emit: mito_artifacts
+    path("mitomaster_output.status.json"), optional: true, emit: api_status
+    path("mitomaster_output.failures.tsv"), optional: true, emit: api_failures
 
     script:
     def filteredFastaPath = filtered_fasta.toString().trim()
@@ -4184,11 +4430,13 @@ python "${mitomasterScriptPath}" \\
   --max-workers ${mitomasterWorkers} \\
   --timeout ${mitomasterTimeout} \\
   --retries ${mitomasterRetries} \\
+  --failure-policy "${mitomasterFailurePolicy}" \\
   --header-mode "${mitomasterHeaderMode}" \\
   --overwrite
 """ : "printf 'Sequence_ID\\thaplo\\n' > mitomaster_output.tsv"
     """
 set -euo pipefail
+echo "MITOMASTER helper: ${mitomasterScriptHash}"
 rm -rf "${mitoChunkDirPath}"
 mkdir -p "${mitoChunkDirPath}"
 gzip -cd "${filteredFastaPath}" > filtered_input.fasta
@@ -4336,6 +4584,9 @@ process SANKEY {
     path(asv_counts)
     path(asv_decon_counts)
     path(asv_micro_counts)
+    path(asv_final_counts)
+    path(control_audit, stageAs: 'control_audit')
+    path(cleaned_counts, stageAs: 'cleaned_counts.tsv')
 
     output:
     path("sankey.done"), emit: done
@@ -4346,6 +4597,7 @@ process SANKEY {
     script:
     def keepTypesArg = sankeyKeepTypes && !sankeyKeepTypes.isEmpty() ? "  --keep-types \"${sankeyKeepTypes.join(',')}\" \\\n" : ''
     def verticalOrderArg = sankeyVerticalOrder && !sankeyVerticalOrder.isEmpty() ? "  --vertical-order \"${sankeyVerticalOrder.join(',')}\" \\\n" : ''
+    def controlAuditArgs = controlDecontamEnabled ? "--sample-qc \"\$PWD/${control_audit}/sample_qc.tsv\" --asv-cleaned \"\$PWD/${cleaned_counts}\"" : ''
     def rawOutputPrefix = "${sankeyOutputPrefix}_raw"
     def labeledFlag = sankeyMakeLabeled ? "  --make-labeled \\\n" : ''
     def unlabeledFlag = sankeyMakeUnlabeled ? "  --make-unlabeled \\\n" : ''
@@ -4361,11 +4613,12 @@ python3 "${sankeyScriptPath}" \\
   --samp-col "${sankeySampCol}" \\
   --group1-col "${sankeyGroupCol}" \\
   --color-col "${sankeyColorCol}" \\
-${keepTypesArg}${verticalOrderArg}  --fastq-stats stats/"${fastq_stats}" \\
-  --filtered-stats stats/"${filtered_stats}" \\
-  --asv-raw ASVs/"${asv_counts}" \\
-  --asv-decon ASVs/"${asv_decon_counts}" \\
-  --asv-micro ASVs/"${asv_micro_counts}" \\
+${keepTypesArg}${verticalOrderArg}  --fastq-stats "\$PWD/${fastq_stats}" \\
+  --filtered-stats "\$PWD/${filtered_stats}" \\
+  --asv-raw "\$PWD/${asv_counts}" \\
+  --asv-decon "\$PWD/${asv_decon_counts}" \\
+  --asv-micro "\$PWD/${asv_micro_counts}" \\
+  --asv-final "\$PWD/${asv_final_counts}" ${controlAuditArgs} \\
   --title "${sankeyTitle}" \\
   --arrangement "${sankeyArrangement}" \\
   --output-prefix "${sankeyOutputPrefix}" \\
@@ -4379,11 +4632,12 @@ python3 "${sankeyScriptPath}" \\
   --samp-col "${sankeySampCol}" \\
   --group1-col "${sankeyGroupCol}" \\
   --color-col "${sankeyColorCol}" \\
-${verticalOrderArg}  --fastq-stats stats/"${fastq_stats}" \\
-  --filtered-stats stats/"${filtered_stats}" \\
-  --asv-raw ASVs/"${asv_counts}" \\
-  --asv-decon ASVs/"${asv_decon_counts}" \\
-  --asv-micro ASVs/"${asv_micro_counts}" \\
+${verticalOrderArg}  --fastq-stats "\$PWD/${fastq_stats}" \\
+  --filtered-stats "\$PWD/${filtered_stats}" \\
+  --asv-raw "\$PWD/${asv_counts}" \\
+  --asv-decon "\$PWD/${asv_decon_counts}" \\
+  --asv-micro "\$PWD/${asv_micro_counts}" \\
+  --asv-final "\$PWD/${asv_final_counts}" ${controlAuditArgs} \\
   --title "${sankeyTitle}" \\
   --arrangement "${sankeyArrangement}" \\
   --output-prefix "${rawOutputPrefix}" \\
@@ -4632,10 +4886,10 @@ process PLOT_UPSET {
     def skipVennArg = plotUpsetSkipVenn ? "  --skip-venn \\\n" : ''
     def rawOnlyArg = plotUpsetRawOnly ? "  --raw-only \\\n" : ''
     def finalOnlyArg = plotUpsetFinalOnly ? "  --final-only \\\n" : ''
-    def rawMicroMetadataPath = "${outputDir}/metadata/metadata_updated_micro_raw.tsv"
+    def rawMicroMetadataPath = analysisCohortEnabled ? "\$PWD/${metadata_table}" : "${outputDir}/metadata/metadata_updated_micro_raw.tsv"
     def rawMicroFinalAsvPath = "${outputDir}/ASVs/ASV_final_raw.micro.tsv"
     def rawMicroAsvTargetPath = "${outputDir}/ASVs/ASV_target.micro.tsv"
-    def rawMitoMetadataPath = "${outputDir}/mito/metadata/metadata_updated_mito_raw.tsv"
+    def rawMitoMetadataPath = analysisCohortEnabled ? "\$PWD/${metadata_table}" : "${outputDir}/mito/metadata/metadata_updated_mito_raw.tsv"
     def rawMitoFinalAsvPath = "${outputDir}/mito/ASVs/ASV_final_raw.mito.tsv"
     def rawMitoAsvTargetPath = "${outputDir}/mito/ASVs/ASV_target.mito.tsv"
     def rawMetadataPathSingle = plotUpsetDomain == 'mito' ? rawMitoMetadataPath : rawMicroMetadataPath
@@ -4648,6 +4902,7 @@ python "${plotUpsetScriptPath}" \\
   --data-dir "${outputDir}" \\
   --subdir "${plotUpsetSubDir}" \\
   --domain "${plotUpsetDomain}" \\
+  --metadata-path "\$PWD/${metadata_table}" \\
 ${taxonomyArg}  --sample-id-col "${plotUpsetSampleIdCol}" \\
   --group-col "${plotUpsetGroupCol}" \\
   --color-col "${plotUpsetColorCol}" \\
@@ -4930,6 +5185,54 @@ ln -sf "${umapResultsFile}" umap_hdbscan_results.tsv
 """
 }
 
+process ANALYSIS_COHORT_DIAGNOSTICS {
+    cpus 1
+    conda "${batchCorrectionCondaEnvPath}"
+    input:
+    path(metadata)
+    path(counts)
+    output:
+    path("cohort/metadata.tsv"), emit: metadata
+    path("cohort/counts.tsv"), emit: counts
+    script:
+    """
+set -euo pipefail
+# selector: ${analysisCohortScriptHash}
+cat > cohort-settings.json <<'JSON'
+${analysisCohortSettingsJson}
+JSON
+python "${analysisCohortScript}" --metadata "${metadata}" --counts "${counts}" --settings cohort-settings.json --outdir cohort
+"""
+}
+
+process ANALYSIS_COHORT {
+    cpus 1
+    conda "${batchCorrectionCondaEnvPath}"
+    publishDir "${outputDir}/analysis_cohort", mode: 'copy'
+    input:
+    path(metadata)
+    path(counts)
+    path(asv_metadata)
+    path(clr_input)
+    output:
+    path("cohort/metadata.tsv"), emit: metadata
+    path("cohort/counts.tsv"), emit: counts
+    path("cohort/asv_metadata.tsv"), emit: asv_metadata
+    path("cohort/clr.tsv"), optional: true, emit: clr
+    path("cohort/sample_selection.tsv"), emit: audit
+    path("cohort/summary.json"), emit: summary
+    script:
+    def clrArg = batchCorrectionEnabled ? "--clr '${clr_input}'" : ''
+    """
+set -euo pipefail
+# selector: ${analysisCohortScriptHash}
+cat > cohort-settings.json <<'JSON'
+${analysisCohortSettingsJson}
+JSON
+python "${analysisCohortScript}" --metadata "${metadata}" --counts "${counts}" --settings cohort-settings.json --outdir cohort --long "${asv_metadata}" ${clrArg}
+"""
+}
+
 process ASV_META_FROM_CORRECTED {
     cpus 1
     conda "${batchCorrectionCondaEnvPath}"
@@ -4942,7 +5245,7 @@ process ASV_META_FROM_CORRECTED {
     path("ASV_meta_micro.corrected.tsv"), emit: asv_meta_corrected
 
     when:
-    batchCorrectionEnabled && (bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled)
+    batchCorrectionEnabled
 
     script:
     """
@@ -5019,13 +5322,14 @@ process OUTLIER_CHECKER {
     def preTransFlag = outlierPreTransformed ? "  --pre-transformed \\\n" : ''
     def scaleFlag = outlierScale ? "  --scale \\\n" : ''
     def hdbMinSamplesArg = outlierHdbMinSamples != null ? "  --hdbscan-min-samples ${outlierHdbMinSamples} \\\n" : ''
-    def updated_metadata = "metadata/${metadata_table}"
-    def asvClrAfterFile = "${batchCorrectionOutputDirAbs}/asv_clr_after_correction.tsv"
+    def updated_metadata = "\$PWD/${metadata_table}"
+    def asvClrAfterFile = "\$PWD/${asv_clr}"
 
 
     """
 set -euo pipefail
 
+# outlier script: ${outlierCheckerScriptHash}
 python "${outlierCheckerScriptPath}" \\
   --data-dir "${outputDir}" \\
   --asv "${asvClrAfterFile}" \\
@@ -5322,6 +5626,7 @@ import re
 import subprocess
 import sys
 
+# ISA plot script: ${plotIndicspeciesScriptHash}
 plot_script = Path("${plotIndicspeciesScriptPath}")
 out_root = Path("${indicspeciesPlotOutputDirAbs}")
 pairs_mode = "${plotPairsMode}"
@@ -5556,7 +5861,7 @@ ${legacySubsetArg}${vocColsArgs}  --spieceasi-min-rel-abund ${spieceasiMinRelAbu
   --isa-q-threshold ${indicspeciesQThreshold} \\
   --isa-focus-groups "${vocCorrelationIsaFocusGroups}" \\
   --isa-all-type-groups "${vocCorrelationIsaAllTypeGroups}" \\
-  --isa-exclude-all-types-from-focus "${vocCorrelationIsaExcludeAllTypes}" \\
+  ${vocCorrelationIsaDistinctArg} --isa-exclude-all-types-from-focus "${vocCorrelationIsaExcludeAllTypes}" \\
   --isa-min-abs-rho ${vocCorrelationIsaMinAbsRho} \\
   --sample-min-abs-z ${vocCorrelationSampleMinAbsZ} \\
   --patient-inference ${vocPatientInference} \\

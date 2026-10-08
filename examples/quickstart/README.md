@@ -36,7 +36,9 @@ analysis path is retained. Other analysis settings and all truth-recovery checks
 are shared with the manuscript configuration; use the latter's full grid for
 power-analysis interpretation.
 
-`validation.txt` and `validation.json` record the successful 29-check validation,
+`validation.txt` and `validation.json` record the successful pre-Cutadapt 29-check validation,
 including the fixture checksum, generator hash and run settings. The recorded run
 used eight threads and retained 24 ASVs in 30 biological samples. It recovered
 two planted indicators, three positive VOC pairs and 30 planted network edges.
+
+The current generated configuration enables Cutadapt and its additional primer audit checks. Re-run and validate this configuration to obtain current-run evidence.

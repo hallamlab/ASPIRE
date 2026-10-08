@@ -46,22 +46,6 @@ from typing import Dict, List, Tuple, Sequence, Optional
 from xml.sax.saxutils import escape
 
 import pandas as pd
-import plotly.graph_objects as go
-
-# Optional aesthetics (kept simple; plots are Plotly HTML)
-import matplotlib as mpl
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# ---------- Global aesthetics (safe no-ops if MPL not used) ----------
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['svg.fonttype'] = 'none'
-mpl.rcParams['savefig.dpi'] = 600
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['font.family'] = 'Source Sans Pro'
-sns.set_theme()
-sns.set_style("white")
-
 
 # =========================
 # Utility parsers / helpers
@@ -241,200 +225,135 @@ def group_counts_by_group(long_counts: pd.DataFrame, metadata: pd.DataFrame,
 # =========================
 # Sankey construction
 # =========================
-def write_fallback_svg(output_svg: Path, title: str, steps: List[str], counts: List[int],
-                       lmp_in: Dict[str, int], lmp_out: Dict[str, int],
-                       palette: Dict[str, str], labeled: bool) -> None:
-    """
-    Write a compact static SVG summary when Plotly/Kaleido export is unavailable.
-    This keeps publication contracts and reports complete on servers without Chrome.
-    """
-    width, height = 1200, 760
-    margin_x = 80
-    top = 110
-    row_h = 34
-    text_color = "#222222"
-
-    def color_for(key: str, fallback: str = "#555555") -> str:
-        value = palette.get(key, fallback) or fallback
-        return value if value.startswith("#") or value.isalpha() else fallback
-
-    elements = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<rect width="100%" height="100%" fill="white"/>',
-        f'<text x="{margin_x}" y="48" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="{text_color}">{escape(title)}</text>',
-        f'<text x="{margin_x}" y="78" font-family="Arial, sans-serif" font-size="14" fill="#666666">Static fallback export; interactive Sankey is available in the matching HTML file.</text>',
-    ]
-
-    columns = [
-        ("Input groups", lmp_in, margin_x),
-        ("Processing steps", dict(zip(steps, counts)), 440),
-        ("Output groups", lmp_out, 820),
-    ]
-    max_value = max([1] + [int(v) for _, values, _ in columns for v in values.values()])
-
-    for heading, values, x in columns:
-        elements.append(
-            f'<text x="{x}" y="{top - 28}" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="{text_color}">{escape(heading)}</text>'
-        )
-        for idx, (name, value) in enumerate(values.items()):
-            y = top + idx * row_h
-            bar_w = max(8, int(260 * (int(value) / max_value)))
-            fill = color_for(name, "#444444" if heading == "Processing steps" else "#999999")
-            label = f"{name}: {int(value):,}" if labeled else f"{int(value):,}"
-            elements.extend([
-                f'<rect x="{x}" y="{y - 18}" width="{bar_w}" height="22" rx="2" fill="{fill}" opacity="0.9"/>',
-                f'<text x="{x}" y="{y + 20}" font-family="Arial, sans-serif" font-size="12" fill="{text_color}">{escape(label)}</text>',
-            ])
-
-    # Simple flow guide so the fallback still reads as a left-to-right process.
-    for x1, x2 in ((350, 420), (730, 800)):
-        elements.extend([
-            f'<line x1="{x1}" y1="360" x2="{x2}" y2="360" stroke="#777777" stroke-width="3"/>',
-            f'<polygon points="{x2},360 {x2 - 12},353 {x2 - 12},367" fill="#777777"/>',
-        ])
-
-    elements.append("</svg>")
-    output_svg.write_text("\n".join(elements) + "\n", encoding="utf-8")
-
-
 def build_sankey(steps: List[str], counts: List[int],
                  lmp_in: Dict[str, int], lmp_out: Dict[str, int],
                  palette: Dict[str, str], title: str,
                  output_html: Path, labeled: bool,
-                 arrangement: str = "snap") -> None:
-    """
-    Build and save a Plotly HTML sankey.
-    """
-    # Helper to safely get color with black as fallback
-    def get_color(key: str) -> str:
-        color = palette.get(key, "black")
-        return color if color else "black"
+                 arrangement: str = "snap", loss_groups=None) -> None:
+    """Export the same count-conserving, ordered layout to SVG and interactive HTML."""
+    import json
+    import textwrap
+    from html import escape as esc
+    if len(steps) != len(counts) or not steps:
+        raise ValueError('Sankey stages and totals must be nonempty and aligned')
+    if any(v < 0 for v in counts) or any(b > a for a, b in zip(counts, counts[1:])):
+        raise ValueError('Sankey stage counts must be nonnegative and nonincreasing')
+    lmp_in = {k: int(v) for k, v in lmp_in.items() if v > 0}
+    lmp_out = {k: int(v) for k, v in lmp_out.items() if v > 0}
+    if sum(lmp_in.values()) != counts[0] or sum(lmp_out.values()) != counts[-1]:
+        raise ValueError('Sankey endpoint groups must sum to their stage totals')
+    total = max(counts[0], 1)
+    group_gaps = 36 * max(len(lmp_in)-1, len(lmp_out)-1, 0)
+    retained_height = max(360, group_gaps + 100)
+    scale = min(260, retained_height - group_gaps) / total
+    divider = 135 + retained_height + 25
+    loss_top = divider + 40
+    width, height = (len(steps)+2)*230+160, 880
+    nodes, links = [], []
 
-    nodes: List[Dict[str, str]] = []
-    links: List[Dict[str, int]] = []
-    node_idx: Dict[Tuple[str, str], int] = {}
-    link_colors: List[str] = []
-    node_x: List[float] = []
-    node_y: List[float] = []
+    def add_node(label, value, column, y, color, lane, stage=False):
+        idx = len(nodes)
+        nodes.append(dict(label=label, value=int(value), x=45+column*230,
+                          y=float(y), initial_y=float(y), h=max(2., value*scale),
+                          color=color, lane=lane, column=column, stage=stage))
+        return idx
 
-    def even_positions(n: int, low: float = 0.06, high: float = 0.94) -> List[float]:
-        """
-        Evenly space node centers on [low, high].
-        Using inner margins prevents edge crowding and makes snap layout look balanced.
-        """
-        if n <= 0:
-            return []
-        if n == 1:
-            return [0.5]
-        span = high - low
-        return [low + (i * span / (n - 1)) for i in range(n)]
+    def add_link(source, target, value, color='#98A2AD'):
+        if value > 0:
+            links.append(dict(source=source, target=target, value=int(value), color=color))
 
-    in_y = even_positions(len(lmp_in))
-    out_y = even_positions(len(lmp_out))
+    source_nodes, output_nodes = [], []
+    for groups, column, dest in [(lmp_in, 0, source_nodes), (lmp_out, len(steps)+1, output_nodes)]:
+        cursor = 135.
+        for label, value in groups.items():
+            i = add_node(label, value, column, cursor, palette.get(label, '#6B7280'), 'retained')
+            dest.append(i); cursor += nodes[i]['h'] + 36
+    stage_nodes = [add_node(label, value, i+1, 135, '#253D52', 'retained', True)
+                   for i, (label, value) in enumerate(zip(steps, counts))]
+    for i in source_nodes: add_link(i, stage_nodes[0], nodes[i]['value'], nodes[i]['color'])
+    for j, (source, target) in enumerate(zip(stage_nodes, stage_nodes[1:])):
+        add_link(source, target, counts[j+1])
+        difference = counts[j] - counts[j+1]
+        groups = (loss_groups or {}).get(j, [(f'{steps[j+1]} removed', difference)])
+        if sum(int(value) for _, value in groups) != difference:
+            raise ValueError(f'Loss accounting does not balance at {steps[j+1]}')
+        cursor = float(loss_top)
+        for label, value in groups:
+            if not value: continue
+            i = add_node(label, value, j+2, cursor, '#CBD2D9', 'removed')
+            add_link(source, i, value, '#CBD2D9'); cursor += nodes[i]['h'] + 50
+    for i in output_nodes: add_link(stage_nodes[-1], i, nodes[i]['value'], nodes[i]['color'])
 
-    # Input-type nodes (left side, x=0.01)
-    n_inputs = len(lmp_in)
-    for i, (k, v) in enumerate(lmp_in.items()):
-        nodes.append({"label": f"{k} ({v})" if labeled else "", "color": get_color(k)})
-        node_idx[(k, "in")] = len(nodes) - 1
-        node_x.append(0.01)
-        node_y.append(in_y[i])
+    height = max(height, int(max(n["y"] + n["h"] for n in nodes)) + 90)
 
-    # Process nodes (middle, evenly spaced)
-    n_steps = len(steps)
-    for i, (step, cnt) in enumerate(zip(steps, counts)):
-        nodes.append({"label": f"{step}<br>({cnt})" if labeled else "", "color": "black"})
-        node_idx[(step, "proc")] = len(nodes) - 1
-        node_x.append(0.2 + (i / max(n_steps - 1, 1)) * 0.6)  # Spread from 0.2 to 0.8
-        node_y.append(0.5)  # Center vertically
+    # Sort ports by the actual opposite endpoint, including the final group split.
+    # Geometry is identical in both exports and does not depend on browser size.
+    for index, node in enumerate(nodes):
+        for key, port in [('source', 'sy'), ('target', 'ty')]:
+            edge_ids = [i for i, edge in enumerate(links) if edge[key] == index]
+            other = 'target' if key == 'source' else 'source'
+            edge_ids.sort(key=lambda i: (nodes[links[i][other]]['y'], links[i][other]))
+            cursor = node['y']
+            for i in edge_ids:
+                links[i][port] = cursor - node['y']
+                cursor += links[i]['value'] * scale
 
-    # Output-type nodes (right side, x=0.99)
-    n_outputs = len(lmp_out)
-    for i, (k, v) in enumerate(lmp_out.items()):
-        nodes.append({"label": f"{k} ({v})" if labeled else "", "color": get_color(k)})
-        node_idx[(k, "out")] = len(nodes) - 1
-        node_x.append(0.99)
-        node_y.append(out_y[i])
+    def ribbon(edge):
+        a,b = nodes[edge['source']],nodes[edge['target']]
+        x1,x2=a['x']+18,b['x']; mid=(x1+x2)/2
+        y1,y2=a['y']+edge['sy'],b['y']+edge['ty']; h=edge['value']*scale
+        return f'M{x1},{y1} C{mid},{y1} {mid},{y2} {x2},{y2} L{x2},{y2+h} C{mid},{y2+h} {mid},{y1+h} {x1},{y1+h} Z'
 
-    # Links: input -> first step
-    first_step = steps[0]
-    for k, v in lmp_in.items():
-        links.append({
-            "source": node_idx[(k, "in")],
-            "target": node_idx[(first_step, "proc")],
-            "value": v
-        })
-        link_colors.append("grey")
-
-    # Links: step -> next step (+ loss nodes)
-    for i in range(len(steps) - 1):
-        s, t = steps[i], steps[i + 1]
-        # main flow to next step
-        links.append({
-            "source": node_idx[(s, "proc")],
-            "target": node_idx[(t, "proc")],
-            "value": counts[i + 1]
-        })
-        link_colors.append("grey")
-
-        # loss from this step
-        if counts[i] > counts[i + 1]:
-            loss_val = counts[i] - counts[i + 1]
-            loss_label = f"{loss_val} removed" if labeled else ""
-            nodes.append({"label": loss_label, "color": "lightgrey"})
-            loss_idx = len(nodes) - 1
-            node_x.append(0.2 + (i / max(n_steps - 1, 1)) * 0.6 + 0.05)  # Slightly offset
-            node_y.append(0.9)  # Position loss nodes at bottom
-            links.append({
-                "source": node_idx[(s, "proc")],
-                "target": loss_idx,
-                "value": loss_val
-            })
-            link_colors.append("lightgrey")
-
-    # Links: last step -> outputs
-    last_step = steps[-1]
-    for k, v in lmp_out.items():
-        links.append({
-            "source": node_idx[(last_step, "proc")],
-            "target": node_idx[(k, "out")],
-            "value": v
-        })
-        link_colors.append("grey")
-
-    fig = go.Figure(data=[go.Sankey(
-        arrangement=arrangement,
-        node=dict(
-            pad=10,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=[n["label"] for n in nodes],
-            color=[n["color"] for n in nodes],
-            x=node_x,  # Explicit x positions
-            y=node_y,  # Explicit y positions
-        ),
-        link=dict(
-            source=[l["source"] for l in links],
-            target=[l["target"] for l in links],
-            value=[l["value"] for l in links],
-            color=link_colors,
-        ),
-    )])
-    fig.update_layout(title_text=title, font_size=12)
-    output_html.parent.mkdir(parents=True, exist_ok=True)
-    fig.write_html(str(output_html))
-    print(f"✔ Sankey saved: {output_html}")
-    try:
-        output_svg = output_html.with_suffix(".svg")
-        fig.write_image(str(output_svg))
-        print(f"✔ Sankey saved: {output_svg}")
-    except Exception as exc:
-        write_fallback_svg(output_svg, title, steps, counts, lmp_in, lmp_out, palette, labeled)
-        print(
-            f"[WARN] Could not export Sankey SVG for {output_html}: {exc}. "
-            f"Wrote static fallback SVG instead: {output_svg}",
-            file=sys.stderr,
-        )
+    parts=[f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" role="img" aria-label="{esc(title)}">',
+           '<style>text{font-family:Arial,sans-serif;fill:#243447;font-size:12px}.node{cursor:grab}.ribbon{fill-opacity:.55}.ribbon:hover{fill-opacity:.85}</style>',
+           '<rect width="100%" height="100%" fill="white"/>',
+           f'<text x="30" y="30" style="font-size:23px;font-weight:bold">{esc(title)}</text>',
+           '<text x="30" y="54">Read pairs / merged-read equivalents; band widths represent counts.</text>',
+           f'<path d="M25,{divider} H{width-25}" stroke="#CBD2D9" stroke-dasharray="5 5"/>',
+           f'<text x="30" y="{divider+22}" style="font-weight:bold">Removed from downstream biological analysis</text>']
+    for i, edge in enumerate(links):
+        a,b=nodes[edge['source']],nodes[edge['target']]
+        parts.append(f'<path id="edge-{i}" class="ribbon" d="{ribbon(edge)}" fill="{esc(edge["color"])}"><title>{esc(a["label"])} → {esc(b["label"])}: {edge["value"]:,}</title></path>')
+    for i, node in enumerate(nodes):
+        parts.append(f'<g id="node-{i}" class="node" data-index="{i}" transform="translate({node["x"]},{node["y"]})"><title>{esc(node["label"])}: {node["value"]:,}</title><rect width="18" height="{node["h"]}" fill="{esc(node["color"])}" stroke="#566573"/>')
+        if labeled:
+            lines=textwrap.wrap(node['label'], 26)
+            if node['stage']:
+                y=-16-len(lines)*15
+                for line in lines:
+                    parts.append(f'<text x="0" y="{y}" style="font-weight:bold">{esc(line)}</text>');y+=15
+                parts.append(f'<text x="0" y="-7">{node["value"]:,}</text>')
+            else:
+                for j,line in enumerate(lines):parts.append(f'<text x="26" y="{12+j*14}">{esc(line)}</text>')
+                parts.append(f'<text x="26" y="{12+len(lines)*14}">{node["value"]:,}</text>')
+        parts.append('</g>')
+    parts.append('</svg>'); svg=''.join(parts)
+    payload=dict(nodes=nodes,links=links,scale=scale,steps=steps,counts=counts,arrangement=arrangement,loss_top=loss_top,retained_bottom=divider-20,removed_bottom=height-55)
+    encoded=json.dumps(payload).replace('<','\\u003c')
+    javascript=r'''
+const flow=JSON.parse(document.getElementById('flow-data').textContent),svg=document.querySelector('svg');
+let active=null,startY=0,originY=0;
+function point(e){return new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse()).y;}
+function redraw(){
+ flow.nodes.forEach((n,i)=>document.getElementById('node-'+i).setAttribute('transform',`translate(${n.x},${n.y})`));
+ flow.links.forEach((e,i)=>{let a=flow.nodes[e.source],b=flow.nodes[e.target],x=a.x+18,z=b.x,m=(x+z)/2,y=a.y+e.sy,t=b.y+e.ty,h=e.value*flow.scale;
+ document.getElementById('edge-'+i).setAttribute('d',`M${x},${y} C${m},${y} ${m},${t} ${z},${t} L${z},${t+h} C${m},${t+h} ${m},${y+h} ${x},${y+h} Z`);});
+}
+svg.addEventListener('pointerdown',e=>{let g=e.target.closest('.node');if(!g||flow.arrangement==='fixed')return;
+ active=+g.dataset.index;startY=point(e);originY=flow.nodes[active].y;svg.setPointerCapture(e.pointerId);e.preventDefault();});
+svg.addEventListener('pointermove',e=>{if(active===null)return;let n=flow.nodes[active],lo=n.lane==='removed'?flow.loss_top:135,hi=(n.lane==='removed'?flow.removed_bottom:flow.retained_bottom)-n.h;
+ flow.nodes.forEach((o,i)=>{if(i===active||o.column!==n.column||o.lane!==n.lane)return;if(o.initial_y<n.initial_y)lo=Math.max(lo,o.y+o.h+10);else hi=Math.min(hi,o.y-n.h-10);});
+ n.y=Math.max(lo,Math.min(hi,originY+point(e)-startY));redraw();});
+function release(){if(active!==null&&flow.arrangement==='snap')flow.nodes[active].y=flow.nodes[active].initial_y;active=null;redraw();}
+svg.addEventListener('pointerup',release);svg.addEventListener('pointercancel',release);
+document.getElementById('reset').onclick=()=>{flow.nodes.forEach(n=>n.y=n.initial_y);redraw();};
+'''
+    html=f'<!doctype html><html><head><meta charset="utf-8"><title>{esc(title)}</title><style>body{{margin:0;font:14px Arial;color:#243447}}.toolbar{{padding:10px;background:#f3f6f8;position:sticky;top:0}}.canvas{{overflow:auto}}svg{{display:block;touch-action:none}}button{{margin-right:12px}}</style></head><body><div class="toolbar"><button id="reset">Reset layout</button>Drag nodes vertically within their retained/removed area. Scroll horizontally to view all stages.</div><div class="canvas">{svg}</div><script id="flow-data" type="application/json">{encoded}</script><script>{javascript}</script></body></html>'
+    output_html.parent.mkdir(parents=True,exist_ok=True)
+    output_html.write_text(html)
+    output_html.with_suffix('.svg').write_text(svg+'\n')
+    output_html.with_suffix('.flow.json').write_text(json.dumps(payload,indent=2)+'\n')
+    print(f'✔ Sankey HTML, SVG and flow audit saved: {output_html}')
 
 
 # =========================
@@ -467,6 +386,9 @@ def get_parser() -> argparse.ArgumentParser:
     io.add_argument("--filtered-stats", default="stats/filtered_fastqs.tsv",
                     help="Path to filtered fastq stats TSV")
 
+    io.add_argument("--sample-qc", type=Path, help="CONTROL_DECONTAM sample_qc.tsv for explicit class/depth dropouts")
+    io.add_argument("--asv-cleaned", type=Path, help="Biological counts after TECH/BIO ASV removal")
+    io.add_argument("--asv-final", type=Path, help="Final filtered ASV_target.tsv before batch correction")
     io.add_argument("--asv-raw", default="ASVs/ASV_counts.tsv", help="Wide ASV counts matrix")
 
     io.add_argument("--asv-decon", default="ASVs/ASV_target.decon.tsv", help="Wide ASV after decontamination")
@@ -483,7 +405,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--arrangement",
         default="snap",
         choices=["snap", "perpendicular", "freeform", "fixed"],
-        help="Plotly sankey node arrangement mode (use 'freeform' for draggable nodes).",
+        help="Layout interaction: freeform/perpendicular allow vertical movement within ordered lanes; snap resets on release; fixed disables dragging.",
     )
     out.add_argument(
         "--vertical-order",
@@ -519,6 +441,8 @@ def main():
     asv_raw_path = resolve(args.asv_raw)
     asv_decon_path = resolve(args.asv_decon)
     asv_micro_path = resolve(args.asv_micro)
+    asv_final_path = resolve(args.asv_final) if args.asv_final else asv_micro_path
+    final_long = read_asv_matrix(asv_final_path, args.samp_col)
 
     keep_types = [t.strip() for t in args.keep_types.split(',')] if args.keep_types.strip() else None
 
@@ -544,7 +468,7 @@ def main():
     if args.all_samples:
         sample_list = meta[args.samp_col].astype(str).unique().tolist()
     else:
-        sample_list = asv_micro_long[args.samp_col].unique().tolist()
+        sample_list = final_long[args.samp_col].unique().tolist()
 
     asv_raw_long = read_asv_matrix(
         asv_raw_path,
@@ -613,21 +537,42 @@ def main():
     asv_decon_reads = int(asv_decon_by_type['num_reads'].sum())
     asv_micro_reads = int(asv_micro_by_type['num_reads'].sum())
 
-    # Steps & counts (used for node labels and loss computation)
-    steps = [
-        'Quality Control',
-        'Error Correction',
-        'Decontamination',
-        'Off-Target Filtering',
-        'Finished Data'
-    ]
-    counts = [
-        raw_reads_total,
-        filt_reads_total,
-        asv_raw_reads,
-        asv_decon_reads,
-        asv_micro_reads
-    ]
+    final_by_type = group_counts_by_group(final_long, meta, args.samp_col, args.group1_col)
+    final_reads = int(final_by_type['num_reads'].sum())
+    steps = ['Input pairs', 'Read QC', 'ASV inference']
+    counts = [raw_reads_total, filt_reads_total, asv_raw_reads]
+    losses = {}
+    if args.sample_qc:
+        if not args.asv_cleaned:
+            raise ValueError('--sample-qc requires --asv-cleaned')
+        qc = pd.read_csv(resolve(args.sample_qc), sep='\t', dtype={args.samp_col:str})
+        qc = qc[qc[args.samp_col].isin(sample_list)]
+        raw_per_sample = asv_raw_long.groupby(args.samp_col)['count'].sum()
+        qc = qc.set_index(args.samp_col)
+        if not set(raw_per_sample.index) <= set(qc.index):
+            raise ValueError('Sample QC audit does not cover all ASV samples')
+        qc['reads'] = raw_per_sample.reindex(qc.index).fillna(0).astype(int)
+        eligible = qc['biological_pass'].astype(str).str.lower().eq('true')
+        cohort_reads = int(qc.loc[eligible,'reads'].sum())
+        classes = [('technical','TECH controls (used for decontam)'),
+                   ('bio_control','BIO controls (used for decontam)'),
+                   ('positive','Positive controls (QC only)')]
+        cohort_losses = [(label,int(qc.loc[qc.decontam_class.eq(cls),'reads'].sum())) for cls,label in classes]
+        cohort_losses.append(('Biological samples below depth cutoff',int(qc.loc[qc.decontam_class.eq('biological') & ~eligible,'reads'].sum())))
+        accounted = sum(value for _,value in cohort_losses)
+        remaining = asv_raw_reads - cohort_reads - accounted
+        if remaining < 0: raise ValueError('Overlapping sample classes in cohort audit')
+        if remaining: cohort_losses.append(('Other samples excluded',remaining))
+        losses[2] = cohort_losses
+        steps.append('Eligible biological cohort'); counts.append(cohort_reads)
+        cleaned = read_asv_matrix(resolve(args.asv_cleaned), args.samp_col)
+        cleaned_reads = int(cleaned.loc[cleaned[args.samp_col].isin(sample_list),'count'].sum())
+        losses[3] = [('TECH/BIO contaminant ASVs removed',cohort_reads-cleaned_reads)]
+        steps.append('After TECH/BIO ASV filtering'); counts.append(cleaned_reads)
+    steps.extend(['After non-target screening','Finished biological data'])
+    counts.extend([asv_micro_reads,final_reads])
+    losses[len(counts)-3] = [('Host / mitochondrial reads removed', counts[-3]-counts[-2])]
+    losses[len(counts)-2] = [('Abundance / prevalence / taxonomy removed', counts[-2]-counts[-1])]
 
     vertical_order = [t.strip() for t in args.vertical_order.split(',') if t.strip()]
     if keep_types:
@@ -651,7 +596,7 @@ def main():
         for t in types
     }
     lmp_out = {
-        str(t): int(asv_micro_by_type.loc[asv_micro_by_type[args.group1_col] == t, 'num_reads'].sum())
+        str(t): int(final_by_type.loc[final_by_type[args.group1_col] == t, 'num_reads'].sum())
         for t in types
     }
 
@@ -682,13 +627,13 @@ def main():
         build_sankey(
             steps, counts, lmp_in, lmp_out, palette,
             args.title, out_pref.with_suffix(".label.html"), True,
-            arrangement=args.arrangement
+            arrangement=args.arrangement, loss_groups=losses
         )
     if args.make_unlabeled:
         build_sankey(
             steps, counts, lmp_in, lmp_out, palette,
             args.title, out_pref.with_suffix(".html"), False,
-            arrangement=args.arrangement
+            arrangement=args.arrangement, loss_groups=losses
         )
 
 

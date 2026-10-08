@@ -94,6 +94,41 @@ def true_values(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().str.lower().isin({"true", "1", "yes"})
 
 
+def validate_primer_trimming(results: Path, supplied: set[str], audit: Audit) -> None:
+    config = yaml.safe_load((results / "summary/tables/run_config.yml").read_text())
+    core = config.get('core', config)
+    primer = core.get('primer_trimming', {})
+    if not primer.get('enabled', False):
+        return  # Historical fixed-clipping runs retain their original validation contract.
+    root = results / 'modules/primer_trimming/tables'
+    try:
+        cohort = json.loads((root / 'primer_cohort.json').read_text())
+        rows = cohort['samples']
+        ids = [row['sample_id'] for row in rows]
+        valid = set(ids) == supplied and len(ids) == len(supplied)
+        valid = valid and cohort['family'] == '515F_806R'
+        valid = valid and all(row['family'] == cohort['family'] for row in rows)
+        audit.check(valid, 'primer_cohort', f"family={cohort['family']}, samples={len(ids)}")
+        errors = []
+        for row in rows:
+            sample = row['sample_id']
+            summary = json.loads((root / f'{sample}.primer_summary.json').read_text())
+            fastp = json.loads((results / f'intermediates/fastp/{sample}.fastp.json').read_text())
+            counts = [row[key] for key in ('input_pairs', 'trimmed_pairs', 'unmatched_pairs', 'too_short_pairs')]
+            valid_counts = all(isinstance(n, int) and n >= 0 for n in counts)
+            valid_counts = valid_counts and counts[0] == sum(counts[1:])
+            valid_counts = valid_counts and fastp['summary']['before_filtering']['total_reads'] == 2 * row['trimmed_pairs']
+            valid_counts = valid_counts and row['screened_pairs'] > 0 and row['supported_screen_pairs'] / row['screened_pairs'] >= primer.get('min_pair_fraction', .5)
+            valid_counts = valid_counts and all((results / row[f'fastq_r{mate}']).is_file() for mate in (1, 2))
+            if summary != row or not valid_counts:
+                errors.append(sample)
+        clipping = core.get('fastp', {})
+        zero_clip = all(clipping.get(key) == 0 for key in ('trim_front_r1', 'trim_tail_r1', 'trim_front_r2', 'trim_tail_r2'))
+        audit.check(not errors and zero_clip, 'primer_read_accounting', f"samples={len(rows)}, invalid={errors}; fixed fastp clipping zero={zero_clip}")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        audit.check(False, 'primer_outputs', str(exc))
+
+
 def validate_control_filtering(metadata: pd.DataFrame, results: Path, audit: Audit, cami: bool) -> None:
     """Validate class separation, inclusion, statistical union and unchanged counts.
 
@@ -302,6 +337,7 @@ def main() -> None:
         "sample_accounting",
         f"manifest={len(supplied)}, metadata={len(metadata_ids)}, published={len(published)}",
     )
+    validate_primer_trimming(results, supplied, audit)
     validate_control_filtering(metadata, results, audit, cami)
 
     truth = read_table(dataset / "ground_truth_reference_filters.tsv")

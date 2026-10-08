@@ -23,6 +23,26 @@ core:
     - \.fastq$
     - \.fq$
     sample_strip_regex: (_S[0-9]+)?(_L[0-9]{3})?(_R[12])?(_[12])?(_001)?$
+  # Optional sequence-aware paired primer trimming before fastp.
+  # When enabled, set all four fastp trim values below to zero.
+  primer_trimming:
+    enabled: false
+    primers:
+    - name: 515F_806R
+      forward: GTGYCAGCMGCCGCGGTAA
+      reverse: GGACTACNVGGGTWTCTAAT
+    - name: 515F_926R
+      forward: GTGYCAGCMGCCGCGGTAA
+      reverse: CCGYCAATTYMTTTRAGTTT
+    sample_reads: 5000
+    max_prefix: 12
+    min_pair_fraction: 0.5
+    min_family_fraction: 0.01
+    min_family_reads: 5
+    screen_error_rate: 0.0  # Exact IUPAC screening; allow substitutions for noisy primer reads if justified.
+    error_rate: 0.1
+    end_overlap: 12
+    minimum_length: 1
   fastp:
     trim_front_r1: 19
     trim_tail_r1: 20
@@ -102,6 +122,7 @@ standard:
     mitomaster_retries: 4
     mitomaster_timeout: 90
     mitomaster_header_mode: first
+    mitomaster_failure_policy: fail  # Set continue to retain local screening when API requests fail.
     output_dir: mito/mitomap
     prefix: nontarget
     formats: svg,pdf
@@ -175,6 +196,10 @@ standard:
       replacement: outlier
       preserve_source: true
 optional:
+  analysis_cohort:
+    sample_col: Sample
+    group_col: Type_Group
+    exclude_groups: []  # Retained in metadata plots and diversity; excluded from other analyses.
   sankey:
     enabled: true
     metadata: /abs/path/metadata.tsv
@@ -450,6 +475,7 @@ optional:
     - Oral Rinse
     - BAL
     - Bronchial Brush
+    isa_exclude_nondistinct: false
     isa_exclude_all_types_from_focus: true
     isa_min_abs_rho: 0.35
     sample_min_abs_z: 2.5
@@ -775,6 +801,7 @@ optional:
     functional_module_min_fraction: 0.5
     functional_annotations: []
 environments:
+  primer_trimming: processes/primer_trimming/env.yml
   main: processes/fastp_qc/env.yml
   sina: processes/sina_trim/env.yml
   taxonomy: processes/taxonomy/env.yml

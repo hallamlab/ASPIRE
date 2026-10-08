@@ -10,10 +10,13 @@ flowchart TD
     RAW -->|Decontamination disabled| REF
     FEATURES --> TARGET[ASV_target.tsv: non-target-filtered microbial counts]
     TARGET --> SELECT[PLOT_METADATA: linked long and wide tables]
-    SELECT --> GROUP[Optional group diagnostics / validated labels]
+    SELECT --> GROUP[Selected-cohort diagnostics / validated labels]
     GROUP --> BATCH[Optional batch correction and count selection]
-    BATCH --> FINAL[Selected counts and synchronized long annotations]
+    BATCH --> DIVERSITY[Full biological cohort: diversity]
+    BATCH --> COHORT[ANALYSIS_COHORT: configured group selection]
+    COHORT --> FINAL[Selected counts and synchronized long annotations]
     FINAL --> STATS[Statistical and network modules]
+    DIVERSITY --> REPORT
     STATS --> REPORT[Module files and integrated report]
     classDef input fill:#DAE8FC,stroke:#6C8EBF,color:#111111
     classDef output fill:#D5E8D4,stroke:#82B366,color:#111111

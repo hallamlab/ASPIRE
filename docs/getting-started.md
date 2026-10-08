@@ -78,3 +78,7 @@ status and resource use, execution timing, the workflow DAG, trace data,
 software/runtime records, and controller or per-task logs under
 `<output_dir>/logs/`. Machine-readable inventories, exact paths, and checksums
 are stored under `<output_dir>/summary/tables/`.
+
+## Optional primer removal
+
+Enable [Cutadapt primer trimming](primer-trimming.md) to detect and remove paired primers before fastp. Set all four fixed fastp clipping values to zero when enabling this module. The primer audit records retained and discarded pairs, and a cohort check requires a single amplicon family before ASV construction.

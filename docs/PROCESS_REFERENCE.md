@@ -20,7 +20,9 @@ distinguish the pipeline backbone from optional branches in the terminal.
 
 | Process | Principal input | Principal output | Purpose |
 |---|---|---|---|
-| `FASTP_QC` | manifest FASTQ pairs | `intermediates/fastp/` | Fixed trimming and read-level QC. |
+| `PRIMER_TRIM` | manifest FASTQ pairs and primer catalogue | `intermediates/primer_trimmed/`, `modules/primer_trimming/tables/` | Optional paired primer detection and Cutadapt removal, with discard audits. |
+| `PRIMER_TRIM_CHECK` | per-sample primer summaries | `modules/primer_trimming/tables/primer_cohort.json` | Require one amplicon family across the cohort before fastp. |
+| `FASTP_QC` | raw or primer-trimmed FASTQ pairs | `intermediates/fastp/` | Fixed trimming and read-level QC. |
 | `MERGE_READS` | trimmed paired reads | merged FASTQ/FASTA intermediates | Merge overlapping read pairs. |
 | `FILTER_READS` | merged reads | quality-filtered FASTA | Expected-error and length filtering. |
 | `RELABEL_FILTERED` | per-sample filtered FASTA | sample-labelled FASTA | Preserve sample identity in sequence headers. |
@@ -44,7 +46,7 @@ distinguish the pipeline backbone from optional branches in the terminal.
 | `PLOT_METADATA` | final microbial and mitochondrial counts, metadata | `modules/metadata_plots/` | Build `ASV_meta_micro.tsv`, `ASV_final.micro.tsv`, updated metadata and master tables. |
 
 `ASV_target.tsv` is the final microbial table emitted by `FILTER_ASVS`.
-`ASV_final.micro.tsv` is its downstream wide sample-by-ASV representation after
+`ASV_final.micro.tsv` is its downstream wide ASV-by-sample representation after
 metadata/control handling. Control decontamination occurs before these tables are constructed. Optional
 batch correction subsequently selects corrected counts for downstream analyses.
 
@@ -71,9 +73,9 @@ batch correction subsequently selects corrected counts for downstream analyses.
 | `INDICSPECIES` | downstream counts and groups | `modules/indicator_analysis/tables/` complete and summary ISA tables |
 | `INDICSPECIES_PLOTS` | ISA tables and metadata | `modules/indicator_analysis/plots/` |
 | `INDICSPECIES_ALIGNED_PLOTS` | collected ISA tables | aligned ISA tables and figures |
-| `POWER_ANALYSIS_PIPELINE` | downstream ASV summaries and ISA completion | `modules/power_analysis/` simulation results and plots |
-| `TAXONOMY_PATIENT_AWARE` | downstream ASV summaries | `modules/taxonomy/` patient-aware abundance tests and plots |
-| `LUNG_STATUS_ANALYSIS` | downstream ASV summaries and lung metadata | `modules/lung_status_analysis/` prepared cohorts, tests and plots |
+| `GROUP_POWER_ANALYSIS` | downstream ASV summaries and ISA completion | `modules/power_analysis/` simulation results and plots |
+| `TAXONOMY_GROUP_ASSOCIATION` | downstream ASV summaries | `modules/taxonomy/` patient-aware abundance tests and plots |
+| `PAIRED_GROUP_CONTRAST` | downstream ASV summaries and lung metadata | `modules/lung_status_analysis/` prepared cohorts, tests and plots |
 
 ## Generalized Optional Processes and Aliases
 
@@ -139,3 +141,22 @@ tree, builds file/checksum inventories, archives logs and creates
 
 The report is the first review page; the TSV inventories and individual module
 tables remain the authoritative machine-readable results.
+
+## Study analysis cohort
+
+`ANALYSIS_COHORT_DIAGNOSTICS` selects raw counts and metadata for grouping diagnostics
+before optional label augmentation. `ANALYSIS_COHORT` selects synchronized counts,
+metadata, long ASV tables and CLR sample rows for subsequent analyses after batch
+preparation. Both use `optional.analysis_cohort.exclude_groups`; an empty list
+keeps every biological sample. The cohort audit is published under
+`modules/analysis_cohort/tables/`. ASVs with zero counts in the selected cohort are
+removed from its count/long tables; CLR retains its original feature basis.
+
+Excluded groups remain in input/QC, control decontamination, metadata plots,
+Sankey accounting and diversity. All other sample-based optional analyses use
+the selected cohort. Batch preparation uses the complete biological table so
+that diversity and the selected cohort share the same corrected measurements.
+
+Outlier reports distinguish unavailable detectors from inliers. HDBSCAN without
+any fitted clusters is unavailable; consensus is unavailable when fewer than
+the configured number of votes can be evaluated.

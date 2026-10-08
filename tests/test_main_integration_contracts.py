@@ -59,3 +59,21 @@ def test_mock_preserves_existing_correction_and_network_choices():
 def test_no_tracked_environment_points_to_removed_shared_environment():
     for path in (ROOT / 'processes').rglob('env.yml'):
         assert path.exists(), f'Broken environment symlink: {path}'
+
+
+def test_analysis_cohort_preserves_diversity_and_uses_staged_outlier_inputs():
+    source = (ROOT / 'asv_pipeline.nf').read_text()
+    optional = source.split('workflow optional {', 1)[1].split('workflow RUN_METADATA_ANALYSES {', 1)[0]
+    assert 'asvFinalForDiversity = analysis_cohort_stage' not in optional
+    assert 'metaMicroForDiversity = analysis_cohort_stage' not in optional
+    for name in ['Indicspecies', 'VocCorrelation', 'Network', 'PowerAnalysis', 'MasterSummary']:
+        assert f'asvFinalFor{name} = analysis_cohort_stage.counts' in optional
+    assert optional.index('ANALYSIS_COHORT(') < optional.index('PLOT_UPSET(')
+    outlier = source.split('process OUTLIER_CHECKER {', 1)[1].split('process COLLECTORS_CURVE {', 1)[0]
+    assert r'\$PWD/${asv_clr}' in outlier
+    assert r'\$PWD/${metadata_table}' in outlier
+
+
+def test_staged_task_paths_are_resolved_by_the_task_shell():
+    source = (ROOT / "asv_pipeline.nf").read_text()
+    assert ".toAbsolutePath()" not in source

@@ -78,15 +78,20 @@ def write_outlier_summary_plot(preds: pd.DataFrame, tag: str, out_dir: Path) -> 
     summary = pd.DataFrame({
         "detector": detector_cols + ["Consensus"],
         "outlier_count": [int((preds[col] == -1).sum()) for col in detector_cols]
-        + [int(preds["is_outlier"].astype(bool).sum())],
+        + [int(preds["is_outlier"].fillna(False).sum())],
     })
     summary["sample_count"] = len(preds)
-    summary["outlier_fraction"] = summary["outlier_count"] / max(len(preds), 1)
+    summary["evaluated_count"] = [int(preds[col].notna().sum()) for col in detector_cols] + [int(preds["is_outlier"].notna().sum())]
+    summary["unavailable_count"] = summary["sample_count"] - summary["evaluated_count"]
+    summary["outlier_fraction"] = summary["outlier_count"] / summary["evaluated_count"].replace(0, np.nan)
     summary.to_csv(out_dir / f"outliers_{tag}_summary.tsv", sep="\t", index=False)
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
     sns.barplot(data=summary, x="detector", y="outlier_count", color="#D55E00", ax=axes[0])
-    axes[0].set_title("Outliers by detector")
+    axes[0].set_title("Outliers by detector (unavailable ≠ inlier)")
+    for i, row in summary.iterrows():
+        if row.unavailable_count:
+            axes[0].text(i, row.outlier_count, f"{row.unavailable_count} unavailable", ha="center", va="bottom", fontsize=8)
     axes[0].set_xlabel("")
     axes[0].set_ylabel("Samples flagged")
     axes[0].tick_params(axis="x", rotation=25)
@@ -253,26 +258,28 @@ def fit_predict_group(
         cols.append("OneClassSVM")
 
     if use_hdb:
-        # Train HDBSCAN; predict for test via approximate_predict
-        # If fit fails due to insufficient points, mark all as inliers
+        # A model without any clusters cannot distinguish cluster members from noise.
+        preds["HDBSCAN"] = np.full(len(samples_test), np.nan)
+        preds["HDBSCAN_strength"] = np.full(len(samples_test), np.nan)
         try:
             hdb = hdbscan.HDBSCAN(prediction_data=True, **hdb_kwargs)
             hdb.fit(X_train)
-            labels, strengths = approximate_predict(hdb, X_test)
-            preds["HDBSCAN"] = np.where(labels == -1, -1, 1)
-            preds["HDBSCAN_strength"] = strengths
-            cols.append("HDBSCAN")
-        except Exception:
-            # Fall back: mark as inliers
-            preds["HDBSCAN"] = np.ones(len(samples_test), dtype=int)
-            preds["HDBSCAN_strength"] = np.zeros(len(samples_test), dtype=float)
-            cols.append("HDBSCAN")
+            if not np.any(hdb.labels_ >= 0):
+                preds["HDBSCAN_status"] = "unavailable: no clusters fitted"
+            else:
+                labels, strengths = approximate_predict(hdb, X_test)
+                preds["HDBSCAN"] = np.where(labels == -1, -1, 1)
+                preds["HDBSCAN_strength"] = strengths
+                preds["HDBSCAN_status"] = "evaluated"
+        except (ValueError, RuntimeError) as exc:
+            preds["HDBSCAN_status"] = f"unavailable: {type(exc).__name__}: {exc}"
 
     df = pd.DataFrame({"sample": samples_test})
     for k, v in preds.items():
         df[k] = v
     # consensus on only the binary predictors
     bin_cols = [c for c in ["IsolationForest", "OneClassSVM", "HDBSCAN"] if c in df.columns]
+    df["available_detectors"] = df[bin_cols].notna().sum(axis=1)
     df["outlier_votes"] = (df[bin_cols] == -1).sum(axis=1)
     return df.set_index("sample")
 
@@ -291,13 +298,16 @@ def run_for_group(
     # select group samples
     group_samples = list(meta_df.index)
     if len(group_samples) < 2:
-        # not enough to train; mark all as inliers with 0 votes
+        # Preserve small groups explicitly as unevaluated.
         base = pd.DataFrame(index=group_samples)
         base["group"] = group_name
         for c in ["IsolationForest", "OneClassSVM", "HDBSCAN"]:
-            base[c] = 1
+            base[c] = np.nan
+            base[c + "_status"] = "unavailable: fewer than two samples"
         base["outlier_votes"] = 0
-        base["is_outlier"] = False
+        base["available_detectors"] = 0
+        base["consensus_evaluable"] = False
+        base["is_outlier"] = pd.NA
         return base
 
     train_samples = [a for a in asv_df.index if a in group_samples]
@@ -315,7 +325,8 @@ def run_for_group(
         iso_kwargs, svm_kwargs, hdb_kwargs
     )
     preds["group"] = group_name
-    preds["is_outlier"] = preds["outlier_votes"] >= vote_threshold
+    preds["consensus_evaluable"] = preds["available_detectors"] >= vote_threshold
+    preds["is_outlier"] = (preds["outlier_votes"] >= vote_threshold).astype("boolean").where(preds["consensus_evaluable"])
     return preds
 
 
@@ -449,8 +460,6 @@ def main():
             per_levels = []
             for level, sub_meta in meta.groupby(gcol):
                 sub_feat = feat.loc[sub_meta.index.intersection(feat.index)]
-                if sub_feat.shape[0] < 2:
-                    continue
                 pred = run_for_group(
                     group_name=str(level),
                     asv_df=sub_feat,

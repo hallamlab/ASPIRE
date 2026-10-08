@@ -34,6 +34,11 @@ class MockTestConfigTest(unittest.TestCase):
             config = MODULE.build_config(
                 project / "examples/mock.local.yml", dataset, output, runtime, project
             )
+            primers = MODULE.config_section(config, "primer_trimming")
+            self.assertTrue(primers['enabled'])
+            self.assertIn('Class:Mammalia', MODULE.config_section(config, 'filter_counts')['exclude_taxa'])
+            self.assertEqual(primers['primers'][0]['name'], '515F_806R')
+            self.assertTrue(all(v == 0 for v in MODULE.config_section(config, 'fastp').values()))
             paths = MODULE.config_section(config, "paths")
             self.assertEqual(paths["input_dir"], str(dataset / "fastq"))
             self.assertEqual(paths["manifest"], str(dataset / "fastq_manifest.tsv"))

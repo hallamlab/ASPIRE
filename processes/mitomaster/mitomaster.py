@@ -15,6 +15,8 @@ Example:
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -37,7 +39,7 @@ def build_session(retries: int, backoff: float, timeout: int, user_agent: str) -
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=None,  # retry POSTs too
         raise_on_status=False,
-        respect_retry_after_header=True,
+        respect_retry_after_header=False,  # bound delays instead of accepting arbitrary server waits
     )
     adapter = HTTPAdapter(max_retries=retry, pool_connections=100, pool_maxsize=100)
     session.mount("http://", adapter)
@@ -94,7 +96,11 @@ def post_one(
         }
         resp = session.post(endpoint, files=files)
         resp.raise_for_status()
-        return resp.text
+        payload = resp.text
+        lines = [line for line in payload.splitlines() if line.strip()]
+        if not lines or '<html' in payload.lower() or '<!doctype' in payload.lower() or len(lines[0].split('\t')) < 2:
+            raise ValueError('MITOMASTER returned an empty or non-tabular response')
+        return payload
 
 
 def append_output(
@@ -106,13 +112,14 @@ def append_output(
     """
     mode: 'full' -> write as-is
           'noheader' -> drop first line before writing
+          'first' -> keep the header only for the first successful write
     """
-    if mode not in {"full", "noheader"}:
-        raise ValueError("mode must be 'full' or 'noheader'")
+    if mode not in {"full", "noheader", "first"}:
+        raise ValueError("mode must be full, noheader or first")
 
-    text = payload if mode == "full" else "\n".join(payload.splitlines()[1:])
     with lock:
         first_write = not out_path.exists() or out_path.stat().st_size == 0
+        text = payload if mode == "full" or (mode == "first" and first_write) else "\n".join(payload.splitlines()[1:])
         with out_path.open("a") as out_f:
             # separate blocks with newline if not the first write and file doesn't end with newline
             if not first_write:
@@ -132,6 +139,7 @@ def process_first_then_pool(
     lock: Lock,
     header_mode: str,
     log_prefix: str = "",
+    failures: Optional[list] = None,
 ) -> Tuple[int, int]:
     """
     Ensures the header is written first when header_mode='first'.
@@ -149,42 +157,36 @@ def process_first_then_pool(
             txt = post_one(session, endpoint, fasta, file_type, output_format)
             append_output(out_path, txt, mode, lock)
             write_checkpoint(chk_path, fasta.name, lock)
-            ok += 1
+            with lock:
+                ok += 1
             print(f"{log_prefix}✅ Done: {fasta.name}")
-        except Exception as e:
-            err += 1
+        except (requests.RequestException, ValueError) as e:
+            with lock:
+                err += 1
+                if failures is not None:
+                    failures.append({"file": str(fasta), "error": f"{type(e).__name__}: {e}"})
             print(f"{log_prefix}❌ Error: {fasta.name}: {e}")
 
     if header_mode == "first":
         # Process first file synchronously to guarantee header at top
         head = files[0]
-        _submit(head, "full")
+        _submit(head, "first")
         rest = files[1:]
         if rest:
             with ThreadPoolExecutor(max_workers=max_workers) as ex:
-                futs = [ex.submit(_submit, fp, "noheader") for fp in rest]
+                futs = [ex.submit(_submit, fp, "first") for fp in rest]
                 for f in as_completed(futs):
-                    # surface exceptions (already counted inside)
-                    try:
-                        f.result()
-                    except Exception:
-                        pass
+                    f.result()  # unexpected/programming errors must fail the run
     elif header_mode == "all":
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futs = [ex.submit(_submit, fp, "full") for fp in files]
             for f in as_completed(futs):
-                try:
-                    f.result()
-                except Exception:
-                    pass
+                f.result()
     elif header_mode == "none":
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futs = [ex.submit(_submit, fp, "noheader") for fp in files]
             for f in as_completed(futs):
-                try:
-                    f.result()
-                except Exception:
-                    pass
+                f.result()
     else:
         raise ValueError("header_mode must be one of: first, all, none")
 
@@ -215,6 +217,8 @@ def parse_args() -> argparse.Namespace:
     net.add_argument("--user-agent", default="mitomaster-batch/1.0 (+https://example.org)", help="HTTP User-Agent")
 
     run = p.add_argument_group("Run")
+    run.add_argument("--failure-policy", choices=["fail", "continue"], default="fail",
+                     help="After API failures, fail or continue with successful results and an explicit audit")
     run.add_argument("--max-workers", type=int, default=8, help="Thread pool size")
     run.add_argument("--header-mode", choices=["first", "all", "none"], default="first",
                      help="How to handle per-file headers when concatenating")
@@ -222,6 +226,9 @@ def parse_args() -> argparse.Namespace:
     run.add_argument("--log-prefix", default="", help="Optional prefix for log lines (useful in controllers)")
 
     args = p.parse_args()
+
+    if args.timeout <= 0 or args.retries < 0 or args.max_workers < 1 or args.backoff < 0:
+        p.error("timeout/workers must be positive; retries/backoff must be nonnegative")
 
     if args.checkpoint_file is None:
         args.checkpoint_file = Path(str(args.output_file) + ".done")
@@ -269,6 +276,7 @@ def main():
         user_agent=args.user_agent,
     )
 
+    failures = []
     ok, err = process_first_then_pool(
         session=session,
         files=remaining,
@@ -281,7 +289,28 @@ def main():
         lock=lock,
         header_mode=args.header_mode,
         log_prefix=args.log_prefix,
+        failures=failures,
     )
+
+    session.close()
+    audit_path = args.output_file.with_suffix('.failures.tsv')
+    with audit_path.open('w') as handle:
+        writer = csv.DictWriter(handle, fieldnames=['file', 'error'], delimiter='\t')
+        writer.writeheader()
+        writer.writerows(failures)
+    args.output_file.with_suffix('.status.json').write_text(json.dumps({
+        'status': 'complete' if err == 0 else ('partial' if ok or done else 'unavailable'),
+        'successful_chunks': ok, 'failed_chunks': err, 'checkpoint_chunks': len(done),
+        'failure_policy': args.failure_policy,
+        'timeout_seconds': args.timeout, 'retries': args.retries,
+    }, indent=2)+'\n')
+    if err:
+        print(f"WARNING: MITOMASTER evidence is incomplete ({err} failed chunks); see {audit_path}.")
+        if args.failure_policy == 'fail':
+            raise SystemExit(1)
+        if not args.output_file.exists() or args.output_file.stat().st_size == 0:
+            args.output_file.write_text('Sequence_ID\thaplo\n')
+        print('Continuing with available MITOMASTER evidence; local BLAST/taxonomy screening remains active.')
 
     print(f"✅ Success: {ok}  ❌ Failed: {err}")
     print(f"📝 Results saved to {args.output_file}")

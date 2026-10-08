@@ -185,6 +185,11 @@ exact historical classification must be reproduced.
 - `save_intermediates`: retain `.decon`, `.micro`, and mitochondrial audit
   tables required by data-loss reporting.
 
+Unassigned ASVs, blank taxonomy values and ASVs missing from the taxonomy table
+are excluded from the final microbial table. An assigned higher rank (for example
+Bacteria) is sufficient; an unresolved genus or species alone does not cause removal.
+The feature QC audit records `taxonomy_assigned` alongside `retained_final`.
+
 The final downstream microbial table is `ASV_target.tsv`. The `.micro.tsv` and
 `.decon.tsv` files are audit intermediates, not authoritative replacements.
 
@@ -273,7 +278,9 @@ families; aligned plot thresholds are configured with `aligned_*` fields.
 - `correlation_direction`: reported direction for the baseline ASV-VOC output.
 - `isa_correlation_direction`: direction for ISA-focused correlation outputs.
 - `isa_focus_groups`, `isa_all_type_groups`,
-  `isa_exclude_all_types_from_focus`: membership rules for ISA/VOC figures.
+  `isa_exclude_all_types_from_focus`: membership rules for focused ISA/VOC figures.
+- `isa_exclude_nondistinct`: exclude indicators containing every configured
+  `isa_all_type_groups` group from all ISA-specific VOC outputs; exclusions are audited.
 - `isa_min_abs_rho`: minimum absolute Spearman magnitude for focused rows and
   columns.
 - `sample_min_abs_z`: minimum absolute sample VOC z-score for focused displays.
@@ -295,6 +302,30 @@ FDR families, outputs, and limitations of the legacy sample-level plots.
   tumour-side/contralateral/healthy label columns.
 
 #### Power-analysis execution and precision
+
+For a full study analysis, a useful starting configuration is:
+
+```yaml
+optional:
+  power_analysis:
+    enabled: true
+    sample_sizes_cancer: 4,6,8,10,15,20,30,40,50
+    sample_sizes_stype: 10,15,20,25,30,40,50
+    n_simulations: 1000
+    n_perm: 999
+    alpha: 0.05
+```
+
+Both grids count **patients**, rather than libraries or reads. The cancer grid
+specifies cancer patients: the control count remains at the observed pilot count
+until the requested cancer count exceeds it, then both groups use the requested
+count. The sample-type grid resamples shared patient profiles for paired type
+comparisons. Interpret observed-effect, null and artificial-effect simulations
+according to their labels; extrapolation depends on the pilot cohort’s effects
+and variability. These results guide patient recruitment, not sequencing depth.
+`n_simulations` controls repeated simulations; `n_perm` controls the inner
+permutation tests. The quickstart deliberately uses smaller values for execution
+checks and should not determine a study’s sample size.
 
 The sample-type taxonomic power stage uses the CPUs allocated to its Nextflow
 task for independent, seed-stable bootstrap simulations. It precomputes patient/
@@ -398,3 +429,46 @@ be recorded with the run configuration and Git commit.
 7. Disable branches lacking required columns or inputs.
 8. Record the Git commit and preserve the resolved YAML, manifest, report,
    checksums and logs.
+
+## Optional primer removal
+
+Enable [Cutadapt primer trimming](primer-trimming.md) to detect and remove paired primers before fastp. Set all four fixed fastp clipping values to zero when enabling this module. The primer audit records retained and discarded pairs, and a cohort check requires a single amplicon family before ASV construction.
+
+## Retaining descriptive sample groups
+
+Use `optional.analysis_cohort.exclude_groups` for biological study groups that
+belong in QC, metadata plots and diversity but not the other downstream analyses:
+
+```yaml
+optional:
+  analysis_cohort:
+    sample_col: Sample
+    group_col: Type_Group
+    exclude_groups: [Skin Brush]
+  voc_correlation:
+    isa_all_type_groups: [Oral Rinse, BAL, Bronchial Brush]
+    isa_exclude_nondistinct: true
+```
+
+The VOC rule excludes memberships spanning every listed airway group from all
+ISA-specific outputs. ISA membership is read from explicit `s.<group>` columns;
+configured palette colours follow those memberships. Cohort selection does not
+alter the biological sample classification, depth QC or upstream feature-filter
+denominators. Diversity retains the complete final biological cohort.
+
+The report embeds the raw, all-library Sankey. Explicit TECH, BIO, positive-control
+and depth-failure bands show where libraries leave the analysis cohort. Removed
+bands occupy the lower lane; retained bands and the final type split keep their
+order. HTML and SVG share the same geometry, with constrained vertical dragging
+and a reset button in HTML.
+
+## MITOMASTER API availability
+
+`standard.mito.run_mitomaster: true` enables external queries. Requests use
+`mitomaster_timeout` seconds and `mitomaster_retries` retries with exponential
+backoff. With `mitomaster_failure_policy: continue`, exhausted connection/HTTP
+failures or invalid responses are audited and local mitochondrial/contaminant
+BLAST plus taxonomic screening continue. Successful API responses are retained.
+`mitomaster_output.status.json` distinguishes complete, partial and unavailable
+API evidence; `mitomaster_output.failures.tsv` lists failed chunks. With `fail`
+(the template default), an incomplete API screen stops the process.

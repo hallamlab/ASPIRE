@@ -66,12 +66,14 @@ changed. Common examples:
 
 | Change | Suggested stage |
 |---|---|
-| FASTQ trimming or merge parameters | `FASTP_QC` or `MERGE_READS` |
+| Primer definitions or screening | `core:PRIMER_TRIM` |
+| FASTQ trimming or merge parameters | `core:FASTP_QC` or `core:MERGE_READS` |
 | per-sample ASV relative-abundance threshold | `FILTER_ASVS` |
 | taxonomy reference | `TAXONOMY` |
 | host/non-target rules | `FILTER_ASVS` |
 | plot annotations or displayed biological types | `PLOT_METADATA` |
 | biological inclusion cutoff, sample classes, TECH/BIO thresholds | `CONTROL_DECONTAM` |
+| Groups excluded from optional analyses | `optional:ANALYSIS_COHORT_DIAGNOSTICS` |
 | ISA settings | `INDICSPECIES` |
 | VOC correlation/plot thresholds | `VOC_CORRELATION` |
 | network cohort or inference settings | `SPIECEASI` |
@@ -169,3 +171,7 @@ process to `run_asv_pipeline.sh --list-stages` when it is a supported rerun
 boundary. Update `PROCESS_REFERENCE.md`, `CONFIGURATION.md`, the full YAML
 template, mock configuration and mock validator together so the test path
 continues to exercise the advertised functionality.
+
+## Selected analysis cohorts
+
+`optional.analysis_cohort.exclude_groups` applies to grouping diagnostics and to the synchronized analysis tables selected after batch correction. Metadata plots, Sankey accounting and diversity retain those biological groups. Review the cohort sample-selection audits when changing this setting.

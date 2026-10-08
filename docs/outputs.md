@@ -64,3 +64,11 @@ also writes `summary/tables/nextflow_artifact_manifest.tsv` with paths, sizes,
 and SHA-256 checksums for all archived run records. The publication is assembled from runtime
 staging only after Nextflow succeeds, so the visible output is never left in a
 half-organized state.
+
+## Cohorts and filtering audits
+
+The report embeds the raw, all-library Sankey, including technical and biological controls. Separate bands show where controls and biological depth failures leave the analysis cohort, followed by contaminant ASV and final filtering losses. Kept nodes sit above removed nodes. Interactive vertical movement preserves node order; Reset restores the initial layout. Each Sankey variant includes a `.flow.json` accounting audit.
+
+`modules/analysis_cohort/tables/` contains sample-selection tables and summary JSON for selected analyses. Diversity retains the full biological cohort, including groups excluded from other analyses. Compare these audits with the metadata tables when checking denominators.
+
+MITOMASTER publishes `.status.json` and `.failures.tsv` records for API requests. A partial or unavailable API result must be interpreted with those records and the local BLAST results. Outlier tables likewise distinguish unavailable detectors from valid inlier or outlier calls.

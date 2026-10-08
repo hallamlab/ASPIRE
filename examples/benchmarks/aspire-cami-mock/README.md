@@ -15,3 +15,5 @@ The result tables and FASTQs remain in the completed run and dataset directories
 The provenance hashes identify those exact inputs and outputs independently of
 how a local directory is named. For the compact installation fixture, use
 `examples/run_quickstart.sh`.
+
+The committed validation records describe the pre-Cutadapt demonstration. Current generated configurations enable primer trimming and require the additional primer audit checks; retain the new run’s validator output as current evidence.

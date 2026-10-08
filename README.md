@@ -50,9 +50,13 @@ Edit the input/output paths, references, sample metadata, assay settings and ena
 
 Use the same command to resume. See the [user guide](https://hallamlab-aspire.readthedocs.io/) for resources, configuration, outputs and troubleshooting.
 
+### Optional primer removal
+
+Enable [Cutadapt primer trimming](docs/primer-trimming.md) to detect and remove paired primers before fastp. Set all four fixed fastp clipping values to zero when enabling this module. The primer audit records retained and discarded pairs, and a cohort check requires a single amplicon family before ASV construction.
+
 ## Workflow
 
-[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg?v=tech-bio-20261006)](docs/assets/workflow-brief.svg)
+[![ASPIRE workflow from amplicon reads through ASVs, taxonomy, optional decontamination and analyses, genome links and integrated reports.](docs/assets/workflow-brief.svg?v=primer-cohort-20261008)](docs/assets/workflow-brief.svg)
 
 [Vector SVG](docs/assets/workflow-brief.svg) · [PDF](docs/assets/workflow-brief.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
 

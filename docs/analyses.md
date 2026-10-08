@@ -1,6 +1,6 @@
 # Choose and interpret analyses
 
-The optional branches use the selected downstream tables. Read [decontamination](decontamination.md) before enabling control-based filtering and [VOC statistics](VOC_STATISTICS.md) before interpreting repeated-participant associations. Use the [process reference](PROCESS_REFERENCE.md) to trace individual inputs and outputs.
+Most optional branches use the selected downstream tables. `optional.analysis_cohort.exclude_groups` selects groups for these analyses after metadata plotting and full-cohort batch correction. Excluded biological groups remain in QC, decontamination, the Sankey, metadata plots and diversity. Grouping diagnostics apply the same group selection before batch correction. Cohort audits record the samples kept and excluded. Read [decontamination](decontamination.md) before enabling control-based filtering and [VOC statistics](VOC_STATISTICS.md) before interpreting repeated-participant associations. Use the [process reference](PROCESS_REFERENCE.md) to trace individual inputs and outputs.
 
 ## Indicator Species Analysis
 
@@ -47,6 +47,8 @@ standard:
       - "Class:Mammalia"
       - Order: Primates
 ```
+
+ASVs with no assigned taxonomy rank are also removed; an unknown genus alone does not make an otherwise assigned ASV unassigned.
 
 Use this for host or other known non-target ranks that should be removed even if they pass sequence and abundance filters.
 
@@ -159,3 +161,9 @@ manuscripts to workflow switches, implementations, and outputs is documented in
 [`docs/SPARK_FUNCTIONALITY.md`](SPARK_FUNCTIONALITY.md). The private
 manuscript-scale run uses 1,000 degree-preserving null networks. The public mock
 configuration uses 100 draws to demonstrate the same method in less time.
+
+## Power and outlier review
+
+Power analysis resamples patient profiles to estimate detection across patient-count grids. It evaluates the pilot study’s observed effects and configured simulation scenarios; it does not estimate the benefit of additional sequencing depth. Use the [power configuration guidance](CONFIGURATION.md#power-analysis-execution-and-precision) to distinguish simulation precision from biological uncertainty.
+
+Outlier methods that cannot produce a valid classification are marked unavailable. Consensus records the number of available detectors and is unknown when there are fewer available detectors than the configured vote threshold. Inspect availability and diagnostics before interpreting a consensus call.

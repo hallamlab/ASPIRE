@@ -26,3 +26,11 @@ serialized mamba slot indicate active environment creation, not a deadlock.
 - Sankey complains about intermediates: set `standard.filter_counts.save_intermediates: true`.
 - BLAST database errors: set `standard.mito.mito_db` and `standard.mito.biof_db` to valid database prefixes or compatible FASTA paths.
 - Conda solve errors: confirm `mamba` is available and review the relevant `environments.*` config entry.
+
+## MITOMASTER API availability
+
+Requests have bounded retries and timeouts. `standard.mito.mitomaster_failure_policy: fail` stops after an API failure; `continue` preserves successful responses and allows local BLAST screening to finish even if all requests fail. Inspect the published status JSON and failure TSV before interpreting mitochondrial evidence. See the [configuration reference](CONFIGURATION.md).
+
+## Unavailable outlier classifications
+
+A detector that fails or cannot form valid clusters is unavailable. If too few detectors remain for the vote threshold, consensus is unknown. Review detector availability and group diagnostics rather than treating unknown calls as inliers.

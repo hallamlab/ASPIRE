@@ -435,6 +435,16 @@ def parse_exclude_taxa(items: Sequence[str]) -> Dict[str, Set[str]]:
     return filters
 
 
+def has_taxonomy_assignment(taxon) -> bool:
+    """Require at least one assigned rank; unresolved lower ranks are allowed."""
+    if pd.isna(taxon):
+        return False
+    empty = {'', 'unassigned', 'unclassified', 'unknown', 'uncultured',
+             'none', 'nan', 'na', 'n/a'}
+    return any(normalize_taxon_value(value) not in empty
+               for value in split_taxa_string(str(taxon)).values())
+
+
 def filter_by_taxonomy(
     count_df: pd.DataFrame,
     tax_df: pd.DataFrame,
@@ -457,13 +467,13 @@ def filter_by_taxonomy(
         Filtered count dataframe
     """
     # Filter taxonomy table
-    tax_filter = (tax_df[taxon_col] != 'Unassigned')
+    tax_filter = tax_df[taxon_col].map(has_taxonomy_assignment)
     
     if min_consensus > 0 and consensus_col in tax_df.columns:
         tax_filter &= (tax_df[consensus_col] >= min_consensus)
-        print(f"[INFO] Taxonomy filter: Taxon != 'Unassigned' AND Consensus >= {min_consensus}")
+        print(f"[INFO] Taxonomy filter: assigned taxonomy required AND Consensus >= {min_consensus}")
     else:
-        print(f"[INFO] Taxonomy filter: Taxon != 'Unassigned'")
+        print(f"[INFO] Taxonomy filter: assigned taxonomy required")
     
     qual_tax_df = tax_df.loc[tax_filter]
 
@@ -492,12 +502,12 @@ def filter_by_taxonomy(
     print(f"[INFO] Taxonomy coverage: {annotated_n}/{len(count_df)} ASVs ({coverage:.1f}%)")
     if annotated_n < len(count_df):
         print(
-            "[WARN] Taxonomy table is partial; ASVs missing taxonomy are retained "
-            "and taxonomy filtering is applied only to annotated ASVs."
+            "[INFO] Taxonomy table is partial; ASVs missing taxonomy are excluded "
+            "from the final microbial table."
         )
 
-    # Apply taxonomy filtering to annotated ASVs; keep unannotated ASVs.
-    keep_mask = (~count_df.index.isin(tax_df.index)) | (count_df.index.isin(qual_tax_df.index))
+    # Require a usable assignment and all configured taxonomy checks.
+    keep_mask = count_df.index.isin(qual_tax_df.index)
     filtered_df = count_df.loc[keep_mask]
 
     removed = len(count_df) - len(filtered_df)
@@ -606,6 +616,8 @@ def main():
         exclude_taxa=exclude_taxa
     )
     
+    assigned_ids = tax_df.index[tax_df[args.taxon_col].map(has_taxonomy_assignment)]
+    feature_qc['taxonomy_assigned'] = feature_qc.index.isin(assigned_ids)
     feature_qc['retained_final'] = feature_qc.index.isin(final_df.index)
     feature_qc_path.parent.mkdir(parents=True, exist_ok=True)
     feature_qc.to_csv(feature_qc_path, sep='\t')

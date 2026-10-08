@@ -63,6 +63,9 @@ def test_reproducible_checksums_and_full_configuration(dataset, tmp_path):
     configure.validate_tabular_inputs(dataset, set(metadata.sample_id))
     config = configure.build_config(ROOT/'examples/mock.local.yml', dataset, tmp_path/'results', tmp_path/'runtime', ROOT, 4)
     section = lambda key: configure.config_section(config,key)
+    assert section('primer_trimming')['enabled']
+    assert section('primer_trimming')['primers'][0]['name'] == '515F_806R'
+    assert all(value == 0 for value in section('fastp').values())
     assert section('control_decontam')['technical_enabled']
     assert section('control_decontam')['bio_control_enabled']
     assert section('control_decontam')['min_biological_reads'] == 5000

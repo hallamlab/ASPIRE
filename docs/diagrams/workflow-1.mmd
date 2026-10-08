@@ -1,6 +1,7 @@
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
 flowchart TD
-    I[FASTQs and sample manifest] --> C[Read QC and ASV construction]
+    I[FASTQs and sample manifest] --> P[Optional Cutadapt primer removal and family check]
+    P --> C[fastp QC and ASV construction]
     R[Sequence and taxonomy references] --> T[Alignment and taxonomy]
     C --> T
     T --> D{Control decontamination enabled?}
@@ -14,8 +15,11 @@ flowchart TD
     F --> M[Metadata-linked microbial tables]
     S --> M
     M --> A[Analysis table preparation]
-    A --> E[Ecology, indicators and associations]
-    A --> N[Networks, modules and topology]
+    A --> V[Diversity: all final biological samples]
+    A --> H[Optional study analysis cohort selection]
+    H --> E[Indicators and associations]
+    H --> N[Networks, modules and topology]
+    V --> O
     F -->|Final filtered ASV sequences| L[Optional ASV-to-genome linkage]
     G[Genome and barrnap references] --> L
     L --> N

@@ -21,6 +21,13 @@ See `examples/manifest.template.tsv` for a reusable template.
 
 Metadata is required by enabled metadata-aware branches such as metadata plots, Sankey, diversity, indicator species, VOC correlation, power analysis, taxonomy patient-aware analysis, lung-status analysis, and several network overlays. The configured sample column must match the manifest sample IDs.
 
+Start with the {download}`minimal metadata workbook <../examples/metadata.template.xlsx>`.
+It contains a **Definitions** sheet and an empty **Metadata** table with `Sample`,
+`sample_class`, `Type_Group`, `Participant_ID`, `Case` and `Set`. The sample-class
+column has a dropdown for biological, technical, biological-control and positive
+roles. Export only the completed Metadata sheet as a UTF-8 tab-separated `.tsv`
+file, then configure ASPIRE's column and group mappings as described in the workbook.
+
 Metadata column names are configured per run (`sample_col`, `type_col`,
 `case_col`, `patient_col`, and related settings); ASPIRE does not require fixed
 study-specific names. If the configured color column is absent, ASPIRE assigns

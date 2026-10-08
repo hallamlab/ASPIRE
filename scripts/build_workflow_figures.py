@@ -12,6 +12,8 @@ NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
 
 FULL = [
+    ('Optional primer removal', 'PRIMER_TRIM (Cutadapt) → PRIMER_TRIM_CHECK',
+     'Detect paired primers; audit discarded pairs; require one amplicon family.'),
     ('Read quality control', 'FASTP_QC → MERGE_READS → FILTER_READS → RELABEL_FILTERED',
      'All biological samples and controls share read processing.'),
     ('ASV construction', 'CONCAT_FASTAS → DEREPLICATE → DENOISE → CHIMERA_CHECK → CREATE_COUNT_MATRIX',
@@ -30,7 +32,9 @@ FULL = [
     ('PLOT_METADATA · final biological tables', 'ASV_target.tsv → synchronized long / wide tables and metadata',
      'CAMI: Airways and Oral only; Skin BIO controls and TECH blanks excluded.'),
     ('Optional analysis-table preparation', 'Group diagnostics / validated labels → batch correction and count selection',
-     'Downstream analyses use the selected counts and synchronized annotations.'),
+     'Diversity retains all final biological samples; configured study-group exclusions apply to other analyses.'),
+    ('ANALYSIS_COHORT · optional study-group selection', 'Synchronize metadata, counts, long ASV tables and CLR sample rows; publish a selection audit',
+     'Diagnostic cohort selection precedes group diagnostics; downstream selection follows batch preparation.'),
     ('Optional analysis branches · dependencies govern execution', 'Diversity / ordination · indicators · patient / paired contrasts · group-effect power',
      'ASV–VOC associations · SPIEC-EASI → modules / topology → annotated networks',
      'Final filtered FASTA + genome references → ASV–MAG links and network overlays.'),
@@ -39,7 +43,7 @@ FULL = [
 ]
 BRIEF = [
     ('Reads → ASVs → full taxonomy', 'Shared QC for biological samples, BIO controls and TECH blanks',
-     'fastp / VSEARCH → ASV count matrix → SINA / QIIME 2 taxonomy'),
+     'Optional Cutadapt → fastp / VSEARCH → ASV count matrix → SINA / QIIME 2 taxonomy'),
     ('Optional TECH / BIO control decontamination', '≥5,000 post-QC reads for biological samples; retain all nonzero controls',
      'Independent prevalence tests → union ASV removal; retained counts unchanged',
      'Positive controls stay in QC. Either control arm may be disabled.'),
@@ -47,7 +51,7 @@ BRIEF = [
      'Mock: ≥0.1% RA in any biological sample AND nonzero counts in ≥5% of biological samples',
      'This percentage is separate from decontam’s prevalence-score cutoffs.'),
     ('Metadata → selected analysis tables', 'PLOT_METADATA receives the final filtered biological count table',
-     'Optional group diagnostics, batch correction and synchronized annotations'),
+     'Optional cohort selection for other analyses; diversity retains all final biological samples'),
     ('Optional analyses and integration', 'Diversity · indicators · patient contrasts · power · participant-level ASV–VOC tests',
      'SPIEC-EASI networks / topology / modules · filtered ASV-to-genome linkage'),
     ('Results, QC and provenance', 'Tables · editable figures · removal audits · HTML report · logs and checksums',

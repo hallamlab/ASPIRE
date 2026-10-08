@@ -7,13 +7,13 @@ dataset is the executable demonstration dataset.
 
 | Reported analysis | YAML switch | ASPIRE implementation | Principal outputs |
 |---|---|---|---|
-| Read QC, merging, filtering, denoising, chimera removal, count matrix | core workflow | `asv_pipeline.nf`; `FASTP_QC` through `CREATE_COUNT_MATRIX` | FASTQ QC, filtered reads, ASV FASTA and count matrix |
-| SILVA/SINA taxonomy and non-target screening | `sina`, `taxonomy`, `mito`, `filter_counts` | `processes/sina_trim`, `processes/taxonomy`, `processes/mitomaster`, `processes/mito_decontam`, `processes/filter_counts` | taxonomy tables, mitochondrial/non-target calls, final microbial table |
+| Read QC, merging, filtering, denoising, chimera removal, count matrix | core workflow | `asv_pipeline.nf`; optional `PRIMER_TRIM`, then `FASTP_QC` through `CREATE_COUNT_MATRIX` | FASTQ QC, filtered reads, ASV FASTA and count matrix |
+| SILVA/SINA taxonomy and non-target screening | `core.sina`, `core.taxonomy`, `standard.mito`, `standard.filter_counts` | `processes/sina_trim`, `processes/taxonomy`, `processes/mitomaster`, `processes/mito_decontam`, `processes/filter_counts` | taxonomy tables, mitochondrial/non-target calls, final microbial table |
 | Current control contamination screen | `core.control_decontam.enabled` | `processes/control_decontam` | biological-only depth QC, independent TECH/BIO prevalence scores, union removal and audit |
-| Read/sample retention and ASV overlap | `general_stats`, `sankey`, `plot_upset`, `metadata_plots` | corresponding processes listed in `README.md` | retention summaries, Sankey, UpSet and Venn outputs |
-| Collector curves | `collectors_curve.enabled` | `processes/collectors_curve/collectors_curve.py` | curve figures and richness summaries |
+| Read/sample retention and ASV overlap | `standard.general_stats`, `optional.sankey`, `optional.plot_upset`, `standard.metadata_plots` | corresponding processes in the [process reference](PROCESS_REFERENCE.md) | retention summaries, Sankey, UpSet and Venn outputs |
+| Collector curves | `optional.collectors_curve.enabled` | `processes/collectors_curve/collectors_curve.py` | curve figures and richness summaries |
 | Shannon, Bray-Curtis, PERMANOVA and PERMDISP | `optional.diversity.enabled`; `optional.diversity.patient_aware.enabled` | `processes/diversity_analysis`; `processes/bray_patient_aware` | diversity tables/figures and patient-blocked tests |
-| UMAP and hierarchical clustermaps | `umap_clustering.enabled`, `clustermaps.enabled` | `processes/umap_clustering`, `processes/clustermaps` | ordinations and taxonomic/ASV heatmaps |
+| UMAP and hierarchical clustermaps | `optional.umap_clustering.enabled`, `optional.clustermaps.enabled` | `processes/umap_clustering`, `processes/clustermaps` | ordinations and taxonomic/ASV heatmaps |
 | Tumour-side, contralateral and healthy-lung comparisons | `optional.lung_status_analysis.enabled` | `processes/lung_status_analysis` | prepared status tables, PERMANOVA/PERMDISP results and figures |
 | Patient-aware taxonomic comparisons | `optional.taxonomy_patient_aware.enabled` | `processes/taxonomy_patient_aware` | sample-type and cancer-status taxonomic tests and figures |
 | Sample-type and cancer-status indicator species | `optional.indicspecies.enabled` | `processes/indicspecies`, `processes/indicspecies_plots` | complete ISA result, summary and figure files |
@@ -27,12 +27,13 @@ dataset is the executable demonstration dataset.
 ## Network topology settings
 
 ```yaml
-network_topology:
-  enabled: true
-  output_dir: spieceasi
-  n_null: 1000
-  seed: 42
-  skip_null: false
+optional:
+  network_topology:
+    enabled: true
+    output_dir: spieceasi
+    n_null: 1000
+    seed: 42
+    skip_null: false
 ```
 
 The implementation follows the deposited SPARK supplementary method: the

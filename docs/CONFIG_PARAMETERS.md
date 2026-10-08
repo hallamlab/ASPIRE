@@ -40,6 +40,22 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `core.filename_patterns.ext_patterns` | list | `["\\.fastq\\.gz$","\\.fq\\.gz$","\\.fastq$","\\.fq$"]` | Regular expressions accepted as FASTQ filename suffixes. |
 | `core.filename_patterns.sample_strip_regex` | str | `(_S[0-9]+)?(_L[0-9]{3})?(_R[12])?(_[12])?(_001)?$` | Regular expression removed from discovered filenames to derive sample IDs. |
 
+### `core.primer_trimming`
+
+| Parameter | Type | Template value | Definition |
+|---|---|---|---|
+| `core.primer_trimming.enabled` | bool | `false` | Run paired Cutadapt primer removal and cohort family validation before fastp. Requires paired reads and all four fastp fixed trimming values set to zero. |
+| `core.primer_trimming.primers` | list | `[{"name":"515F_806R","forward":"GTGYCAGCMGCCGCGGTAA","reverse":"GGACTACNVGGGTWTCTAAT"},{"name":"515F_926R","forward":"GTGYCAGCMGCCGCGGTAA","reverse":"CCGYCAATTYMTTTRAGTTT"}]` | Candidate primer families, each with unique name, forward and reverse IUPAC DNA sequences. Restrict to the known assay when possible; candidate screening does not discover unknown primers. |
+| `core.primer_trimming.sample_reads` | int | `5000` | Number of initial read pairs screened per sample; positive integer. Screening is sequential, not random. |
+| `core.primer_trimming.max_prefix` | int | `12` | Maximum number of bases allowed before a 5-prime primer; integer from 0 to 100. The prefix is removed with the primer. |
+| `core.primer_trimming.min_pair_fraction` | float | `0.5` | Minimum fraction of screened pairs supporting a candidate primer pair (greater than 0 and at most 1). Insufficient support stops the sample. |
+| `core.primer_trimming.min_family_fraction` | float | `0.01` | Minimum fraction of screened pairs supporting a family/orientation for selection (greater than 0 and at most 1). |
+| `core.primer_trimming.min_family_reads` | int | `5` | Minimum supporting screened pairs for each selected family/orientation; positive integer. |
+| `core.primer_trimming.screen_error_rate` | float | `0.0` | Maximum substitution rate for complete primers during screening (0 to 0.25), without indels; 0 requires exact IUPAC matches. Independent of Cutadapt error_rate. Allowed substitutions are floor(rate times primer length). |
+| `core.primer_trimming.error_rate` | float | `0.1` | Maximum Cutadapt primer mismatch rate (0 to 0.25); indels are disabled. Screening has a separate screen_error_rate setting. |
+| `core.primer_trimming.end_overlap` | int | `12` | Minimum overlap for optional opposite-primer read-through removal at the 3-prime end; positive integer. |
+| `core.primer_trimming.minimum_length` | int | `1` | Minimum length of each primer-trimmed mate; positive integer. Pairs with a shorter mate enter the too-short audit bin. |
+
 ### `core.fastp`
 
 | Parameter | Type | Template value | Definition |
@@ -156,6 +172,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `standard.mito.mitomaster_retries` | int | `4` | Numeric setting for mitomaster retries in the mito module. |
 | `standard.mito.mitomaster_timeout` | int | `90` | Numeric setting for mitomaster timeout in the mito module. |
 | `standard.mito.mitomaster_header_mode` | str | `first` | Value selecting or naming mitomaster header mode for the mito module. |
+| `standard.mito.mitomaster_failure_policy` | str | `fail` | After bounded API retries, fail stops the process; continue retains successful responses and runs local BLAST even if all API requests fail. Publishes status JSON and failed-chunk TSV; unavailable API evidence is not a completed negative screen. |
 | `standard.mito.output_dir` | str | `mito/mitomap` | Directory or published subdirectory used for output dir. |
 | `standard.mito.prefix` | str | `nontarget` | Value selecting or naming prefix for the mito module. |
 | `standard.mito.formats` | str | `svg,pdf` | Comma-separated output figure formats. |
@@ -231,6 +248,14 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 ## `optional`
 
+### `optional.analysis_cohort`
+
+| Parameter | Type | Template value | Definition |
+|---|---|---|---|
+| `optional.analysis_cohort.sample_col` | str | `Sample` | Sample identifier column used to synchronize downstream metadata, counts and long tables. |
+| `optional.analysis_cohort.group_col` | str | `Type_Group` | Metadata column whose exact values define study groups to exclude from downstream analysis. |
+| `optional.analysis_cohort.exclude_groups` | list | `[]` | List of study groups retained in QC, decontamination, metadata plots, batch preparation and diversity, but excluded from every other sample-based optional analysis. Empty disables cohort selection. Does not change control roles or upstream abundance/prevalence denominators. |
+
 ### `optional.sankey`
 
 | Parameter | Type | Template value | Definition |
@@ -244,7 +269,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.sankey.palette_file` | null | `null` | Path to, or configured name of, the palette file input. |
 | `optional.sankey.keep_types` | null | `null` | Retain types when true. |
 | `optional.sankey.vertical_order` | list | `["Bronchial Brush","BAL","Oral Rinse","Skin Brush","Scope Flush","Control"]` | Explicit category order used for vertical analysis and display. |
-| `optional.sankey.arrangement` | str | `freeform` | Value selecting or naming arrangement for the sankey module. |
+| `optional.sankey.arrangement` | str | `freeform` | Vertical node interaction: snap returns nodes to their ordered initial positions on release; freeform and perpendicular retain constrained vertical positions; fixed disables dragging. Retained/removed lanes and within-column order are preserved in all modes. |
 | `optional.sankey.output_prefix` | str | `metadata/data_loss_sankey` | Output name, prefix, or destination used for output prefix. |
 | `optional.sankey.title` | str | `Data Loss Flow` | Title printed on generated figures. |
 | `optional.sankey.make_labeled` | bool | `true` | Enable or disable make labeled behavior in the sankey module. |
@@ -492,6 +517,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.voc_correlation.isa_correlation_direction` | str | `both` | Direction retained in ISA-focused ASV–VOC outputs. |
 | `optional.voc_correlation.isa_focus_groups` | list | `["Bronchial Brush","Lung Brush"]` | Sample-type labels defining the focus-group ISA/VOC subset; matching groups may include these labels in singleton or mixed memberships. |
 | `optional.voc_correlation.isa_all_type_groups` | list | `["Oral Rinse","BAL","Bronchial Brush"]` | Ordered values used for isa all type groups by the VOC correlation module. |
+| `optional.voc_correlation.isa_exclude_nondistinct` | bool | `false` | Exclude ISA memberships containing every isa_all_type_groups value from all ISA-specific VOC plots and tables. Excluded memberships are audited; general ASV correlation tables remain available. |
 | `optional.voc_correlation.isa_exclude_all_types_from_focus` | bool | `true` | Exclude universal sample-type memberships from the focus-group ISA/VOC subset. |
 | `optional.voc_correlation.isa_min_abs_rho` | float | `0.35` | Minimum absolute Spearman rho required in focused ISA/VOC rows and columns. |
 | `optional.voc_correlation.sample_min_abs_z` | float | `2.5` | Minimum absolute sample VOC z-score used for focused sample heatmaps. |
@@ -513,11 +539,11 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.power_analysis.patient_col` | str | `Participant_ID` | Column containing participant/patient identifiers for blocking or pairing. |
 | `optional.power_analysis.case_col` | str | `Case` | Column containing case/control status. |
 | `optional.power_analysis.type_col` | str | `Type_Group` | Column containing sample-type labels. |
-| `optional.power_analysis.sample_sizes_cancer` | str | `6,8,10,15,20,25,30` | Value selecting or naming sample sizes cancer for the power analysis module. |
-| `optional.power_analysis.sample_sizes_stype` | str | `10,15,20,25,30,40,50` | Value selecting or naming sample sizes stype for the power analysis module. |
-| `optional.power_analysis.n_simulations` | int | `1000` | Configured number or size for n simulations in the power analysis module. |
-| `optional.power_analysis.n_perm` | int | `199` | Configured number or size for n perm in the power analysis module. |
-| `optional.power_analysis.alpha` | float | `0.05` | Numeric setting for alpha in the power analysis module. |
+| `optional.power_analysis.sample_sizes_cancer` | str | `6,8,10,15,20,25,30` | Cancer-patient counts to simulate. Controls retain the observed pilot count until cancer count exceeds it, then use equal counts per group. |
+| `optional.power_analysis.sample_sizes_stype` | str | `10,15,20,25,30,40,50` | Patient-profile counts to simulate for paired sample-type comparisons; not library counts or sequencing depth. |
+| `optional.power_analysis.n_simulations` | int | `1000` | Number of repeated simulations per scenario and patient-count setting; controls Monte Carlo precision. |
+| `optional.power_analysis.n_perm` | int | `199` | Number of permutations within each permutation test; separate from the simulation count. |
+| `optional.power_analysis.alpha` | float | `0.05` | Significance cutoff used to count detections in power simulations. |
 | `optional.power_analysis.seed` | int | `42` | Random seed used to make stochastic behavior reproducible. |
 | `optional.power_analysis.skip_estimate` | bool | `false` | Skip estimate when true. |
 | `optional.power_analysis.skip_plot` | bool | `false` | Skip plot when true. |
@@ -817,6 +843,7 @@ This general measurement-association extension is outside the publication workfl
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
+| `environments.primer_trimming` | str | `processes/primer_trimming/env.yml` | Conda environment YAML for paired Cutadapt primer removal and cohort checks. |
 | `environments.main` | str | `processes/fastp_qc/env.yml` | Conda environment YAML used by the main process family. |
 | `environments.sina` | str | `processes/sina_trim/env.yml` | Conda environment YAML used by the sina process family. |
 | `environments.taxonomy` | str | `processes/taxonomy/env.yml` | Conda environment YAML used by the taxonomy process family. |

@@ -1154,6 +1154,7 @@ def main() -> None:
     parser.add_argument("--isa-q-threshold", type=float, default=0.05)
     parser.add_argument("--isa-focus-groups", "--isa-brush-groups", dest="isa_focus_groups", default="Bronchial Brush,Lung Brush")
     parser.add_argument("--isa-all-type-groups", default="")
+    parser.add_argument("--isa-exclude-nondistinct", action="store_true", help="Exclude universal memberships across isa-all-type-groups from every ISA-specific output")
     parser.add_argument("--isa-exclude-all-types-from-focus", "--isa-exclude-all-types-from-brush", dest="isa_exclude_all_types_from_focus", default="true")
     parser.add_argument(
         "--isa-min-abs-rho",
@@ -1243,6 +1244,14 @@ def main() -> None:
 
     isa_annotations = load_isa_annotations(args.indicspecies_glob, q_threshold=args.isa_q_threshold)
     isa_group_annotations = isa_annotations.loc[isa_annotations["source_category"] == "group"].copy()
+    if args.isa_exclude_nondistinct:
+        if not isa_all_type_groups:
+            raise ValueError('--isa-exclude-nondistinct requires --isa-all-type-groups')
+        distinct = isa_group_annotations['isa_groups'].map(
+            lambda label: isa_group_is_focus_specific(label, isa_all_type_groups, isa_all_type_groups, True)
+        ).astype(bool)
+        isa_group_annotations.loc[~distinct].to_csv(outdir / 'isa_annotations_excluded_nondistinct.tsv', sep='\t', index=False)
+        isa_group_annotations = isa_group_annotations.loc[distinct].copy()
     if not isa_group_annotations.empty:
         isa_group_annotations.to_csv(outdir / "isa_annotations_group.tsv", sep="\t", index=False)
         focus_mask = isa_group_annotations["isa_groups"].map(

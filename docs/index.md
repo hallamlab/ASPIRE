@@ -28,6 +28,7 @@ inputs
 :caption: Run and understand analyses
 
 workflow
+primer-trimming
 decontamination
 analyses
 outputs

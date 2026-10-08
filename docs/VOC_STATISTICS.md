@@ -117,3 +117,7 @@ Patient-level association outputs:
   any case barplot is descriptive and has no inferential annotation.
 
 See [the complete parameter catalogue](CONFIG_PARAMETERS.md) for defaults.
+
+## Non-distinct indicator memberships
+
+Set `optional.voc_correlation.isa_exclude_nondistinct: true` to omit indicators whose membership contains every group in `isa_all_type_groups` from all ISA-specific VOC outputs. Additional group membership does not make such an indicator distinct. `isa_annotations_excluded_nondistinct.tsv` records these exclusions. This is broader than `isa_exclude_all_types_from_focus`, which controls focused displays. General ASV–VOC correlation outputs remain available.

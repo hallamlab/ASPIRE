@@ -131,3 +131,17 @@ output tables. The parameter record uses path placeholders; use the configurator
 above to produce a runnable YAML. The manuscript benchmark measures recovery for
 this fixed synthetic design. The [installation fixture](test.md) uses a separate,
 smaller community with deliberately strong planted signals.
+
+## Primer trimming in current runs
+
+The configurator enables Cutadapt before fastp for both mock datasets, using the
+515F/806R V4 primer family and a 64-base prefix search window to accommodate
+the large mock's R2 adapter prefixes. Screening and trimming each allow a 0.1 substitution
+rate; the minimum paired-primer screening support remains 50%. All four fixed
+fastp clipping settings are zero. The validator additionally checks primer-family
+membership, read-pair accounting and the handoff to fastp.
+
+The recorded validation logs and numerical results on this page describe the
+previous fixed-clipping run. They remain historical evidence; the Cutadapt
+variation requires a new full run and validation. Re-running the configuration
+command updates an existing YAML, and Nextflow reruns affected tasks.
