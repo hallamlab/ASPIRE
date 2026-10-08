@@ -534,6 +534,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
 | `optional.power_analysis.enabled` | bool | `true` | Whether this module or nested analysis is scheduled. |
+| `optional.power_analysis.workers` | null | `null` | Maximum simulation worker processes. Null inherits core.resources.threads; explicit values are capped at that budget and available CPUs. One runs serially. |
 | `optional.power_analysis.output_dir` | str | `power_analysis` | Directory or published subdirectory used for output dir. |
 | `optional.power_analysis.sample_col` | str | `Sample` | Column containing sample identifiers. |
 | `optional.power_analysis.patient_col` | str | `Participant_ID` | Column containing participant/patient identifiers for blocking or pairing. |

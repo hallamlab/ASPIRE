@@ -26,6 +26,7 @@ sys.modules.setdefault("statsmodels.stats.multitest", statsmodels.stats.multites
 
 
 SCRIPT = Path(__file__).parents[1] / "processes" / "power_analysis_pipeline" / "power_taxonomic_abundance.py"
+sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("power_taxonomic_abundance", SCRIPT)
 POWER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POWER)

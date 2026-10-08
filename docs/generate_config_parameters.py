@@ -17,6 +17,7 @@ OUTPUT = ROOT / "docs" / "CONFIG_PARAMETERS.md"
 EXACT = {
     "optional.power_analysis.sample_sizes_cancer": "Cancer-patient counts to simulate. Controls retain the observed pilot count until cancer count exceeds it, then use equal counts per group.",
     "optional.power_analysis.sample_sizes_stype": "Patient-profile counts to simulate for paired sample-type comparisons; not library counts or sequencing depth.",
+    "optional.power_analysis.workers": "Maximum simulation worker processes. Null inherits core.resources.threads; explicit values are capped at that budget and available CPUs. One runs serially.",
     "optional.power_analysis.n_simulations": "Number of repeated simulations per scenario and patient-count setting; controls Monte Carlo precision.",
     "optional.power_analysis.n_perm": "Number of permutations within each permutation test; separate from the simulation count.",
     "optional.power_analysis.alpha": "Significance cutoff used to count detections in power simulations.",

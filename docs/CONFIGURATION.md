@@ -345,6 +345,7 @@ For a full study analysis, a useful starting configuration is:
 optional:
   power_analysis:
     enabled: true
+    workers: 32
     sample_sizes_cancer: 4,6,8,10,15,20,30,40,50
     sample_sizes_stype: 10,15,20,25,30,40,50
     n_simulations: 1000
@@ -363,26 +364,53 @@ and variability. These results guide patient recruitment, not sequencing depth.
 permutation tests. The quickstart deliberately uses smaller values for execution
 checks and should not determine a study’s sample size.
 
-The sample-type taxonomic power stage uses the CPUs allocated to its Nextflow
-task for independent, seed-stable bootstrap simulations. It precomputes patient/
-sample-type means and accelerates the small exact signed-rank tests on validated
-SciPy 1.17.1; other versions fall back to their native SciPy implementation.
-The statistical procedure, simulation counts, permutation counts, and existing
-early-stopping rule are unchanged. Cancer PERMANOVA also reuses its centered
-distance matrix within each permutation test. Other power stages, including
-ISA, remain serial; these optimizations do not eliminate their runtime.
+Power analysis distributes independent simulation replicates across worker processes.
+This covers cancer/control and sample-type PERMANOVA, Shannon and taxonomic
+power, plus **indicator-species power simulations** inside this module. The main
+ISA analysis is unchanged. Effect-size bootstrap replicates also use workers;
+input preparation and plotting remain serial. Analysis families run sequentially
+and share the worker budget; permutations within a replicate remain serial.
+BLAS/OpenMP libraries are limited to one thread per worker to avoid nested pools.
 
-Sample-type taxonomic checkpoints are saved every 25 completed replicates under
-`power_analysis/results/.taxonomic_sample_type_checkpoints/` in runtime staging.
-They are keyed by inputs, settings, implementation, and library versions. A retry
-with the same inputs reuses them regardless of worker count; changed inputs or
-settings create new checkpoints. Earlier runs without checkpoints cannot recover
-their in-memory progress. Python progress output is unbuffered on new runs.
-Standalone execution supports `run_power_analysis_pipeline.sh --workers N`;
-Nextflow supplies `--workers` from `task.cpus`, so no YAML parameter is needed.
+`workers: null` (the template default) inherits `core.resources.threads`, capped
+at the CPUs visible to Nextflow. A positive integer sets a lower module-specific
+limit, also capped at that budget. For a 32-thread run, use
+`core.resources.threads: 32` and either `workers: null` or `workers: 32`.
+`workers: 1` runs serially. Standalone execution supports
+`run_power_analysis_pipeline.sh --workers N`. Parallel execution requires Linux
+or another POSIX platform supporting fork, with enough memory for worker-local
+bootstrap matrices. The robust simulation counts and patient grids are unchanged.
+
+Replicate seeds and result aggregation order are independent of worker count.
+PERMANOVA reuses the centered distance matrix within each permutation test.
+Sample-type taxonomic power also precomputes patient/type means and uses its
+validated exact signed-rank optimization, with a native SciPy fallback.
+Existing sample-size stopping rules remain unchanged.
+
+Checkpoints live under `power_analysis/effect_sizes/checkpoints/` and
+`power_analysis/results/checkpoints/` in runtime publication staging. The existing
+sample-type taxonomic checkpoints remain in
+`power_analysis/results/.taxonomic_sample_type_checkpoints/`. Python saves every
+25 completed replicates; indicator-species power saves batches of up to
+`max(25, workers)` replicates. Keys include inputs, scientific settings, source
+and library versions. Compatible checkpoints are reused across worker counts;
+changed inputs/settings/code start new checkpoints. Keep the runtime directory
+to retain these files. Progress messages report completed/cached replicates and
+elapsed time.
+
+To adopt this implementation during an existing run, first stop the old run and
+wait for its tasks to exit, then restart with the same YAML and runtime directory:
+
+```bash
+./run_asv_pipeline.sh /path/to/study.yml --rerun-from GROUP_POWER_ANALYSIS
+```
+
+The controller reuses eligible upstream results and reruns power and subsequent
+stages. Old serial work without checkpoints cannot recover its in-memory progress.
+Do not launch concurrent runs writing the same results/runtime directory.
 
 There is no universal required number of simulations. Keep `n_simulations: 1000`
-for the full analysis and the existing smaller mock setting for demonstrations.
+for the full study and large-mock analysis; the quickstart uses a shorter execution check.
 For an estimated power of 0.80, 1,000 simulations give Monte Carlo standard error
 about 0.013 (approximately ±2.5 percentage points at 95%); 100 give about 0.040
 (±7.8 points). This measures simulation precision, not uncertainty from the

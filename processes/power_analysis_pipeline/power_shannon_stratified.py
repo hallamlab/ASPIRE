@@ -6,6 +6,8 @@ Shannon diversity power analysis stratified by sample type.
 Uses patient-level aggregation and Mann-Whitney tests.
 """
 
+from power_parallel import run_replicates, add_parallel_arguments, configure_parallel
+
 import argparse
 import warnings
 from pathlib import Path
@@ -183,7 +185,9 @@ def run_power_simulation(count_matrix, patient_ids, case_status,
     significant_count = 0
     effect_values = []
 
-    for i in range(n_simulations):
+    def replicate(i):
+        significant_count = 0
+        effect_values = []
         if use_true_null:
             # True null: pool patients and randomly assign labels
             boot_counts, boot_patients, boot_case = bootstrap_patients_true_null(
@@ -215,13 +219,18 @@ def run_power_simulation(count_matrix, patient_ids, case_status,
                 control_shannon.append(shannon_val)
 
         if len(cancer_shannon) < 2 or len(control_shannon) < 2:
-            continue
+            return (significant_count, effect_values,)
 
         _, p_value = mannwhitneyu(cancer_shannon, control_shannon, alternative='two-sided')
         effect_values.append(rank_biserial_from_samples(cancer_shannon, control_shannon))
 
         if p_value < alpha:
             significant_count += 1
+        return (significant_count, effect_values,)
+
+    for result in run_replicates(replicate, n_simulations, locals()):
+        significant_count += result[0]
+        effect_values.extend(result[1])
 
     power = significant_count / n_simulations
     mean_effect = np.nanmean(effect_values) if effect_values else np.nan
@@ -246,7 +255,9 @@ def main():
     parser.add_argument("--contralateral-sample-types", default="Bronchial Brush,BAL")
     parser.add_argument("--scenarios", default="observed,null",
                        help="Comma-separated: observed, null")
+    add_parallel_arguments(parser)
     args = parser.parse_args()
+    configure_parallel(args.workers, args.checkpoint_dir or str(Path(args.outdir) / "checkpoints"))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

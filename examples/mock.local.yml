@@ -295,6 +295,7 @@ optional:
     voc_columns: []
   power_analysis:
     enabled: true
+    workers: null
     sample_col: sample_id
     patient_col: Participant_ID
     case_col: Case

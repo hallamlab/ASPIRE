@@ -6,6 +6,9 @@ PERMANOVA power analysis stratified by sample type.
 Uses patient-level bootstrap with spike-in scenarios.
 """
 
+from power_permanova import _centered_gram, _r2_from_gram
+from power_parallel import run_replicates, add_parallel_arguments, configure_parallel
+
 import argparse
 import json
 import warnings
@@ -166,7 +169,8 @@ def permanova_permutation_test(dist_matrix, group_labels, patient_ids, n_perm=19
     """PERMANOVA with restricted permutations of patient labels."""
     np.random.seed(seed)
 
-    obs_r2 = permanova_r2(dist_matrix, group_labels)
+    gram = _centered_gram(dist_matrix)
+    obs_r2 = _r2_from_gram(gram, group_labels)
 
     unique_patients = np.unique(patient_ids)
     patient_to_group = {}
@@ -179,7 +183,7 @@ def permanova_permutation_test(dist_matrix, group_labels, patient_ids, n_perm=19
         shuffled_groups = np.random.permutation(list(patient_to_group.values()))
         shuffled_mapping = dict(zip(unique_patients, shuffled_groups))
         perm_groups = np.array([shuffled_mapping[p] for p in patient_ids])
-        perm_r2.append(permanova_r2(dist_matrix, perm_groups))
+        perm_r2.append(_r2_from_gram(gram, perm_groups))
 
     p_value = (1 + np.sum(np.array(perm_r2) >= obs_r2)) / (n_perm + 1)
 
@@ -199,7 +203,9 @@ def run_power_simulation(count_matrix, patient_ids, case_status, asv_names,
     significant_count = 0
     r2_values = []
 
-    for i in range(n_simulations):
+    def replicate(i):
+        significant_count = 0
+        r2_values = []
         if use_true_null:
             # True null: pool patients and randomly assign labels
             boot_counts, boot_patients, boot_case = bootstrap_patients_true_null(
@@ -229,6 +235,11 @@ def run_power_simulation(count_matrix, patient_ids, case_status, asv_names,
         r2_values.append(r2)
         if p_value < alpha:
             significant_count += 1
+        return (significant_count, r2_values,)
+
+    for result in run_replicates(replicate, n_simulations, locals()):
+        significant_count += result[0]
+        r2_values.extend(result[1])
 
     power = significant_count / n_simulations
     mean_r2 = np.mean(r2_values)
@@ -256,7 +267,9 @@ def main():
     parser.add_argument("--contralateral-sample-types", default="Bronchial Brush,BAL")
     parser.add_argument("--scenarios", default="observed,null",
                        help="Comma-separated: observed, null, weak, moderate, strong")
+    add_parallel_arguments(parser)
     args = parser.parse_args()
+    configure_parallel(args.workers, args.checkpoint_dir or str(Path(args.outdir) / "checkpoints"))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

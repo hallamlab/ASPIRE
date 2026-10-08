@@ -490,6 +490,7 @@ optional:
     voc_columns: []
   power_analysis:
     enabled: true
+    workers: null  # Inherit pipeline CPU budget; set 32 to cap this module at 32.
     output_dir: power_analysis
     sample_col: Sample
     patient_col: Participant_ID

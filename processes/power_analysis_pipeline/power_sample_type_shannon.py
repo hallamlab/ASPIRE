@@ -6,6 +6,8 @@ Shannon diversity power analysis for sample type comparisons.
 Tests paired Wilcoxon comparisons (BAL vs Bronchial Brush vs Oral Rinse) with FDR correction.
 """
 
+from power_parallel import run_replicates, add_parallel_arguments, configure_parallel
+
 import argparse
 import warnings
 from pathlib import Path
@@ -118,7 +120,8 @@ def run_power_simulation(count_matrix, patient_ids, sample_types,
     """
     significant_any = 0  # Power to detect at least one difference
 
-    for i in range(n_simulations):
+    def replicate(i):
+        significant_any = 0
         # Bootstrap patients
         boot_counts, boot_patients, boot_stypes = bootstrap_patients_sample_types(
             count_matrix, patient_ids, sample_types,
@@ -167,8 +170,10 @@ def run_power_simulation(count_matrix, patient_ids, sample_types,
             if np.any(p_corrected < alpha):
                 significant_any += 1
 
-        if (i + 1) % 100 == 0:
-            print(f"    {i+1}/{n_simulations} simulations...", end='\r')
+        return (significant_any,)
+
+    for result in run_replicates(replicate, n_simulations, locals()):
+        significant_any += result[0]
 
     power = significant_any / n_simulations
     return power
@@ -189,7 +194,9 @@ def main():
     parser.add_argument("--type-col", default="type_group")
     parser.add_argument("--sample-col", default="sample")
     parser.add_argument("--outdir", required=True)
+    add_parallel_arguments(parser)
     args = parser.parse_args()
+    configure_parallel(args.workers, args.checkpoint_dir or str(Path(args.outdir) / "checkpoints"))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

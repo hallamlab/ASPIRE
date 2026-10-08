@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 export PYTHONUNBUFFERED=1
+# Each simulation process owns one CPU; prevent nested BLAS/OpenMP pools.
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1 BLIS_NUM_THREADS=1
 
 usage() {
   cat <<USAGE
@@ -77,6 +80,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ "$WORKERS" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: --workers must be a positive integer"; exit 2; }
+
 [[ -n "$DATA_LONG" ]] || { echo "ERROR: --data-long is required"; exit 2; }
 [[ -n "$DATA_WIDE" ]] || { echo "ERROR: --data-wide is required"; exit 2; }
 [[ -n "$OUTDIR" ]] || { echo "ERROR: --outdir is required"; exit 2; }
@@ -104,6 +109,8 @@ if [[ "$SKIP_ESTIMATE" == "false" ]]; then
     --case-col "$CASE_COL" \
     --type-col "$TYPE_COL" \
     --outdir "$EFFECT_DIR" \
+    --workers "$WORKERS" \
+    --seed "$SEED" \
     --transform "$TRANSFORM" \
     --exclude-contralateral-in-cancer "$EXCLUDE_CONTRALATERAL" \
     --contralateral-sample-types "$CONTRALATERAL_SAMPLE_TYPES"

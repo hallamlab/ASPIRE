@@ -2526,6 +2526,15 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         exit 1, "power_analysis.enabled requires metadata_plots.enabled to be true"
     }
     boolean powerAnalysisEnabled = powerAnalysisRequested
+    def powerAnalysisWorkersRaw = powerAnalysisConfig.workers
+    if (powerAnalysisWorkersRaw != null && !(powerAnalysisWorkersRaw.toString() ==~ /[1-9][0-9]*/)) {
+        exit 1, "power_analysis.workers must be a positive integer or null"
+    }
+    int powerAnalysisCpuBudget = Math.min((config.resources?.threads ?: pipelineThreads) as int, pipelineThreads)
+    int powerAnalysisWorkers = powerAnalysisWorkersRaw != null ?
+        Math.min(powerAnalysisWorkersRaw as int, powerAnalysisCpuBudget) : powerAnalysisCpuBudget
+    if (powerAnalysisWorkers < 1) exit 1, "Power-analysis CPU budget must be positive"
+    if (powerAnalysisEnabled) log.info "Power analysis: ${powerAnalysisWorkers} simulation workers (one CPU per worker)"
     def powerAnalysisOutputDir = powerAnalysisConfig.output_dir ?: 'power_analysis'
     def powerAnalysisOutputDirAbs = resolveOutputRelative(powerAnalysisOutputDir.toString(), outputDir)
     def powerAnalysisSampleCol = powerAnalysisConfig.sample_col ?: metadataPlotsSampleCol
@@ -2860,6 +2869,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         powerAnalysisSampleSizesCancer: powerAnalysisSampleSizesCancer,
         powerAnalysisSampleSizesStype: powerAnalysisSampleSizesStype,
         powerAnalysisNSimulations: powerAnalysisNSimulations,
+        powerAnalysisWorkers: powerAnalysisWorkers,
         powerAnalysisNPerm: powerAnalysisNPerm,
         powerAnalysisAlpha: powerAnalysisAlpha,
         powerAnalysisSeed: powerAnalysisSeed,
@@ -6032,7 +6042,7 @@ touch group_label_augmentation.done
 }
 
 process GROUP_POWER_ANALYSIS {
-    cpus pipelineThreads
+    cpus powerAnalysisWorkers
     conda "${powerAnalysisCondaEnvPath}"
 
     input:
