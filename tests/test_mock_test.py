@@ -81,9 +81,9 @@ class MockTestConfigTest(unittest.TestCase):
             )
             reparsed = yaml.safe_load(yaml.safe_dump(config, sort_keys=False))
             self.assertEqual(MODULE.config_section(reparsed, "indicspecies")["perms"], 999)
-            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["sample_sizes_cancer"], "4,6,8,10")
-            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["n_simulations"], 100)
-            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["n_perm"], 199)
+            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["sample_sizes_cancer"], "4,6,8,10,15,20,30,40,50")
+            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["n_simulations"], 1000)
+            self.assertEqual(MODULE.config_section(reparsed, "power_analysis")["n_perm"], 999)
 
     def test_truth_mapping_accepts_trimmed_inferred_sequences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

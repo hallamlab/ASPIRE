@@ -30,7 +30,7 @@ core:
     trim_tail_r2: 0
 ```
 
-The template defaults to disabled and includes both 515F/806R and 515F/926R candidates. For a known V4 assay, use only `515F_806R` with forward `GTGYCAGCMGCCGCGGTAA` and reverse `GGACTACNVGGGTWTCTAAT`. Custom families require a unique name and forward/reverse IUPAC DNA sequences. Candidate screening identifies support among the supplied sequences; it cannot discover unknown primers or establish the exact oligo formulation used in the laboratory.
+The template enables primer trimming, sets all four fixed fastp clipping values to zero, and includes both 515F/806R and 515F/926R candidates. For a known V4 assay, use only `515F_806R` with forward `GTGYCAGCMGCCGCGGTAA` and reverse `GGACTACNVGGGTWTCTAAT`. Custom families require a unique name and forward/reverse IUPAC DNA sequences. Candidate screening identifies support among the supplied sequences; it cannot discover unknown primers or establish the exact oligo formulation used in the laboratory.
 
 All four fixed fastp clipping values must explicitly be zero when this module is enabled. Fastp still performs quality filtering and its usual adapter processing. Configure merged-read length limits and SINA regions for your assay: V4 and V4–V5 inserts need different length settings. Already primer-trimmed reads should use this module disabled and appropriate fastp clipping values.
 

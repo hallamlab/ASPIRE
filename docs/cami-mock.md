@@ -145,3 +145,12 @@ The recorded validation logs and numerical results on this page describe the
 previous fixed-clipping run. They remain historical evidence; the Cutadapt
 variation requires a new full run and validation. Re-running the configuration
 command updates an existing YAML, and Nextflow reruns affected tasks.
+
+### Power settings for new runs
+
+Newly generated large-mock configurations use the production power settings:
+1,000 simulations, 999 permutations, patient counts
+`4,6,8,10,15,20,30,40,50`, and sample-type counts `10,15,20,25,30,40,50`.
+The committed run record retains the settings used for that completed run.
+The small quickstart uses 10 simulations, 49 permutations, and counts
+`4,6,8,10` to keep installation checks short.

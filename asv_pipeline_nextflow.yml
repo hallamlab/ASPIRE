@@ -23,10 +23,10 @@ core:
     - \.fastq$
     - \.fq$
     sample_strip_regex: (_S[0-9]+)?(_L[0-9]{3})?(_R[12])?(_[12])?(_001)?$
-  # Optional sequence-aware paired primer trimming before fastp.
-  # When enabled, set all four fastp trim values below to zero.
+  # Sequence-aware paired primer trimming before fastp, enabled in this template.
+  # Select primers for your assay; fixed fastp clipping stays at zero.
   primer_trimming:
-    enabled: false
+    enabled: true
     primers:
     - name: 515F_806R
       forward: GTGYCAGCMGCCGCGGTAA
@@ -44,10 +44,10 @@ core:
     end_overlap: 12
     minimum_length: 1
   fastp:
-    trim_front_r1: 19
-    trim_tail_r1: 20
-    trim_front_r2: 20
-    trim_tail_r2: 20
+    trim_front_r1: 0
+    trim_tail_r1: 0
+    trim_front_r2: 0
+    trim_tail_r2: 0
   merge:
     max_diffs: 20
     min_overlap: 5
@@ -95,8 +95,9 @@ core:
     stats_tsv: ASV_SILVA_stats.full-length.vsearch.tsv
     uppercase_fasta: ASVs.upper.fasta
     threads: 6
+  # Set the metadata class column/labels below; disable an arm if that control class is absent.
   control_decontam:
-    enabled: false
+    enabled: true
     metadata: null
     metadata_sample_col: Sample
     # Biological inclusion only: controls are NEVER filtered at this depth.
@@ -122,7 +123,7 @@ standard:
     mitomaster_retries: 4
     mitomaster_timeout: 90
     mitomaster_header_mode: first
-    mitomaster_failure_policy: fail  # Set continue to retain local screening when API requests fail.
+    mitomaster_failure_policy: continue  # Audit API failures and preserve local BLAST screening.
     output_dir: mito/mitomap
     prefix: nontarget
     formats: svg,pdf
@@ -150,13 +151,14 @@ standard:
     output: ASV_target.tsv
     group_col: Type_Group
     min_group_size: 3
-    min_relative_abundance_pct: 0.5
-    min_prevalence_fraction: 0  # Nonzero presence in biological samples; 0.05 = 5%.
+    min_relative_abundance_pct: 0.1
+    min_prevalence_fraction: 0.05  # Nonzero presence in biological samples; 0.05 = 5%.
     sample_id_col: Sample
-    min_consensus: 0.0
+    min_consensus: 0.05
     exclude_taxa:
     - Species:Homo sapiens
     - Class:Mammalia
+    - Phylum:Vertebrata
     taxon_col: Taxon
     consensus_col: Consensus
     biofactorial_col: BioFactorial
@@ -464,8 +466,8 @@ optional:
     voc_table: /abs/path/ref_db/VOC_table.tsv
     output_dir: voc_correlation
     voc_sample_col: sample
-    sample_id_mode: legacy_patient_pair
-    use_legacy_voc_subset: true
+    sample_id_mode: exact
+    use_legacy_voc_subset: false
     correlation_direction: positive
     isa_correlation_direction: both
     isa_focus_groups:
@@ -487,16 +489,16 @@ optional:
     clr_pseudocount: 0.5
     voc_columns: []
   power_analysis:
-    enabled: false
+    enabled: true
     output_dir: power_analysis
     sample_col: Sample
     patient_col: Participant_ID
     case_col: Case
     type_col: Type_Group
-    sample_sizes_cancer: 6,8,10,15,20,25,30
+    sample_sizes_cancer: 4,6,8,10,15,20,30,40,50
     sample_sizes_stype: 10,15,20,25,30,40,50
     n_simulations: 1000
-    n_perm: 199
+    n_perm: 999
     alpha: 0.05
     seed: 42
     skip_estimate: false
@@ -642,7 +644,7 @@ optional:
     group2_palette: Non-Cancer=#FFFFFF,Cancer=#A50026,Cancer+Non-Cancer=#000000,not_indicator=#D3D3D3
     focus_group1_label: Bronchial Brush
     transpose: true
-    min_relative_abundance_fraction: 0.005
+    min_relative_abundance_fraction: 0.001
     min_prevalence_fraction: 0.05
     remove_zero_var: true
     force_keep_indicator_asvs: true
@@ -674,7 +676,7 @@ optional:
     abundance_scale_power: 1.6
     pulsar_criterion: stars
   network_topology:
-    enabled: false
+    enabled: true
     output_dir: spieceasi
     n_null: 1000
     seed: 42

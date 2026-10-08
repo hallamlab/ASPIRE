@@ -24,16 +24,16 @@ At minimum, review:
 
 ## Configure controls and biological inclusion
 
-For the TECH/BIO workflow, enable `core.control_decontam.enabled` and provide its
-metadata, sample identifier column, class column and class labels. The general
-template leaves this stage disabled until the study's control design is specified.
+The template enables `core.control_decontam.enabled`. Provide the study’s
+metadata, sample identifier column, class column and class labels before running.
 Both enabled arms use the same biological cohort passing 5,000 post-QC ASV reads;
 nonzero controls are exempt. Disable the unused arm for TECH-only or BIO-only data.
 
 The [decontamination guide](decontamination.md) describes the full configuration.
 The order is full taxonomy → control decontamination → reference screening →
 `FILTER_ASVS` → `PLOT_METADATA`. The mock uses a 0.1% final abundance cutoff in at
-least one biological sample; the general template's default is 0.5%. Set
+least one biological sample; the general template uses the same cutoff and
+requires 5% nonzero prevalence in biological samples. Set
 `standard.filter_counts.min_relative_abundance_pct` explicitly for your study.
 
 Run the pipeline:

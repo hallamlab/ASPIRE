@@ -1,7 +1,7 @@
 # Complete ASPIRE Configuration Parameter Catalogue
 
 This file documents every explicit parameter in the canonical
-[`asv_pipeline_nextflow.yml`](https://github.com/hallamlab/ASPIRE/blob/main/asv_pipeline_nextflow.yml) template. It is generated
+{download}`asv_pipeline_nextflow.yml <../asv_pipeline_nextflow.yml>` template. It is generated
 from that template; lists are documented as one parameter and their complete template
 value is shown. Paths are resolved relative to the YAML file unless absolute.
 
@@ -44,7 +44,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
-| `core.primer_trimming.enabled` | bool | `false` | Run paired Cutadapt primer removal and cohort family validation before fastp. Requires paired reads and all four fastp fixed trimming values set to zero. |
+| `core.primer_trimming.enabled` | bool | `true` | Run paired Cutadapt primer removal and cohort family validation before fastp. Requires paired reads and all four fastp fixed trimming values set to zero. |
 | `core.primer_trimming.primers` | list | `[{"name":"515F_806R","forward":"GTGYCAGCMGCCGCGGTAA","reverse":"GGACTACNVGGGTWTCTAAT"},{"name":"515F_926R","forward":"GTGYCAGCMGCCGCGGTAA","reverse":"CCGYCAATTYMTTTRAGTTT"}]` | Candidate primer families, each with unique name, forward and reverse IUPAC DNA sequences. Restrict to the known assay when possible; candidate screening does not discover unknown primers. |
 | `core.primer_trimming.sample_reads` | int | `5000` | Number of initial read pairs screened per sample; positive integer. Screening is sequential, not random. |
 | `core.primer_trimming.max_prefix` | int | `12` | Maximum number of bases allowed before a 5-prime primer; integer from 0 to 100. The prefix is removed with the primer. |
@@ -60,10 +60,10 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
-| `core.fastp.trim_front_r1` | int | `19` | Number of bases removed from the 5′ end of read 1. |
-| `core.fastp.trim_tail_r1` | int | `20` | Number of bases removed from the 3′ end of read 1. |
-| `core.fastp.trim_front_r2` | int | `20` | Number of bases removed from the 5′ end of read 2. |
-| `core.fastp.trim_tail_r2` | int | `20` | Number of bases removed from the 3′ end of read 2. |
+| `core.fastp.trim_front_r1` | int | `0` | Number of bases removed from the 5′ end of read 1. |
+| `core.fastp.trim_tail_r1` | int | `0` | Number of bases removed from the 3′ end of read 1. |
+| `core.fastp.trim_front_r2` | int | `0` | Number of bases removed from the 5′ end of read 2. |
+| `core.fastp.trim_tail_r2` | int | `0` | Number of bases removed from the 3′ end of read 2. |
 
 ### `core.merge`
 
@@ -144,7 +144,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
-| `core.control_decontam.enabled` | bool | `false` | Run independent TECH/BIO prevalence tests before biological feature filtering. |
+| `core.control_decontam.enabled` | bool | `true` | Run independent TECH/BIO prevalence tests before biological feature filtering. |
 | `core.control_decontam.metadata` | null | `null` | Path to the metadata TSV consumed by this module. |
 | `core.control_decontam.metadata_sample_col` | str | `Sample` | Sample-identifier column in the metadata table. |
 | `core.control_decontam.min_biological_reads` | int | `5000` | Minimum post-QC count sum for biological samples only. Biological/sample and technical controls are exempt. |
@@ -172,7 +172,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `standard.mito.mitomaster_retries` | int | `4` | Numeric setting for mitomaster retries in the mito module. |
 | `standard.mito.mitomaster_timeout` | int | `90` | Numeric setting for mitomaster timeout in the mito module. |
 | `standard.mito.mitomaster_header_mode` | str | `first` | Value selecting or naming mitomaster header mode for the mito module. |
-| `standard.mito.mitomaster_failure_policy` | str | `fail` | After bounded API retries, fail stops the process; continue retains successful responses and runs local BLAST even if all API requests fail. Publishes status JSON and failed-chunk TSV; unavailable API evidence is not a completed negative screen. |
+| `standard.mito.mitomaster_failure_policy` | str | `continue` | After bounded API retries, fail stops the process; continue retains successful responses and runs local BLAST even if all API requests fail. Publishes status JSON and failed-chunk TSV; unavailable API evidence is not a completed negative screen. |
 | `standard.mito.output_dir` | str | `mito/mitomap` | Directory or published subdirectory used for output dir. |
 | `standard.mito.prefix` | str | `nontarget` | Value selecting or naming prefix for the mito module. |
 | `standard.mito.formats` | str | `svg,pdf` | Comma-separated output figure formats. |
@@ -203,11 +203,11 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `standard.filter_counts.output` | str | `ASV_target.tsv` | Output filename written by this module. |
 | `standard.filter_counts.group_col` | str | `Type_Group` | Primary grouping column used by this module. |
 | `standard.filter_counts.min_group_size` | int | `3` | Minimum number of samples required for a metadata group to participate in group-aware filtering. |
-| `standard.filter_counts.min_relative_abundance_pct` | float | `0.5` | Per-sample microbial relative-abundance percentage; retain an ASV meeting it in any biological sample after control filtering. General default 0.5%; mock 0.1%. |
-| `standard.filter_counts.min_prevalence_fraction` | int | `0` | Minimum fraction of retained biological samples with nonzero counts, independent of RA. Mock 0.05 (5%); general default 0 disables it. Positive values require control decontamination. Includes zero-depth columns remaining after feature removal. |
+| `standard.filter_counts.min_relative_abundance_pct` | float | `0.1` | Per-sample microbial relative-abundance percentage; retain an ASV meeting it in any biological sample after control filtering. General and mock default 0.1%. |
+| `standard.filter_counts.min_prevalence_fraction` | float | `0.05` | Minimum fraction of retained biological samples with nonzero counts, independent of RA. General and mock default 0.05 (5%); 0 disables it. Positive values require control decontamination. Includes zero-depth columns remaining after feature removal. |
 | `standard.filter_counts.sample_id_col` | str | `Sample` | Column containing sample identifiers. |
-| `standard.filter_counts.min_consensus` | float | `0.0` | Minimum taxonomy consensus score accepted by final count filtering. |
-| `standard.filter_counts.exclude_taxa` | list | `["Species:Homo sapiens","Class:Mammalia"]` | Exact rank-qualified taxa removed even when they pass other filters. |
+| `standard.filter_counts.min_consensus` | float | `0.05` | Minimum taxonomy consensus score accepted by final count filtering. |
+| `standard.filter_counts.exclude_taxa` | list | `["Species:Homo sapiens","Class:Mammalia","Phylum:Vertebrata"]` | Exact rank-qualified taxa removed even when they pass other filters. |
 | `standard.filter_counts.taxon_col` | str | `Taxon` | Column containing taxonomy strings. |
 | `standard.filter_counts.consensus_col` | str | `Consensus` | Column containing taxonomy consensus scores. |
 | `standard.filter_counts.biofactorial_col` | str | `BioFactorial` | Input-table column containing biofactorial. |
@@ -511,8 +511,8 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.voc_correlation.voc_table` | str | `/abs/path/ref_db/VOC_table.tsv` | Path to, or configured name of, the VOC table input. |
 | `optional.voc_correlation.output_dir` | str | `voc_correlation` | Directory or published subdirectory used for output dir. |
 | `optional.voc_correlation.voc_sample_col` | str | `sample` | Input-table column containing VOC sample. |
-| `optional.voc_correlation.sample_id_mode` | str | `legacy_patient_pair` | Value selecting or naming sample id mode for the VOC correlation module. |
-| `optional.voc_correlation.use_legacy_voc_subset` | bool | `true` | Enable or disable use legacy VOC subset behavior in the VOC correlation module. |
+| `optional.voc_correlation.sample_id_mode` | str | `exact` | Value selecting or naming sample id mode for the VOC correlation module. |
+| `optional.voc_correlation.use_legacy_voc_subset` | bool | `false` | Enable or disable use legacy VOC subset behavior in the VOC correlation module. |
 | `optional.voc_correlation.correlation_direction` | str | `positive` | Direction retained in the baseline ASV–VOC correlation outputs: positive, negative, or both. |
 | `optional.voc_correlation.isa_correlation_direction` | str | `both` | Direction retained in ISA-focused ASV–VOC outputs. |
 | `optional.voc_correlation.isa_focus_groups` | list | `["Bronchial Brush","Lung Brush"]` | Sample-type labels defining the focus-group ISA/VOC subset; matching groups may include these labels in singleton or mixed memberships. |
@@ -533,16 +533,16 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
-| `optional.power_analysis.enabled` | bool | `false` | Whether this module or nested analysis is scheduled. |
+| `optional.power_analysis.enabled` | bool | `true` | Whether this module or nested analysis is scheduled. |
 | `optional.power_analysis.output_dir` | str | `power_analysis` | Directory or published subdirectory used for output dir. |
 | `optional.power_analysis.sample_col` | str | `Sample` | Column containing sample identifiers. |
 | `optional.power_analysis.patient_col` | str | `Participant_ID` | Column containing participant/patient identifiers for blocking or pairing. |
 | `optional.power_analysis.case_col` | str | `Case` | Column containing case/control status. |
 | `optional.power_analysis.type_col` | str | `Type_Group` | Column containing sample-type labels. |
-| `optional.power_analysis.sample_sizes_cancer` | str | `6,8,10,15,20,25,30` | Cancer-patient counts to simulate. Controls retain the observed pilot count until cancer count exceeds it, then use equal counts per group. |
+| `optional.power_analysis.sample_sizes_cancer` | str | `4,6,8,10,15,20,30,40,50` | Cancer-patient counts to simulate. Controls retain the observed pilot count until cancer count exceeds it, then use equal counts per group. |
 | `optional.power_analysis.sample_sizes_stype` | str | `10,15,20,25,30,40,50` | Patient-profile counts to simulate for paired sample-type comparisons; not library counts or sequencing depth. |
 | `optional.power_analysis.n_simulations` | int | `1000` | Number of repeated simulations per scenario and patient-count setting; controls Monte Carlo precision. |
-| `optional.power_analysis.n_perm` | int | `199` | Number of permutations within each permutation test; separate from the simulation count. |
+| `optional.power_analysis.n_perm` | int | `999` | Number of permutations within each permutation test; separate from the simulation count. |
 | `optional.power_analysis.alpha` | float | `0.05` | Significance cutoff used to count detections in power simulations. |
 | `optional.power_analysis.seed` | int | `42` | Random seed used to make stochastic behavior reproducible. |
 | `optional.power_analysis.skip_estimate` | bool | `false` | Skip estimate when true. |
@@ -678,7 +678,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 | `optional.spieceasi.group2_palette` | str | `Non-Cancer=#FFFFFF,Cancer=#A50026,Cancer+Non-Cancer=#000000,not_indicator=#D3D3D3` | Explicit label-to-color mapping used for group2 displays. |
 | `optional.spieceasi.focus_group1_label` | str | `Bronchial Brush` | Value selecting or naming focus group1 label for the spieceasi module. |
 | `optional.spieceasi.transpose` | bool | `true` | Transpose the configured matrix orientation before analysis. |
-| `optional.spieceasi.min_relative_abundance_fraction` | float | `0.005` | Network-input per-sample abundance fraction; 0.001 means 0.1%. Require at least one sample to meet it; force-kept indicators bypass it. |
+| `optional.spieceasi.min_relative_abundance_fraction` | float | `0.001` | Network-input per-sample abundance fraction; 0.001 means 0.1%. Require at least one sample to meet it; force-kept indicators bypass it. |
 | `optional.spieceasi.min_prevalence_fraction` | float | `0.05` | Fraction of network-input samples with a nonzero count; 0.05 means 5%. Force-kept indicators bypass it; zero-variance filtering still applies. |
 | `optional.spieceasi.remove_zero_var` | bool | `true` | Enable or disable remove zero var behavior in the spieceasi module. |
 | `optional.spieceasi.force_keep_indicator_asvs` | bool | `true` | Force keep indicator ASVs instead of accepting a reusable cached product. |
@@ -714,7 +714,7 @@ for dependencies and interpretation and [Process Reference](PROCESS_REFERENCE.md
 
 | Parameter | Type | Template value | Definition |
 |---|---|---|---|
-| `optional.network_topology.enabled` | bool | `false` | Whether this module or nested analysis is scheduled. |
+| `optional.network_topology.enabled` | bool | `true` | Whether this module or nested analysis is scheduled. |
 | `optional.network_topology.output_dir` | str | `spieceasi` | Directory or published subdirectory used for output dir. |
 | `optional.network_topology.n_null` | int | `1000` | Number of seeded degree-preserving null-network draws. |
 | `optional.network_topology.seed` | int | `42` | Random seed used to make stochastic behavior reproducible. |

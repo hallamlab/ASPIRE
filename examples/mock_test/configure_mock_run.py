@@ -293,7 +293,9 @@ def build_config(
     if manifest_file.is_file() and json.loads(manifest_file.read_text()).get("name") == "aspire-quickstart":
         # Exercise every power-analysis path with a short installation grid.
         # Truth-recovery thresholds and all other analysis settings are shared.
-        config_section(config, "power_analysis").update(n_simulations=10, n_perm=49)
+        config_section(config, "power_analysis").update(
+            sample_sizes_cancer="4,6,8,10", sample_sizes_stype="4,6,8,10",
+            n_simulations=10, n_perm=49)
     return config
 
 

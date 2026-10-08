@@ -184,7 +184,7 @@ counts and `filter_removed_asvs.tsv` records the removal checkpoint.
 
 ## Relative-abundance threshold in the mock
 
-The mock template sets `standard.filter_counts.min_relative_abundance_pct: 0.1`, meaning
+The general and mock templates set `standard.filter_counts.min_relative_abundance_pct: 0.1`, meaning
 **0.1%**, or a fraction of 0.001. This is independent of the TECH/BIO prevalence
 score thresholds, which also default to 0.1 but are not percentages.
 
@@ -196,13 +196,12 @@ sample; individual low-abundance cells are not zeroed. Skin BIO controls, TECH
 blanks and positive controls are absent from this calculation.
 
 The initial `core.table_filter.min_relative_abundance_pct` setting is a per-sample
-percentage; the mock sets it to zero. The general study template
-uses a configurable final abundance default of 0.5%; the mock explicitly overrides
-it to 0.1%. Choose the threshold in the YAML used for the run.
+percentage; both templates set it to zero and apply the 0.1% gate in the final
+filter. Choose the threshold in the YAML used for the run.
 
 ## Biological sample prevalence
 
-The mock sets `standard.filter_counts.min_prevalence_fraction: 0.05`.
+Both templates set `standard.filter_counts.min_prevalence_fraction: 0.05`.
 `FILTER_ASVS` retains ASVs with a nonzero count in at least 5% of the biological
 samples remaining after group-size filtering. With 50 samples, this requires
 at least three nonzero observations. Zero-depth columns created by earlier
@@ -215,4 +214,5 @@ records each ASV's biological sample denominator, nonzero sample count, prevalen
 maximum per-sample RA, configured thresholds, gate results and final retention.
 The retained ASVs and original counts then feed metadata and downstream analyses.
 A positive biological prevalence threshold requires control decontamination to be
-enabled; the general template defaults this new setting to zero for compatibility.
+enabled; the general template enables decontamination and the 5% gate together.
+If you disable decontamination, set this gate to zero as required by the pipeline.

@@ -299,10 +299,10 @@ optional:
     patient_col: Participant_ID
     case_col: Case
     type_col: Type_Group
-    sample_sizes_cancer: 4,6,8,10
-    sample_sizes_stype: 4,6,8,10
-    n_simulations: 100
-    n_perm: 199
+    sample_sizes_cancer: 4,6,8,10,15,20,30,40,50
+    sample_sizes_stype: 10,15,20,25,30,40,50
+    n_simulations: 1000
+    n_perm: 999
     seed: 42
     keep_contralateral_in_cancer: false
     skip_estimate: false

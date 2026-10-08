@@ -1,12 +1,47 @@
 # ASPIRE Configuration Reference
 
-This guide describes the configuration accepted by the `main` branch. The
+This guide describes the configuration shipped with this documentation version. The
 authoritative complete template is
-[`asv_pipeline_nextflow.yml`](https://github.com/hallamlab/ASPIRE/blob/main/asv_pipeline_nextflow.yml). Its exhaustive
+{download}`asv_pipeline_nextflow.yml <../asv_pipeline_nextflow.yml>`. Its exhaustive
 [parameter catalogue](CONFIG_PARAMETERS.md) defines every key and template
 value. Copy the template for a production run and retain the resolved copy with
 the results. Private study YAMLs are intentionally excluded from the repository
 because they contain machine-specific paths and study provenance.
+
+## Template enable/disable defaults
+
+The template starts the current paired-read, control-aware study workflow.
+Replace all input/reference path placeholders and configure the assay and sample
+classes before running. `core.control_decontam.metadata: null` reuses the
+`standard.filter_counts.metadata` table.
+
+| Component | Template default |
+|---|---|
+| Cutadapt primer trimming | Enabled; choose the primer family and matching SINA region for your assay. |
+| fastp | Quality/adapter processing remains active; all four fixed clipping lengths are zero. |
+| TECH/BIO decontamination | Enabled; both arms enabled. Disable the unused arm for TECH-only or BIO-only studies. |
+| Biological depth inclusion | 5,000 post-QC counts; nonzero controls are exempt. |
+| Final ASV filters | 0.1% RA in at least one biological sample AND 5% nonzero biological prevalence. |
+| Taxonomy filtering | Excludes human, mammalian and vertebrate assignments; requires assigned taxonomy and a minimum consensus of 0.05. |
+| Mitochondrial screening | Local screening and MITOMASTER enabled; API failures are audited and local screening continues. |
+| Diversity, ISA, ordination, heatmaps and network inference | Enabled. |
+| Network topology | Enabled, with 1,000 null draws. |
+| Power analysis | Enabled, with 1,000 simulations and 999 permutations; requires the configured patient and group metadata. |
+| VOC/other measurements and MAG linkage | Disabled until their additional input tables or references are supplied. |
+| Batch correction, grouping diagnostics, patient-aware diversity/taxonomy and lung-status contrasts | Opt-in; configure the study design before enabling. |
+
+Power analysis uses patient counts `4,6,8,10,15,20,30,40,50` for the cancer
+comparison and sample counts `10,15,20,25,30,40,50` for sample-type comparisons,
+with alpha `0.05`, seed `42`, and both estimation and plotting enabled. These
+settings match SPARK and newly generated large-mock configurations; the
+quickstart uses a shorter grid with 10 simulations and 49 permutations.
+
+VOC analysis starts with exact sample-ID matching and legacy VOC subsets disabled
+when you enable it and provide the measurement table.
+
+Already primer-trimmed or single-end inputs require disabling paired primer
+trimming and choosing assay-appropriate QC settings. Existing run YAMLs keep
+their own explicit settings; copying the updated template starts a new configuration.
 
 ## Filtering parameter names and units
 
@@ -31,8 +66,9 @@ in `FILTER_ASVS`, before `PLOT_METADATA`. Its separate abundance gate requires
 0.1% RA in at least one biological sample. Both gates must pass. Prevalence uses
 all biological columns remaining after sample-group filtering, including any
 whose counts became zero after feature removal. Controls do not enter this table.
-The general template leaves this additional gate disabled (`0`); enabling a
-positive value requires `core.control_decontam.enabled` to establish the cohort.
+The general template enables the same gates and `core.control_decontam.enabled`
+to establish the biological cohort. Disabling decontamination requires setting
+the final prevalence gate to zero.
 
 Network gates operate on the selected network table, after optional batch
 correction. Force-kept indicator ASVs bypass the network abundance and prevalence
@@ -175,7 +211,7 @@ exact historical classification must be reproduced.
 - `metadata`, `sample_id_col`, `group_col`: sample/group mapping.
 - `min_group_size`: minimum group size considered by group-aware filtering.
 - `min_relative_abundance_pct`: per-sample percentage; an ASV must meet it in at least
-  one retained biological sample. The mock uses 0.1%, the general template 0.5%.
+  one retained biological sample. The general and mock templates both use 0.1%.
   Controls are excluded upstream when control decontamination is enabled.
 - `min_consensus`: minimum taxonomy consensus value.
 - `exclude_taxa`: explicit exact rank/value exclusions such as
