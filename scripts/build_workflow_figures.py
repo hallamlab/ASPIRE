@@ -15,63 +15,101 @@ ET.register_namespace('', NS)
 COLORS = {'data': ('#F5F5F5', '#666666'), 'input': ('#DAE8FC', '#6C8EBF'),
           'output': ('#D5E8D4', '#82B366')}
 
-# title, input, compute nodes, output, explanatory annotation
-FULL = [
-    ('Primer removal\n& read QC', 'Paired reads\nand manifest',
-     ['Primer trimming\nCutadapt · optional', 'Read QC\nfastp', 'Merge / filter\nVSEARCH'], 'Processed\nreads',
-     'Paired-primer audit and amplicon-family check precede shared QC for biological samples and controls.'),
-    ('ASV\nconstruction', 'Processed\nreads',
-     ['Dereplicate', 'Denoise', 'Chimera check\nand counts'], 'Raw ASVs\nand counts',
-     'Preserve original counts and control-only ASVs for the control prevalence tests.'),
-    ('Alignment\n& taxonomy', 'All inferred ASVs\nand references',
-     ['Align sequences\nSINA', 'Assign taxonomy\nQIIME 2'], 'Full ASV\ntaxonomy',
-     'Taxonomy covers the raw ASV set before biological feature filtering.'),
-    ('Control\ndecontamination', 'Raw counts and\nsample classes',
-     ['Biological\ndepth QC', 'TECH / BIO\nprevalence tests', 'Union of\nflagged ASVs'], 'Decontaminated\nbiological counts',
-     'Optional · Biological depth cutoff is configurable; nonzero TECH / BIO controls retain their original counts.'),
-    ('Non-target\nscreening', 'ASVs and\nreference sequences',
-     ['MITOMASTER\noptional API', 'Local BLAST\nreference screen'], 'Non-target\nevidence',
-     'Configured API retry and failure policies publish availability audits alongside local reference results.'),
-    ('Biological\nfeature filtering', 'Biological counts\nand taxonomy',
-     ['Abundance and\nprevalence', 'Host / unassigned\ntaxon exclusions'], 'Final microbial\ncounts and FASTA',
-     'Mock: ≥0.1% relative abundance in any biological sample AND nonzero counts in ≥5% of biological samples.'),
-    ('Metadata\n& preparation', 'Final counts\nand metadata',
-     ['Metadata-linked\nlong / wide tables', 'Group diagnostics\nselected cohort', 'Batch preparation\nfull cohort'], 'Synchronized\nanalysis tables',
-     'Metadata plots retain all final biological samples; batch correction is optional.'),
-    ('Diversity\n& cohort selection', 'Prepared\nbiological tables',
-     ['Full cohort\ndiversity', 'Select study groups\nfor other analyses'], 'Diversity and\nselected tables',
-     'Parallel uses of prepared tables: excluded groups remain in diversity; sample-selection audits accompany other analyses.'),
-    ('Associations\n& study design', 'Selected tables\nand optional VOCs',
-     ['Indicators and\npatient contrasts', 'ASV–VOC\nassociations', 'Patient-count\npower simulations'], 'Association tables\nand figures',
-     'Optional branches share synchronized inputs; VOC clustermaps cluster VOC rows and ASV columns.'),
-    ('Networks\n& genome links', 'Selected tables\nand optional genomes',
-     ['SPIEC-EASI\ninference', 'Modules and\nnull topology', 'ASV–MAG links\nand overlays'], 'Networks and\nlinkage tables',
-     'Genome linkage uses final filtered ASV sequences and supplied references; enabled branches follow their dependencies.'),
-    ('Reports\n& provenance', 'Module outputs\nand QC audits',
-     ['Master summaries', 'All-library Sankey\nand HTML report', 'Logs and\nchecksum inventory'], 'Published results\nand run record',
-     'The Sankey includes TECH / BIO controls and explicit dropout bands; kept nodes remain above removed nodes.'),
-]
-BRIEF = [
-    ('Reads\n& ASVs', 'Reads, metadata\nand references',
-     ['Optional Cutadapt\nthen shared QC', 'ASV construction', 'Full taxonomy'], 'Raw ASVs\nand taxonomy',
-     'Biological samples and controls share primer processing and read QC.'),
-    ('Control\ndecontamination', 'Raw counts and\nsample classes',
-     ['Biological-only\ndepth QC', 'TECH / BIO\nprevalence', 'Union ASV\nremoval'], 'Biological\ncounts',
-     'Optional · Each control arm is configurable; nonzero controls are exempt from the biological depth cutoff.'),
-    ('Microbial\nfeature selection', 'Counts, taxonomy\nand references',
-     ['Non-target\nscreening', 'Abundance /\nprevalence filters', 'Taxonomy\nexclusions'], 'Final microbial\ncounts and FASTA',
-     'The mock uses 0.1% abundance in at least one biological sample and 5% nonzero biological prevalence.'),
-    ('Metadata\n& cohorts', 'Final counts\nand metadata',
-     ['Linked metadata\nand preparation', 'Full-cohort\ndiversity', 'Study groups for\nother analyses'], 'Diversity and\nselected tables',
-     'Configured group exclusions apply to other analyses; metadata plots and diversity retain those groups.'),
-    ('Analyses\n& integration', 'Selected tables;\nVOCs / genomes',
-     ['Indicators /\npatient tests', 'Associations\nand power', 'Networks /\ngenome links'], 'Analysis tables\nand figures',
-     'Optional analyses run according to their input dependencies and available study data.'),
-    ('Results\n& provenance', 'Module outputs\nand QC audits',
-     ['All-library\nSankey', 'Integrated\nHTML report', 'Logs and\nchecksums'], 'Auditable\nrun outputs',
-     'Explicit control-dropout bands accompany the retained-sample and retained-read accounting.'),
-]
-
+# title, input, (process label, tool label) pairs, output
+FULL = [('Primer removal\n& read QC',
+  'Paired reads\nand manifest',
+  [('Primer trimming\n(optional)', 'Cutadapt'), ('Read QC', 'fastp'), ('Merge / filter', 'VSEARCH')],
+  'Processed\nreads'),
+ ('ASV\nconstruction',
+  'Processed\nreads',
+  [('Dereplicate', 'VSEARCH'),
+   ('Denoise', 'VSEARCH'),
+   ('Chimera check\nand counts', 'VSEARCH')],
+  'Raw ASVs\nand counts'),
+ ('Alignment\n& taxonomy',
+  'All inferred ASVs\nand references',
+  [('Align sequences', 'SINA'), ('Assign taxonomy', 'QIIME 2 / VSEARCH')],
+  'Full ASV\ntaxonomy'),
+ ('Control\ndecontamination',
+  'Raw counts and\nsample classes',
+  [('Biological\ndepth QC', 'ASPIRE / pandas'),
+   ('TECH / BIO\nprevalence tests', 'decontam'),
+   ('Union of\nflagged ASVs', 'ASPIRE / pandas')],
+  'Decontaminated\nbiological counts'),
+ ('Non-target\nscreening',
+  'ASVs and\nreference sequences',
+  [('Mitochondrial lookup\n(optional API)', 'MITOMASTER'), ('Local reference\nscreen', 'BLAST+')],
+  'Non-target\nevidence'),
+ ('Biological\nfeature filtering',
+  'Biological counts\nand taxonomy',
+  [('Abundance and\nprevalence', 'ASPIRE / pandas'),
+   ('Host / unassigned\ntaxon exclusions', 'ASPIRE / pandas')],
+  'Final microbial\ncounts and FASTA'),
+ ('Metadata\n& preparation',
+  'Final counts\nand metadata',
+  [('Metadata-linked\nlong / wide tables', 'pandas'),
+   ('Group diagnostics\nselected cohort', 'scikit-learn'),
+   ('Batch correction\n(optional)', 'ConQuR')],
+  'Synchronized\nanalysis tables'),
+ ('Diversity\n& cohort selection',
+  'Prepared\nbiological tables',
+  [('Full cohort\ndiversity', 'scikit-bio / vegan'),
+   ('Select study groups\nfor other analyses', 'ASPIRE / pandas')],
+  'Diversity and\nselected tables'),
+ ('Associations\n& study design',
+  'Selected tables\nand optional VOCs',
+  [('Indicators and\npatient contrasts', 'indicspecies / vegan'),
+   ('ASV–VOC\nassociations', 'SciPy / statsmodels'),
+   ('Patient-count\npower simulations', 'NumPy / SciPy')],
+  'Association tables\nand figures'),
+ ('Networks\n& genome links',
+  'Selected tables\nand optional genomes',
+  [('Network\ninference', 'SPIEC-EASI'),
+   ('Modules and\nnull topology', 'igraph / NetworkX'),
+   ('ASV–MAG links\nand overlays', 'BLAST+ / Biopython')],
+  'Networks and\nlinkage tables'),
+ ('Reports\n& provenance',
+  'Module outputs\nand QC audits',
+  [('Master summaries', 'ASPIRE / pandas'),
+   ('All-library Sankey\nand HTML report', 'ASPIRE'),
+   ('Logs and\nchecksum inventory', 'Nextflow / ASPIRE')],
+  'Published results\nand run record')]
+BRIEF = [('Reads\n& ASVs',
+  'Reads, metadata\nand references',
+  [('Primer trimming\nand read QC', 'Cutadapt / fastp'),
+   ('ASV construction', 'VSEARCH'),
+   ('Full taxonomy', 'SINA / QIIME 2')],
+  'Raw ASVs\nand taxonomy'),
+ ('Control\ndecontamination',
+  'Raw counts and\nsample classes',
+  [('Biological-only\ndepth QC', 'ASPIRE / pandas'),
+   ('TECH / BIO\nprevalence', 'decontam'),
+   ('Union ASV\nremoval', 'ASPIRE / pandas')],
+  'Biological\ncounts'),
+ ('Microbial\nfeature selection',
+  'Counts, taxonomy\nand references',
+  [('Non-target\nscreening', 'MITOMASTER / BLAST+'),
+   ('Abundance /\nprevalence filters', 'ASPIRE / pandas'),
+   ('Taxonomy\nexclusions', 'ASPIRE / pandas')],
+  'Final microbial\ncounts and FASTA'),
+ ('Metadata\n& cohorts',
+  'Final counts\nand metadata',
+  [('Linked metadata\nand preparation', 'pandas / ConQuR'),
+   ('Full-cohort\ndiversity', 'scikit-bio / vegan'),
+   ('Study groups for\nother analyses', 'ASPIRE / pandas')],
+  'Diversity and\nselected tables'),
+ ('Analyses\n& integration',
+  'Selected tables;\nVOCs / genomes',
+  [('Indicators /\npatient tests', 'indicspecies / vegan'),
+   ('Associations\nand power', 'SciPy / statsmodels'),
+   ('Networks /\ngenome links', 'SPIEC-EASI / BLAST+')],
+  'Analysis tables\nand figures'),
+ ('Results\n& provenance',
+  'Module outputs\nand QC audits',
+  [('All-library\nSankey', 'ASPIRE'),
+   ('Integrated\nHTML report', 'ASPIRE'),
+   ('Logs and\nchecksums', 'Nextflow / ASPIRE')],
+  'Auditable\nrun outputs')]
 
 def element(parent, tag, text=None, **attrs):
     child = ET.SubElement(parent, f'{{{NS}}}{tag}', {k.replace('_', '-'): str(v) for k, v in attrs.items()})
@@ -81,7 +119,7 @@ def element(parent, tag, text=None, **attrs):
 
 def build(name, rows):
     width, gap = 1500, 175
-    height = 335 + gap * len(rows) + (60 if rows is FULL else 0)
+    height = 335 + gap * len(rows) + (110 if rows is FULL else 0)
     svg = ET.Element(f'{{{NS}}}svg', dict(width=str(width), height=str(height), viewBox=f'0 0 {width} {height}', role='img', **{'aria-labelledby': 'title desc', 'data-workflow-style': 'mp-nodal-v1'}))
     element(svg, 'title', 'ASPIRE: amplicon analysis workflow', id='title')
     element(svg, 'desc', 'Numbered conceptual modules use the MetaPathways nodal style. Shared read processing and full taxonomy precede control decontamination and final feature filtering. Diversity keeps the full biological cohort; selected groups feed other analyses. Module numbers are not a serial execution schedule.', id='desc')
@@ -123,8 +161,8 @@ def build(name, rows):
         text(x, 150, kind.title(), 21)
         node(x, 183, kind)
 
-    for i, (title, source, steps, output, note) in enumerate(rows):
-        y = 345 + i * gap + (60 if rows is FULL and i > 7 else 0)
+    for i, (title, source, steps, output) in enumerate(rows):
+        y = 345 + i * gap + (110 if rows is FULL and i > 7 else 0)
         text(140, y-8, title, 27)
         node(290, y, 'module')
         text(290, y+7, str(i+1), 20)
@@ -136,23 +174,23 @@ def build(name, rows):
         xs = [650, 920, 1160] if len(steps) == 3 else [730, 1070]
         # Diversity and selected-cohort analysis are parallel consumers.
         if title == 'Diversity\n& cohort selection':
-            for yy, label in zip([y-25, y+35], steps):
+            for yy, (label, tool) in zip([y-25, y+110], steps):
                 node(900, yy, 'compute')
-                text(900, yy-48 if yy < y else yy+30, label, 21)
+                text(900, yy-62, label, 21)
+                text(900, yy+37, tool, 19)
                 element(svg, 'path', d=f'M443.5 {y} H550 V{yy} H885', **{'class': 'wire'})
                 element(svg, 'path', d=f'M915 {yy} H1260 V{y} H1356.5', **{'class': 'wire'})
-            text(900, y+107, 'Full cohort and selected cohort are exported separately; sample-selection audits record exclusions.', 19)
         else:
             last = 443.5
-            for x, label in zip(xs, steps):
+            for x, (label, tool) in zip(xs, steps):
                 node(x, y, 'compute')
                 text(x, y-66, label, 21)
+                text(x, y+37, tool, 19)
                 wire(last, y, x-15, y)
                 last = x+15
             wire(last, y, 1356.5, y)
-            text(900, y+49, note, 18)
         if i < len(rows)-1:
-            wire(290, y+14.5, 290, y+gap+(60 if rows is FULL and i == 7 else 0)-14.5)
+            wire(290, y+14.5, 290, y+gap+(110 if rows is FULL and i == 7 else 0)-14.5)
     text(750, height-20, 'Numbered modules group related operations; arrows summarize flow and enabled branches follow their dependencies.', 19)
     target = ROOT / 'docs/assets' / f'{name}.svg'
     ET.ElementTree(svg).write(target, encoding='unicode')

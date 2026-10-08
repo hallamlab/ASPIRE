@@ -6,7 +6,7 @@
 
 [Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf)
 
-Figures follow the shared [MP nodal style](WORKFLOW_STYLE.md): numbered module squares, compute diamonds and data circles.
+Figures follow the shared [MP nodal style](WORKFLOW_STYLE.md): numbered module squares, compute diamonds and data circles. Process names sit above diamonds; the main software tools or libraries sit below them.
 
 The core path is optional primer removal → read QC and ASV construction → full taxonomy → optional
 `CONTROL_DECONTAM` → reference screening → `FILTER_ASVS` → `PLOT_METADATA`.

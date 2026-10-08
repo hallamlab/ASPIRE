@@ -17,8 +17,10 @@ visual grammar; a different layout requires an explicit user request.
   Module labels sit to its left. A number groups related operations; it does
   not assert that independent analyses execute serially.
 - Each module reads left to right: circular inputs, diamond compute steps,
-  circular data / outputs. Use short labels above nodes and tool names or
-  concise explanatory notes below. Preserve generous whitespace.
+  circular data / outputs. Put short process labels above compute diamonds
+  and concise software / major-library names directly below each diamond.
+  Omit module-wide explanatory notes; keep those details in the accompanying
+  documentation. Preserve generous whitespace.
 - Show actual forks and joins with clean orthogonal connectors. Label optional
   branches explicitly. Keep cohort-specific paths scientifically accurate.
 - Use thin black connectors with small arrowheads and heavier node outlines.
