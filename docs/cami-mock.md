@@ -45,12 +45,12 @@ Use the following shared layout (the paths can be changed consistently):
 ```
 
 After DECOI completes, install ASPIRE using the [installation guide](installation.md).
-The commands below use the current documented feature branch:
+From a new ASPIRE checkout:
 
 ```bash
 mkdir -p ~/repos
 cd ~/repos
-git clone --branch docs/main-user-guide https://github.com/hallamlab/ASPIRE.git
+git clone https://github.com/hallamlab/ASPIRE.git
 cd ASPIRE
 
 DEMO_ROOT="$HOME/data/aspire-demo"
@@ -65,8 +65,7 @@ CONFIG="$DEMO_ROOT/aspire-cami-mock.yml"
 ./examples/validate_mock_run.sh --dataset "$DATASET" --results "$RESULTS"
 ```
 
-For an existing checkout, use `git pull --ff-only` on `docs/main-user-guide`
-instead of cloning again. The configurator checks the dataset and supplies its
+For an existing checkout, use `git pull --ff-only` instead of cloning again. The configurator checks the dataset and supplies its
 FASTQ manifest, metadata, chemistry and reference fixtures along with current
 analysis settings. Use this complete generated YAML for the demonstration.
 To resume an interrupted analysis, rerun the same pipeline command with the same

@@ -23,10 +23,10 @@ sample data are needed to build the documentation. Workflow previews are committ
 
 1. Sign in to [Read the Docs](https://app.readthedocs.org/) using your GitHub account.
 2. Add a project from `hallamlab/ASPIRE`. Grant the GitHub integration access to this repository; organization access may need an administrator.
-3. Select the branch containing these documentation files for the first build. Use the branch containing the intended workflow version for review, then `main` after merging.
+3. Use `main` as the documentation source.
 4. Keep `.readthedocs.yaml` at the repository root as the build configuration. It selects `docs/conf.py`, installs `docs/requirements.txt`, and treats Sphinx warnings as errors.
 5. Start a build and inspect its log. Open the resulting site; check the test page, workflow figures, Mermaid diagrams, parameter tables and PDF downloads.
-6. In the project versions/settings, activate the versions you want to publish and choose the default version visitors should see. After merging, make sure the production branch is the source of the default documentation build.
+6. In the project versions/settings, activate the versions you want to publish and choose the default version visitors should see. Keep the default documentation build connected to `main`.
 7. Confirm that a subsequent push triggers a new build. The GitHub integration normally handles update notifications automatically; inspect the integration settings if it does not.
 
 Read the Docs documents the [GitHub integration and automatic notifications](https://docs.readthedocs.com/platform/stable/reference/git-integration.html).
