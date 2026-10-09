@@ -27,7 +27,7 @@ identifiers and patient pairing are preserved in metadata.
 ## Reproduce the demonstration
 
 Start with the DECOI [CAMI body-site guide](https://hallamlab-decoi.readthedocs.io/en/latest/cami-body-sites.html).
-It covers the required local reference collection, installation, preparation,
+It covers downloading the official CAMI reference bundles, installation, preparation,
 simulation and the handoff back to this page. The small [quickstart](test.md)
 is a separate installation check; this larger demonstration exercises a richer
 synthetic study design.
@@ -36,6 +36,7 @@ Use the following shared layout (the paths can be changed consistently):
 
 ```text
 ~/data/aspire-demo/
+  cami-source/                    downloaded CAMI setup bundles and genomes
   aspire-cami-mock-inputs/          prepared DECOI references and configuration
   aspire-cami-mock/                DECOI simulation output
     dataset/mock_dataset/         input dataset for ASPIRE
