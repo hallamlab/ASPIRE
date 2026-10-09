@@ -18,3 +18,30 @@ def test_multipatt_combination_index_is_not_a_bitmask():
     assert palette[mapping[3]]=='#6A3D9A'
     assert palette[mapping[5]]=='#5CC8C8'
     assert palette[mapping[11]]=='#CBB6E9'
+
+
+@pytest.mark.parametrize('empty_groups', [(1,), (2,), (1, 2)])
+def test_cli_accepts_header_only_isa_results(tmp_path, empty_groups):
+    """Full-union removal can legitimately leave either grouping with no rows."""
+    import subprocess
+    import sys
+    for group in (1, 2):
+        table = pd.DataFrame({
+            'ASV': ['ASV_1'], 's.Cancer': [1], 's.Control': [0],
+            'index': [1], 'stat': [.8], 'p.value': [.01], 'q.value': [.02],
+        })
+        if group in empty_groups:
+            table = table.iloc[:0]
+        table.to_csv(tmp_path / f'group{group}.tsv', sep='\t', index=False)
+    output = tmp_path / 'plots'
+    subprocess.run([
+        sys.executable, str(ROOT/'processes/indicspecies_plots/plot_indicspecies.py'),
+        '--group1-results', str(tmp_path/'group1.tsv'),
+        '--group2-results', str(tmp_path/'group2.tsv'),
+        '--group1-name', 'Site', '--group2-name', 'Case', '--outdir', str(output),
+    ], check=True, capture_output=True, text=True)
+    for group, name in [(1, 'site'), (2, 'case')]:
+        result = pd.read_csv(output/f'{name}_ISA_enriched.tsv', sep='\t')
+        assert result.empty == (group in empty_groups)
+        if group not in empty_groups:
+            assert (output/f'{name}_ISA_plot.svg').is_file()

@@ -1,5 +1,7 @@
 [PASS] publication_layout: missing modules=none
 [PASS] sample_accounting: manifest=46, metadata=46, published=46
+[PASS] primer_cohort: family=515F_806R, samples=46
+[PASS] primer_read_accounting: samples=46, invalid=[]; fixed fastp clipping zero=True
 [PASS] control_classes: class counts={'biological': 30, 'bio_control': 12, 'technical': 4}
 [PASS] control_metadata: QC samples=46, pairing columns=['Participant_ID', 'source_sample']
 [PASS] biological_depth_qc: cutoff=5000, passing=30

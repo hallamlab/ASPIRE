@@ -58,3 +58,29 @@ class EnvironmentContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_incomplete_conda_prefixes_are_quarantined(tmp_path):
+    import os
+    import subprocess
+    cache = tmp_path/'cache with spaces'
+    cache.mkdir()
+    for name, history in [('env-complete', 'completed transaction\n'), ('env-empty', ''), ('env-missing', None)]:
+        prefix = cache/name
+        (prefix/'conda-meta').mkdir(parents=True)
+        (prefix/'keep.txt').write_text('preserve this')
+        if history is not None:
+            (prefix/'conda-meta/history').write_text(history)
+    launcher = (PROJECT/'run_asv_pipeline.sh').read_text()
+    block = launcher.split('# Quarantine unfinished Conda transactions', 1)[1]
+    block = '# Quarantine unfinished Conda transactions' + block.split('# End unfinished Conda transaction recovery.', 1)[0]
+    command = ['bash', '-eu', '-c', block]
+    env = dict(os.environ, CONDA_CACHE_DIR=str(cache))
+    subprocess.run(command, env=env, check=True, capture_output=True)
+    assert (cache/'env-complete/keep.txt').is_file()
+    assert not (cache/'env-empty').exists()
+    assert not (cache/'env-missing').exists()
+    preserved = list(cache.glob('incomplete-env.*/env-*/keep.txt'))
+    assert len(preserved) == 2
+    subprocess.run(command, env=env, check=True, capture_output=True)
+    assert list(cache.glob('incomplete-env.*/env-*/keep.txt')) == preserved

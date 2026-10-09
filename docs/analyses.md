@@ -6,6 +6,11 @@ Most optional branches use the selected downstream tables. `optional.analysis_co
 
 `INDICSPECIES` runs the primary analyses listed in `optional.indicspecies.group_cols` when enabled, preserving the standard outputs such as `Type_Group_indicator_species_summary.tsv` and `Case_indicator_species_summary.tsv`.
 
+Associations spanning every group are removed as non-distinct. A grouping can
+therefore produce a header-only result table, especially in a small test dataset.
+ISA plotting preserves that empty table and skips plots requiring those rows;
+other groupings continue normally.
+
 Additional nested ISA runs can be requested with `optional.indicspecies.stratified`. Each analysis tests `group_col` separately within each selected `within_col` value. For example, the VOC-enabled example config tests cancer/control indicators within each respiratory sample type:
 
 ```yaml

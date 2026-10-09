@@ -441,6 +441,16 @@ if (( ${#stale_env_locks[@]} > 0 )); then
   rm -f "${stale_env_locks[@]}"
   echo "[controller] Removed ${#stale_env_locks[@]} stale Nextflow Conda environment lock marker(s)."
 fi
+# Quarantine unfinished Conda transactions while holding the cache ownership lock.
+# Nextflow otherwise reuses an existing prefix even if package installation aborted.
+while IFS= read -r -d '' cached_env; do
+  if [[ ! -s "${cached_env}/conda-meta/history" ]]; then
+    quarantine_dir="$(mktemp -d "${CONDA_CACHE_DIR}/incomplete-env.XXXXXXXX")"
+    mv "$cached_env" "$quarantine_dir/"
+    echo "[controller] Quarantined incomplete Conda environment: $cached_env; it will be rebuilt."
+  fi
+done < <(find "$CONDA_CACHE_DIR" -maxdepth 1 -type d -name 'env-*' -print0)
+# End unfinished Conda transaction recovery.
 if [[ "$RESUME_ENABLED" -eq 0 && -d "$PUBLICATION_STAGING_DIR" ]]; then
   publication_staging_real="$(realpath -m "$PUBLICATION_STAGING_DIR")"
   runtime_dir_real="$(realpath -m "$RUNTIME_DIR")"

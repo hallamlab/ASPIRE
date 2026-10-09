@@ -1040,7 +1040,9 @@ def main():
         group1_index_map.update(
             infer_index_map_from_sign_table(g1_df, args.idx_col, args.p_col, args.stat_col)
         )
-    if not group1_index_map:
+    # A header-only table is valid when every association is the full-group union.
+    # There are no row indices to decode; retain empty tables and skip plots with no data.
+    if not group1_index_map and not g1_df.empty:
         raise ValueError("Provide group1 index mapping via --group1-index or metadata columns.")
     group1_index_map = normalize_label_mapping_values(group1_index_map)
     group1_index_map = extend_digit_keys(group1_index_map)
@@ -1065,7 +1067,7 @@ def main():
         group2_index_map.update(
             infer_index_map_from_sign_table(g2_df, args.idx_col, args.p_col, args.stat_col)
         )
-    if not group2_index_map:
+    if not group2_index_map and not g2_df.empty:
         raise ValueError("Provide group2 index mapping via --group2-index or metadata columns.")
     group2_index_map = normalize_label_mapping_values(group2_index_map)
     group2_index_map = extend_digit_keys(group2_index_map)

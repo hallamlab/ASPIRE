@@ -46,6 +46,10 @@ checks. New larger-demonstration configurations use 1,000 simulations and 999 pe
 Both fixtures retain 999 indicator permutations, the full network settings and
 identical validator thresholds.
 
+Rerun the same quickstart command after interruption. It resumes completed tasks
+and rebuilds Conda environments with unfinished installation histories, preserving
+the incomplete prefixes in the runtime cache for inspection.
+
 ## What the fixture exercises
 
 Twelve synthetic patients provide 18 airway and 12 oral libraries, with 12 Skin
@@ -165,7 +169,7 @@ rate; the minimum paired-primer screening support remains 50%. All four fixed
 fastp clipping settings are zero. The validator additionally checks primer-family
 membership, read-pair accounting and the handoff to fastp.
 
-The recorded validation logs and numerical results on this page describe the
-previous fixed-clipping run. They remain historical evidence; the Cutadapt
-variation requires a new full run and validation. Re-running the configuration
-command updates an existing YAML, and Nextflow reruns affected tasks.
+The quickstart validation record covers the current Cutadapt workflow: all 31
+checks passed. The larger demonstration retains its historical benchmark record.
+Re-running the configuration command updates an existing YAML, and Nextflow
+reruns affected tasks.
