@@ -46,7 +46,7 @@ independently checked.
 
 ## Public mock-data scope
 
-`examples/mock.local.yml` enables the manuscript analysis modules and runs the
+`examples/mock.local.yml` enables the full analysis modules and runs the
 topology method with 100 null draws. `examples/validate_mock_run.sh` verifies
 that the topology tables exist, contain a non-empty graph, and contain the
 completed null ensemble.

@@ -6,7 +6,7 @@ and occupies approximately **2.5 MB** when generated. Sequence seeds and the
 reproducible generator are included in the repository.
 
 The larger **aspire-cami-mock** is the separate
-[manuscript demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html),
+[larger demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html),
 with 50 synthetic patients and 179 libraries.
 
 ## Run the quickstart
@@ -18,7 +18,7 @@ From the ASPIRE repository, with Python 3 and Mamba available:
 ```
 
 This builds the fixture, configures ASPIRE, runs the pipeline and executes the
-**same full validator used for the manuscript demonstration**. Success ends with
+**same full validator used for the larger demonstration**. Success ends with
 `All mock-run checks passed.` The command retains a validation log and resumes
 existing runs when repeated.
 
@@ -42,7 +42,7 @@ QIIME2/SILVA references. Those dependencies are much larger than the input
 fixture. Runtime depends on environment and reference caches, hardware and the
 analysis modules. The quickstart uses 10 power simulations and 49 permutations per power test to
 exercise that module efficiently. These coarse power curves serve as execution
-checks. The manuscript configuration uses 100 simulations and 199 permutations.
+checks. New larger-demonstration configurations use 1,000 simulations and 999 permutations.
 Both fixtures retain 999 indicator permutations, the full network settings and
 identical validator thresholds.
 
@@ -80,7 +80,7 @@ The network contract requires at least ten inferred edges, a module with two
 members, and three edges between members of the same planted module. Failed
 checks remain failures. Genome linkage uses separate genome inputs and is outside
 both amplicon fixtures. The installation fixture demonstrates successful
-execution on a small, designed input; manuscript recovery results are reported
+execution on a small, designed input; larger-demonstration recovery results are recorded
 for `aspire-cami-mock`.
 
 ## Validated quickstart result

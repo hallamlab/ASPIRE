@@ -159,7 +159,7 @@ Selectable analyses live under `optional` and are controlled by their
 The mapping from analyses reported in the SPARK and ASPIRE
 manuscripts to workflow switches, implementations, and outputs is documented in
 [`docs/SPARK_FUNCTIONALITY.md`](SPARK_FUNCTIONALITY.md). The private
-manuscript-scale run uses 1,000 degree-preserving null networks. The public mock
+full-study run uses 1,000 degree-preserving null networks. The public mock
 configuration uses 100 draws to demonstrate the same method in less time.
 
 ## Power and outlier review

@@ -30,7 +30,7 @@ benchmarked workflow and executes its validator:
 ./examples/run_quickstart.sh --output "$PWD/aspire-quickstart" --threads 4
 ```
 
-The separate [**aspire-cami-mock** manuscript demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html)
+The separate [**aspire-cami-mock** larger demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html)
 contains 50 synthetic patients and 179 libraries. Both use the same full validator.
 
 Success ends with `All mock-run checks passed.` Open

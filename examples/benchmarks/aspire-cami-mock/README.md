@@ -1,7 +1,7 @@
-# aspire-cami-mock: manuscript run record
+# aspire-cami-mock: demonstration run record
 
 This record documents the completed 50-patient, 179-library demonstration.
-The dedicated manuscript section is `docs/cami-mock.md`.
+The dedicated demonstration section is `docs/cami-mock.md`.
 
 - `validation.txt`: all 29 checks passed on 7 October 2026. Only the local output
   directory in the log is replaced with the public benchmark name.

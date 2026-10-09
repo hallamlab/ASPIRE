@@ -1,7 +1,6 @@
-# Manuscript demonstration: aspire-cami-mock
+# Larger demonstration: aspire-cami-mock
 
-`aspire-cami-mock` is the full CAMI2-derived demonstration for the ASPIRE
-manuscript. The validated run contains **50 synthetic patients and 179 libraries**.
+`aspire-cami-mock` is the larger CAMI2-derived demonstration for ASPIRE. The validated run contains **50 synthetic patients and 179 libraries**.
 For a small installation test, use the [quickstart](test.md).
 
 ## Dataset and study design
@@ -27,25 +26,51 @@ identifiers and patient pairing are preserved in metadata.
 
 ## Reproduce the demonstration
 
-Prepare the 50-patient synthetic clinical study using the DECOI
-[CAMI body-site study instructions](https://hallamlab-decoi.readthedocs.io/en/latest/cami-body-sites.html).
-Use `aspire-cami-mock-inputs` for preparation and `aspire-cami-mock` for simulation
-output. The completed input to ASPIRE is `dataset/mock_dataset/` beneath that
-simulation directory. Its manifest has 179 libraries. ASPIRE's configurator
-supplies the control classes and analysis settings described below.
+Start with the DECOI [CAMI body-site guide](https://hallamlab-decoi.readthedocs.io/en/latest/cami-body-sites.html).
+It covers the required local reference collection, installation, preparation,
+simulation and the handoff back to this page. The small [quickstart](test.md)
+is a separate installation check; this larger demonstration exercises a richer
+synthetic study design.
 
-From the ASPIRE repository:
+Use the following shared layout (the paths can be changed consistently):
+
+```text
+~/data/aspire-demo/
+  aspire-cami-mock-inputs/          prepared DECOI references and configuration
+  aspire-cami-mock/                DECOI simulation output
+    dataset/mock_dataset/         input dataset for ASPIRE
+  aspire-cami-mock-results/        ASPIRE analysis output
+  aspire-cami-mock.yml             generated ASPIRE configuration
+```
+
+After DECOI completes, install ASPIRE using the [installation guide](installation.md).
+The commands below use the current documented feature branch:
 
 ```bash
-DATASET=/absolute/path/to/aspire-cami-mock/dataset/mock_dataset
-RESULTS=/absolute/path/to/aspire-cami-mock-results
+mkdir -p ~/repos
+cd ~/repos
+git clone --branch docs/main-user-guide https://github.com/hallamlab/ASPIRE.git
+cd ASPIRE
+
+DEMO_ROOT="$HOME/data/aspire-demo"
+DATASET="$DEMO_ROOT/aspire-cami-mock/dataset/mock_dataset"
+RESULTS="$DEMO_ROOT/aspire-cami-mock-results"
+CONFIG="$DEMO_ROOT/aspire-cami-mock.yml"
 
 ./examples/configure_mock_run.sh \
   --dataset "$DATASET" --output "$RESULTS" \
-  --config-out aspire-cami-mock.yml --threads 32
-./run_asv_pipeline.sh aspire-cami-mock.yml
+  --config-out "$CONFIG" --threads 32
+./run_asv_pipeline.sh "$CONFIG"
 ./examples/validate_mock_run.sh --dataset "$DATASET" --results "$RESULTS"
 ```
+
+For an existing checkout, use `git pull --ff-only` on `docs/main-user-guide`
+instead of cloning again. The configurator checks the dataset and supplies its
+FASTQ manifest, metadata, chemistry and reference fixtures along with current
+analysis settings. Use this complete generated YAML for the demonstration.
+To resume an interrupted analysis, rerun the same pipeline command with the same
+YAML and retain the runtime directory. Run the validator after completion.
+The report is `aspire-cami-mock-results/summary/report/ASPIRE_run_report.html`.
 
 The public name describes the dataset and benchmark. Existing completed runs
 can be validated in their original directories; published provenance retains
@@ -128,7 +153,7 @@ Download the recorded evidence:
 These files preserve the
 check results, portable parameter record and hashes identifying the input and
 output tables. The parameter record uses path placeholders; use the configurator
-above to produce a runnable YAML. The manuscript benchmark measures recovery for
+above to produce a runnable YAML. The demonstration benchmark measures recovery for
 this fixed synthetic design. The [installation fixture](test.md) uses a separate,
 smaller community with deliberately strong planted signals.
 

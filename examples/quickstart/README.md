@@ -2,7 +2,7 @@
 
 `features.tsv` contains 32 V4 seed sequences, their original DECOI identifiers,
 sequence hashes and taxonomy. `source.json` records the source registry hash and
-selection. The source sequences come from the CAMI2-derived manuscript fixture.
+selection. The source sequences come from the larger CAMI2-derived fixture.
 The deterministic builder creates a separate synthetic community, counts,
 metadata, chemistry, truth tables and error-free paired FASTQs.
 
@@ -27,14 +27,14 @@ installation, full taxonomy references and analysis outputs require additional
 space; cached installations reuse those dependencies.
 
 This fixture tests installation and execution with deliberately strong signals.
-Use the separate `aspire-cami-mock` demonstration to report manuscript results.
+Use the separate `aspire-cami-mock` demonstration for a larger synthetic study.
 The same full mock-run validator checks both fixtures, with the same thresholds.
 
 The configurator recognizes `name: aspire-quickstart` in the dataset manifest and
 sets the power grid to 10 simulations and 49 permutations per test. Every power
 analysis path is retained. Other analysis settings and all truth-recovery checks
-are shared with the manuscript configuration; use the latter's full grid for
-power-analysis interpretation.
+are shared with the larger-demonstration configuration, which uses 1,000
+simulations, 999 permutations and the expanded patient-count grids.
 
 `validation.txt` and `validation.json` record the successful pre-Cutadapt 29-check validation,
 including the fixture checksum, generator hash and run settings. The recorded run
