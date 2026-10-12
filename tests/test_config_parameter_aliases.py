@@ -18,6 +18,8 @@ def test_parameter_aliases_and_units(tmp_path):
     script.write_text('nextflow.enable.dsl=2\ndef normalize = ' + boundary + '''
 assert normalize([core:[table_filter:[min_sample_sum:5000, min_asv_sum:0]], standard:[filter_counts:[abundance_threshold:0.1]], optional:[three_tier_decontam:[technical_threshold:0.1, bio_control_threshold:0.2], spieceasi:[min_prevalence:0.05, min_rel_abund:0.001]]]) == normalize([core:[table_filter:[min_sample_reads:5000, min_relative_abundance_pct:0], control_decontam:[technical_score_threshold:0.1, bio_control_score_threshold:0.2]], standard:[filter_counts:[min_relative_abundance_pct:0.1]], optional:[spieceasi:[min_prevalence_fraction:0.05, min_relative_abundance_fraction:0.001]]])
 assert normalize([voc_correlation:[isa_brush_groups:['Airways'], isa_exclude_all_types_from_brush:false]]) == normalize([voc_correlation:[isa_focus_groups:['Airways'], isa_exclude_all_types_from_focus:false]])
+assert normalize([spieceasi:[force_keep_isa_asvs:false]]).spieceasi.force_keep_indicator_asvs == false
+assert normalize([spieceasi:[force_keep_isa_asvs:true]]).spieceasi.force_keep_indicator_asvs == true
 assert normalize([spieceasi:[min_prevalence:5]]).spieceasi.min_prevalence_fraction == 0.05
 assert normalize([spieceasi:[min_prevalence_fraction:0]]).spieceasi.min_prevalence_fraction == 0
 for (bad in [

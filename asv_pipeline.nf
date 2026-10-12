@@ -89,7 +89,7 @@ def flattenTieredConfig = { rawConfig ->
                     }
                     def oldValue = values.remove(legacy)
                     // Preserve the network CLI's historical percent shorthand.
-                    if( section == 'spieceasi' && oldValue != null ) {
+                    if( section == 'spieceasi' && legacy in ['min_rel_abund', 'min_prevalence'] && oldValue != null ) {
                         def number = oldValue as double
                         if( number > 1 && number <= 100 ) oldValue = number / 100
                     }
