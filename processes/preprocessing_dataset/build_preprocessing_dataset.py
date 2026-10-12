@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 
 
 def sha256(path: Path) -> str:
@@ -43,6 +43,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--preprocessing-parameters", required=True)
+    parser.add_argument("--primer-audit")
+    parser.add_argument("--control-audit")
+    parser.add_argument("--control-cleaned")
     for name in (
         "asv_counts",
         "asv_filtered",
@@ -82,6 +85,10 @@ def main() -> None:
         "concat_stats": "concat_fastas.tsv",
         "sample_manifest": "sample_manifest.tsv",
     }
+    if args.primer_audit:
+        names["primer_audit"] = "primer_cohort.json"
+    if args.control_cleaned:
+        names["control_cleaned"] = "control_cleaned.tsv"
     records = []
     for role, destination_name in names.items():
         source = Path(getattr(args, role))
@@ -100,6 +107,20 @@ def main() -> None:
                 "columns": columns,
             }
         )
+
+    if args.control_audit:
+        source_dir = Path(args.control_audit)
+        for source in sorted(source_dir.rglob("*")):
+            if not source.is_file():
+                continue
+            relative = Path("control_audit") / source.relative_to(source_dir)
+            destination = outdir / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            rows, columns = table_shape(destination)
+            records.append(dict(role="control_audit:" + str(source.relative_to(source_dir)),
+                                file=str(relative), bytes=destination.stat().st_size,
+                                sha256=sha256(destination), data_rows=rows, columns=columns))
 
     parameters = json.loads(args.preprocessing_parameters)
     with (outdir / "preprocessing_parameters.json").open("w", encoding="utf-8") as handle:

@@ -214,7 +214,7 @@ def main() -> None:
                     Line2D([0], [0], marker="D", linestyle="none", color="black", markersize=7,
                            label="Median; line = IQR"),
                 ]
-                ax.legend(handles=handles, frameon=False, bbox_to_anchor=(1.02, 0.5), loc="center left")
+                ax.legend(handles=handles, frameon=False, bbox_to_anchor=(1.02, 0.5), loc="upper left")
                 save(fig, args.outdir / "vertical_turnover_compartment_boundary_contrast", formats)
 
         heat = data.pivot_table(index="midpoint_depth", columns="date", values="community_distance", aggfunc="mean")
@@ -283,7 +283,7 @@ def main() -> None:
             ax.set_ylabel("Depth")
             ax.set_title("Sample compositional uniqueness by depth")
             if significant.any():
-                ax.legend(frameon=False)
+                ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0))
             save(fig, args.outdir / "global_lcbd_by_depth", formats)
         if depth_column and date_column:
             global_lcbd[date_column] = pd.to_datetime(global_lcbd[date_column], errors="coerce")

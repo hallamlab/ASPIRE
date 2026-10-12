@@ -1,96 +1,182 @@
-# ASPIRE expert guide
+# ASPIRE Expert Guide
 
-This guide complements the [README](../README.md) and
-[YAML reference](CONFIGURATION.md). There is no separate expert-mode flag.
-Use the supported wrapper for every production run. Examples below assume
-that you are in the ASPIRE repository and have configured `my_run.yml`.
+This guide covers execution, resource use, recovery and diagnosis. Start with the
+[installation guide](installation.md) for installation and quick starts, the
+[configuration reference](CONFIGURATION.md) for YAML semantics, and the
+[process reference](PROCESS_REFERENCE.md) for process I/O.
 
-## Plan a run and preserve its identity
+## Preserve Run Identity
 
-Record `git rev-parse HEAD`, the launch command, supplied YAML, sample manifest,
-reference versions/checksums, and final output manifests. Conda environment YAMLs
-can contain unpinned dependencies: a later environment solve may differ from an
-existing cached environment. Retain the actual run's software records.
-
-The full configuration template enables many analyses and contains example
-paths. It is a configuration reference, not a minimal runnable dataset. Replace
-active placeholders and turn off branches you cannot supply inputs for. The
-mock configuration generator is the supported portable first-run example.
-Local `examples/si.local.yml` and `examples/set1-2.local.yml` are study recipes,
-not recommended universal settings.
-
-Before a production run, confirm:
-
-- Manifest IDs are unique and match the configured metadata ID column exactly.
-- R1/R2 files refer to the correct paired sample; single-end assays use the
-  separate single-end/full-length instructions.
-- Primer removal and fixed trimming do not remove the same bases twice.
-- Length and merging settings fit the assay, not merely another study's YAML.
-- Every enabled module has its metadata, reference files, and upstream inputs.
-- CPU, RAM, disk space, network access, and the required font are available.
+Record the repository revision and keep one configuration per analytical run:
 
 ```bash
-./run_asv_pipeline.sh --help
+git rev-parse HEAD
+cp asv_pipeline_nextflow.yml my_study.yml
+./run_asv_pipeline.sh my_study.yml
+```
+
+Use a new `core.paths.output_dir` for an independent parameter experiment. Reusing
+an output directory means the wrapper may reuse its `.aspire` runtime cache and
+will replace the public module tree after a successful run.
+
+## Resume or Start Fresh
+
+The normal command resumes the best retained run history automatically:
+
+```bash
+./run_asv_pipeline.sh my_study.yml
+```
+
+Run without cache reuse:
+
+```bash
+./run_asv_pipeline.sh my_study.yml --no-resume
+```
+
+List valid stages and force the selected stage plus later registered stages to
+rerun while allowing unaffected upstream work to remain cached:
+
+```bash
 ./run_asv_pipeline.sh --list-stages
-./run_asv_pipeline.sh my_run.yml -- -preview
+./run_asv_pipeline.sh my_study.yml --rerun-from standard:FILTER_ASVS
 ```
 
-Preview assembles/validates workflow construction without executing analysis
-tasks. It is not proof that every input schema, tool invocation, API or environment
-will work. Controller initialization may still occur.
+The live ANSI dashboard uses the real `core:PROCESS`, `standard:PROCESS`, and
+`optional:PROCESS` Nextflow scopes. These are execution identities rather than
+post-processed display labels. The wrapper defaults `TERMINAL_WIDTH` to 160 so
+the qualified names are not shortened with an ellipsis; an explicitly supplied
+environment value takes precedence.
 
-## Parameter semantics that matter
+Choose a specific retained Nextflow run only when automatic selection is not
+appropriate:
 
-| Setting | Meaning and review point |
+```bash
+cd /path/to/ASPIRE
+./.controller_env/bin/nextflow log -q
+./run_asv_pipeline.sh my_study.yml --resume-run RUN_NAME
+```
+
+V2 selects a successful run with submitted tasks for the requested execution phase.
+Use `--resume-run` to select another retained run explicitly.
+
+## Choosing the Earliest Rerun Stage
+
+Start at the earliest process whose inputs, parameters, script, or environment
+changed. Common examples:
+
+| Change | Suggested stage |
 |---|---|
-| `fastp.trim_front_r1` and related fields | Fixed numbers of bases removed, not primer identification. The standalone [primer tool](../scripts/PRIMER_TRIMMING.md) is optional and outside Nextflow. |
-| `merge.min_overlap` | Minimum aligned overlap in bases. Raising it may remove valid shortened pairs. |
-| `merge.max_diffs` | Maximum disagreements in the overlap, not the final merged-read error count. |
-| `filter.max_ee` | Maximum expected errors calculated from read qualities; distinct from observed overlap disagreements. |
-| `filter.min_len`, `max_len` | Read-length bounds; inspect length distributions and taxon-specific losses. |
-| `unoise.min_size` | Pooled abundance of a unique input sequence required for denoising. It is not per-sample ASV prevalence. |
-| `read_mapping.min_identity` | Read/reference alignment identity fraction. Current count construction uses first-qualifying-hit assignment. |
-| `table_filter.min_sample_sum` | Minimum mapped counts in a sample. |
-| `table_filter.min_asv_sum` | Percent relative abundance attained in at least one retained sample. Zero is honored. |
-| `filter_counts.abundance_threshold` | Later percent-abundance threshold, after non-target processing. |
-| `spieceasi.min_rel_abund` | Fractional maximum relative abundance across samples: 0.005 means 0.5% in at least one sample. |
-| `spieceasi.min_prevalence` | Fraction of samples with positive counts: 0.005 means 0.5% of samples. |
+| Primer definitions or screening | `core:PRIMER_TRIM` |
+| FASTQ trimming or merge parameters | `core:FASTP_QC` or `core:MERGE_READS` |
+| per-sample ASV relative-abundance threshold | `FILTER_ASVS` |
+| taxonomy reference | `TAXONOMY` |
+| host/non-target rules | `FILTER_ASVS` |
+| plot annotations or displayed biological types | `PLOT_METADATA` |
+| biological inclusion cutoff, sample classes, TECH/BIO thresholds | `CONTROL_DECONTAM` |
+| Groups excluded from optional analyses | `optional:ANALYSIS_COHORT_DIAGNOSTICS` |
+| ISA settings | `INDICSPECIES` |
+| VOC correlation/plot thresholds | `VOC_CORRELATION` |
+| network cohort or inference settings | `SPIECEASI` |
+| topology null count/seed | `NETWORK_TOPOLOGY` |
 
-Force-retained ASV lists can bypass network abundance/prevalence gates;
-zero-variance removal still applies. Inspect the filtering audit rather than
-assuming all retained ASVs passed every standard cutoff.
+The stage registry uses `core:PROCESS`, `standard:PROCESS`, and
+`optional:PROCESS` identifiers. Bare process names remain accepted for existing
+automation. The registry is a rerun boundary list, not a promise that every later
+independent branch biologically depends on the selected process. Nextflow still
+uses the declared DAG and task hashes.
 
-### Read mapping and ambiguity
+## Runtime and Storage
 
-```yaml
-read_mapping:
-  min_identity: 0.999
+By default, runtime state is retained under:
+
+```text
+<output_dir>/.aspire/
+├── nf_work/
+├── conda_cache/
+└── publication_staging/
 ```
 
-The workflow fallback is 0.999. The SI recipe currently uses 0.995. For a
-253-bp ungapped A/C/G/T alignment, these allow zero and one substitutions.
-An identity fraction is not a general one-error cap: alignment length, gaps,
-ambiguous bases, and the identity definition matter.
+Keep `core.paths.keep_runtime_dir: true` until validation and any planned reruns are
+complete. `core.paths.work_dir` can move task work to fast scratch or network
+storage; `core.paths.conda_cache_dir` can move environments independently. Do not
+point concurrent runs at the same Conda cache: the controller serializes access
+and may reject unsafe overlap.
 
-VSEARCH orders candidates by shared k-mers, aligns them, and by default stops
-at the first qualifying hit (`maxaccepts=1`, `maxrejects=32`). The current
-workflow does not expose search-exhaustiveness or ambiguity policy in YAML.
-Adding unknown YAML fields does not enable those behaviors.
+Disk use includes input staging, per-task work products, Conda environments,
+references and published output. `core.resources.threads` controls per-task CPU use,
+not aggregate disk or the number of concurrently scheduled independent tasks.
 
-VSEARCH itself supports `--maxaccepts 0 --maxrejects 0` to consider all candidates
-surviving its prefilter, and `--top_hits_only` to report highest-identity hits.
-These are not equivalent to rejecting ambiguous assignments. In VSEARCH 2.31.0,
-`--otutabout` assigns a read to one top-ranked accepted reference; equal-identity
-ties favor earlier database entries. An all-best-hits report and a count table
-therefore have different semantics. Unique-best-only counting would require a
-separate implementation and validation. See the [VSEARCH manual](https://torognes.github.io/vsearch/commands/vsearch-usearch_global.1.html)
-and [versioned count-table implementation](https://github.com/torognes/vsearch/blob/v2.31.0/src/search.cc).
+## Nextflow Options
 
-Report mapping recovery against the actual filtered-read denominator. Denoising,
-chimera removal, and mapping are separate filters: fewer candidate ASVs can
-coexist with stable mapped abundance. A higher mapping rate is not proof of
-more accurate abundance estimates. Match ASVs between runs by sequence, not
-numbered IDs.
+Pass native options after `--` so the wrapper still performs environment setup,
+logging and atomic output publication:
+
+```bash
+./run_asv_pipeline.sh my_study.yml -- \
+  -with-report custom_report.html \
+  -with-trace custom_trace.tsv
+```
+
+Direct `nextflow run` is useful for workflow debugging but bypasses part of the
+supported wrapper lifecycle and should not be the normal user entrypoint.
+
+## Reading a Failed Task
+
+The terminal error reports a work directory. Inspect its generated command and
+logs:
+
+```bash
+cd /reported/nextflow/work/directory
+sed -n '1,240p' .command.sh
+sed -n '1,240p' .command.err
+sed -n '1,240p' .command.out
+```
+
+After a successful run, equivalent task records are copied under
+`<output_dir>/logs/tasks/`, and `<output_dir>/logs/task_execution.tsv` maps
+process names and hashes to statuses and durations. The controller stream is
+stored in `<output_dir>/logs/controller.log`.
+
+## Environment and Network Failures
+
+The wrapper creates `.controller_env` and process-specific Conda environments.
+Messages about a serialized mamba slot indicate controlled environment creation.
+If a solve or download fails, fix connectivity or package availability and run
+the same command again; completed work remains resumable.
+
+MITOMASTER is an external service. For a deliberately offline analysis, set
+`standard.mito.run_mitomaster: false` and document that choice. Do not silently treat an
+API failure as a valid no-hit response. Local mitochondrial and contaminant
+BLAST screens can still run when compatible database prefixes or FASTAs are
+configured.
+
+## Analytical Review
+
+- Confirm `summary/tables/run_manifest.tsv` contains the intended samples.
+- Review read/sample loss before interpreting group differences.
+- Treat `.micro.tsv`, `.decon.tsv`, and raw matrices as audit intermediates;
+  identify the configured final downstream table.
+- Review control classifications and read loss when control decontamination
+  is enabled.
+- Review effect sizes and adjusted p-values, not only nominal significance.
+- Treat network edges and ASV-VOC correlations as associations.
+- Confirm repeated observations use the configured participant/block column.
+- Check `module_output_manifest.tsv` and reference checksums before archiving.
+
+## Extending the Workflow
+
+New processes should have a process-specific environment, explicit inputs and
+outputs, configuration validation, stable publication paths, and tests. Add the
+process to `run_asv_pipeline.sh --list-stages` when it is a supported rerun
+boundary. Update `PROCESS_REFERENCE.md`, `CONFIGURATION.md`, the full YAML
+template, mock configuration and mock validator together so the test path
+continues to exercise the advertised functionality.
+
+## Selected analysis cohorts
+
+`optional.analysis_cohort.exclude_groups` applies to grouping diagnostics and to the synchronized analysis tables selected after batch correction. Metadata plots, Sankey accounting and diversity retain those biological groups. Review the cohort sample-selection audits when changing this setting.
+
+## V2 execution phases and cache management
 
 ## Restart, overwrite, or isolate an experiment
 
@@ -194,71 +280,3 @@ Use explicit cache commands in this revision. The launcher's
 `keep_runtime_dir` YAML default expression can treat false as true; do not rely
 on automatic deletion by setting false. Do not delete publication staging
 without verifying which canonical/published inputs or custom links need it.
-
-## Statistical and ecological review
-
-- Verify the actual sample cohort for each test. Missing measurements and rare
-  groups can change it; overlays may intentionally include additional samples.
-- Set blocking/pairing to the sampling design. Samples from one cruise or
-  participant are not automatically independent replicates.
-- Interpret corrected p-values together with effect sizes and test scope.
-  An omnibus association does not identify a significant specific contrast.
-- A fitted compartment association is not a predictive advantage. Use paired
-  held-out comparisons and check dispersion diagnostics where provided.
-- Batch correction and outlier removal require their own audits. Check for
-  confounding between technical batches and biological strata.
-- Inspect SPIEC-EASI stability and the selected lambda before extending its
-  search range. Compare module membership, not just module numbers, across runs.
-- Prefer prespecified sensitivity comparisons and report changes transparently;
-  do not select parameter settings to obtain significance.
-
-For generated BASIN/BASINS-linked diversity cohorts, use
-`diversity.matched_cohort.source: community_predictor_comparison` and enable
-that producer. This is an explicit task dependency. A pre-existing external
-cohort instead uses `matched_cohort.table`; do not specify both. Statistical
-cohort restriction does not globally discard ASV samples from unrelated work.
-
-## Failure handling and useful diagnostics
-
-| Symptom | Check / next action |
-|---|---|
-| `[MITOMASTER STOPPED]` | Read `mitomaster_output.tsv.status.json` in the task work directory. Check endpoint connectivity/status, HTTP error, timeout or response format. Partial results are quarantined, not accepted. |
-| Missing required font | Install the requested font and confirm `fc-match` returns it rather than a substitute. |
-| Missing generated cohort | Enable its producer and use `matched_cohort.source`; do not point at a not-yet-published file. |
-| Very low mapping recovery | Check primers, sequence boundaries, alignment settings, chimera/denoising losses and count-table denominators. |
-| Apparently unchanged published results | Inspect current runtime logs; final publication happens after successful completion. |
-| Cache prune freed nothing | Compare retained versus eligible run records and protected pointers; inspect the separate staging/Conda categories. |
-| No new process after editing a helper | Use the appropriate `--rerun-from` if that script is not represented in task hashing. |
-| Environment build failed | Review network/repodata/solver errors. Waiting for the serialized build slot alone is not a failure. |
-
-MITOMASTER HTTP/network failures retry according to the configured limits, then
-stop. Valid header-only results mean no reported hits; an empty response cannot
-safely be interpreted that way. If you intentionally omit the API, set
-`mito.run_mitomaster: false` and document that remote evidence was not used.
-Resuming after a failed task is preferable to removing all cached work.
-
-## Extending and testing the workflow
-
-Process definitions live in `workflow/modules/`; configuration, channels and
-subworkflow calls live in `asv_pipeline.nf`. The wrapper assembles them into a
-same-directory generated launch script. Add new processes to the relevant
-module, wire explicit dependencies, document YAML keys, provide an environment,
-and update the controller stage registry and output organizer as needed.
-
-Keep sample identifiers, canonical-dataset schemas, output inventories and
-hash-based provenance consistent. Use shared figure styling and avoid hidden
-inputs that bypass task dependencies.
-
-The tests combine pytest functions, unittest cases, external-tool fixtures and
-Nextflow integration fixtures. Use an appropriate development environment with
-pytest and the dependencies required by the selected tests:
-
-```bash
-python -m pytest tests/test_cache_management.py tests/test_phase_architecture.py
-python -m unittest discover -s tests -p 'test_mitomaster_output_contract.py'
-python -m unittest discover -s tests -p 'test_trim_amplicon_primers.py'
-```
-
-Some integration tests skip without Nextflow, Cutadapt or analysis dependencies.
-A skipped test is not successful tool validation. The full biological smoke test
-is the mock workflow plus its supplied validator; syntax tests do not replace it.

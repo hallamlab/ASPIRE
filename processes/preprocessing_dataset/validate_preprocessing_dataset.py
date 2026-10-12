@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 REQUIRED_ROLES = {
     "asv_counts",
     "asv_filtered",
@@ -44,7 +44,7 @@ def main() -> None:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Missing preprocessing manifest: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    if manifest.get("schema_version") not in {"1.1", SCHEMA_VERSION}:
         raise ValueError(f"Unsupported preprocessing schema: {manifest.get('schema_version')!r}")
     records = manifest.get("files", [])
     roles = {record.get("role") for record in records}
@@ -61,6 +61,12 @@ def main() -> None:
     parameter_path = dataset / manifest["preprocessing_parameters_file"]
     if sha256(parameter_path) != manifest["preprocessing_parameters_sha256"]:
         raise ValueError(f"Checksum mismatch for {parameter_path}")
+    parameters = json.loads(parameter_path.read_text())
+    if parameters.get("primer_trimming", {}).get("enabled") and "primer_audit" not in roles:
+        raise ValueError("Primer trimming was enabled but its cohort audit is missing")
+    if parameters.get("control_decontam", {}).get("enabled"):
+        if not {"control_cleaned", "control_audit:sample_qc.tsv"} <= roles:
+            raise ValueError("Control decontamination was enabled but its audit is incomplete")
     print(f"Validated {len(records)} preprocessing artifacts in {dataset}")
 
 

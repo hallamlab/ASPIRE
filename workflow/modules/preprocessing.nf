@@ -1,3 +1,49 @@
+process PRIMER_TRIM {
+    tag { meta.sample_id }
+    cpus sampleThreads
+    maxForks maxParallelSampleTasks
+    conda "${primerEnvPath}"
+    publishDir "${outputDir}/primer_trimmed", mode: 'copy', pattern: 'reads', saveAs: { filename -> meta.sample_id }
+    publishDir "${outputDir}/primer_trimming", mode: 'copy', pattern: 'audit', saveAs: { filename -> meta.sample_id }
+    publishDir "${outputDir}/primer_trimming", mode: 'copy', pattern: '*.primer_summary.json'
+
+    input:
+    tuple val(meta), path(r1), path(r2)
+    path runner
+    path utility
+    val settings
+
+    output:
+    tuple val(meta), path("reads/trimmed/${meta.sample_id}_R1.fastq.gz"), path("reads/trimmed/${meta.sample_id}_R2.fastq.gz"), emit: reads
+    path("${meta.sample_id}.primer_summary.json"), emit: summary
+    path('reads'), emit: read_audit
+    path('audit'), emit: audit
+
+    script:
+    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    """
+cat > primer_settings.json <<'ASPIRE_PRIMER_SETTINGS'
+${settings}
+ASPIRE_PRIMER_SETTINGS
+"\${CONDA_PREFIX}/bin/python" "${runner}" run --sample "${meta.sample_id}" --r1 "${r1}" --r2 "${r2}" --settings primer_settings.json --utility "${utility}"
+"""
+}
+
+process PRIMER_TRIM_CHECK {
+    conda "${primerEnvPath}"
+    publishDir "${outputDir}/primer_trimming", mode: 'copy'
+    input:
+    path summaries
+    path runner
+    output:
+    path('primer_cohort.json'), emit: done
+    script:
+    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    """
+"\${CONDA_PREFIX}/bin/python" "${runner}" check --summaries *.primer_summary.json --output primer_cohort.json
+"""
+}
+
 process FASTP_QC {
     tag { meta.sample_id }
     cpus sampleThreads
@@ -331,33 +377,6 @@ vsearch --usearch_global concat_counts.fasta \\
 gzip -n ASVs.fasta
 """
 }
-process FILTER_TABLE {
-    conda "${condaEnvPath}"
-    publishDir dirMap.asv, mode: 'copy', pattern: '*'
-
-    input:
-    tuple path(count_table), path(asv_fasta)
-
-    output:
-    tuple path("ASV_filtered.tsv"), path("ASVs_filtered.fasta.gz"), emit: filtered
-
-    script:
-    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
-    def tableCfg = config.table_filter ?: [:]
-    """
-set -euo pipefail
-gzip -cd "${asv_fasta}" > ASVs.fasta
-"\${CONDA_PREFIX}/bin/python" "${tableScriptFile}" \\
-       "${count_table}" \\
-       ASV_filtered.tsv \\
-       ${tableCfg.min_sample_sum != null ? tableCfg.min_sample_sum : 5000} \\
-       ${tableCfg.min_asv_sum != null ? tableCfg.min_asv_sum : 0.01} \\
-       ASVs.fasta \\
-       ASVs_filtered.fasta
-gzip -n ASVs_filtered.fasta
-"""
-}
-
 process PREPROCESS_DATASET {
     tag "canonical preprocessing dataset"
     cpus 1
@@ -366,9 +385,9 @@ process PREPROCESS_DATASET {
 
     input:
     path(asv_counts)
-    path(asv_filtered)
+    path(asv_filtered, stageAs: 'handoff_filtered.tsv')
     path(asv_sequences)
-    path(asv_target)
+    path(asv_target, stageAs: 'handoff_target.tsv')
     path(asv_target_micro)
     path(asv_target_mito)
     path(asv_target_decon)
@@ -379,12 +398,17 @@ process PREPROCESS_DATASET {
     path(concat_stats)
     path(sample_manifest)
     val(preprocessing_parameters)
+    path(primer_audit)
+    path(control_audit)
+    path(control_cleaned)
 
     output:
     path("preprocessing_dataset"), emit: dataset
 
     script:
     def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    def auditArgs = (primer_audit ? " --primer-audit \"${primer_audit}\"" : '') +
+        (control_audit ? " --control-audit \"${control_audit}\" --control-cleaned \"${control_cleaned}\"" : '')
     """
 set -euo pipefail
 "\${CONDA_PREFIX}/bin/python" "${preprocessDatasetBuildScriptPath}" \\
@@ -402,7 +426,7 @@ set -euo pipefail
   --fastp-stats "${fastp_stats}" \\
   --filtered-stats "${filtered_stats}" \\
   --concat-stats "${concat_stats}" \\
-  --sample-manifest "${sample_manifest}"
+  --sample-manifest "${sample_manifest}" ${auditArgs}
 """
 }
 

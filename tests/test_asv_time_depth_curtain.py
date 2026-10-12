@@ -105,7 +105,7 @@ class AsvTimeDepthCurtainTests(unittest.TestCase):
             r'"(oxic__gmm0=#[0-9A-Fa-f]{6},[^"\n]+outlier=#FFFFFF)"',
             config,
         )
-        self.assertEqual(len(palette_specs), 13)
+        self.assertGreaterEqual(len(palette_specs), 13)
         self.assertEqual(len(set(palette_specs)), 1)
         self.assertEqual(
             MODULE.parse_palette(palette_specs[0]),

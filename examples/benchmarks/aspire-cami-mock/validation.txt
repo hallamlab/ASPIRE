@@ -1,0 +1,32 @@
+[PASS] publication_layout: missing modules=none
+[PASS] sample_accounting: manifest=179, metadata=179, published=179
+[PASS] control_classes: class counts={'biological': 125, 'bio_control': 50, 'technical': 4}
+[PASS] control_metadata: QC samples=179, pairing columns=['Participant_ID', 'source_sample']
+[PASS] biological_depth_qc: cutoff=5000, passing=125
+[PASS] biological_qc_counts: QC biological counts equal raw counts
+[PASS] cami_control_arms: TECH and BIO must both be enabled
+[PASS] TECH_cohort: biological=125, controls=4, low-depth controls=2
+[PASS] TECH_calls: threshold=0.1, flagged=108
+[PASS] TECH_technical_prevalence: denominator=4
+[PASS] TECH_biological_prevalence: denominator=125
+[PASS] BIO_cohort: biological=125, controls=50, low-depth controls=0
+[PASS] BIO_calls: threshold=0.1, flagged=97
+[PASS] BIO_bio_control_prevalence: denominator=50
+[PASS] BIO_biological_prevalence: denominator=125
+[PASS] contamination_union: categories={'CLEAN': 378, 'TECH': 93, 'BIO': 82, 'TECH+BIO': 15}; retained counts unchanged
+[PASS] contamination_reasons: removed ASVs=190
+[PASS] combined_filter_counts_fasta: ASVs=221, biological samples=125
+[PASS] biological_prevalence_abundance: RA>=0.1%; nonzero prevalence>=0.05; biological denominator=125
+[PASS] non_target_truth: identified=4/4, excluded_from_micro=True
+[PASS] taxonomy: assigned ASVs=536
+[PASS] truth_id_mapping: mapped inferred ASVs=568
+[PASS] indicator_analysis: significant=141, implanted_recovered=23
+[PASS] voc_correlation: rho>=0.30 pairs=312, implanted_positive_recovered=7
+[PASS] voc_patient_inference: patients=50, tested=2340, insufficient=0; significance is not required
+[PASS] network_analysis: edges=1570, largest_module=27, implanted_within_module_edges=9
+[PASS] network_topology: nodes=195, thresholded_positive_edges=1570, null_draws=100
+[PASS] plot_contract: modules without SVG=none
+[PASS] manifest_integrity: invalid entries=0
+
+Validated dataset with 179 samples against aspire-cami-mock/results
+All mock-run checks passed.

@@ -1,0 +1,13 @@
+name: Workflow figure style
+on:
+  pull_request:
+  push:
+permissions:
+  contents: read
+jobs:
+  mp-nodal-style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check MP nodal workflow figures
+        run: python3 scripts/check_workflow_style.py

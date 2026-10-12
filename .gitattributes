@@ -1,0 +1,2 @@
+# An empty final TSV field is represented by a required trailing tab.
+examples/quickstart/features.tsv whitespace=-blank-at-eol

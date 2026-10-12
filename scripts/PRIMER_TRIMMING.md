@@ -1,7 +1,7 @@
 # Standalone paired-read primer trimming
 
-`trim_amplicon_primers.py` is an optional preprocessing utility, not an ASPIRE
-workflow step. It leaves input FASTQs unchanged and requires a new or empty output
+`trim_amplicon_primers.py` backs the optional ASPIRE `PRIMER_TRIM` module and can also run independently.
+See [pipeline configuration](../docs/primer-trimming.md). It leaves input FASTQs unchanged and requires a new or empty output
 directory. Python standard library and Cutadapt >=4 are required; tested with 5.2.
 
 ```bash
@@ -27,6 +27,9 @@ These are broad primer families: the 515F-Y/806RB degenerate sequences also matc
 the original formulations. A match cannot conclusively identify the oligo version
 used in the laboratory. This is candidate screening, not de novo primer discovery.
 Already-trimmed or unknown-primer data may have no supported match.
+`--screen-error-rate` defaults to 0 (exact); a positive rate allows
+`floor(rate × primer length)` substitutions in a complete primer, without indels.
+It is independent of Cutadapt `--error-rate`.
 
 At least 50% of screened pairs must support a candidate pair. Each selected
 family/orientation needs at least five pairs and 1% of screened pairs. Adjust with

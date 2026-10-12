@@ -64,7 +64,7 @@ def plot_distribution(taxa: pd.DataFrame, variable: str, output: Path, formats: 
     ax.set_xlabel(variable)
     ax.set_ylabel("Change-point density")
     ax.set_title(f"TITAN taxon change points: {variable}")
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     save(fig, output, formats)
 
 
@@ -91,7 +91,7 @@ def plot_community(curve: pd.DataFrame, threshold: pd.Series, variable: str,
     ax.set_xlabel(variable)
     ax.set_ylabel("Summed indicator z-score")
     ax.set_title(f"TITAN community response: {variable}")
-    ax.legend(frameon=False, ncol=2)
+    ax.legend(frameon=False, ncol=2, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     save(fig, output, formats)
 
 

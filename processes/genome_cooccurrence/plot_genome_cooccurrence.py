@@ -465,7 +465,7 @@ def draw_network(
         fig.legend(
             handles=combined_handles,
             frameon=False,
-            loc="lower center",
+            loc="upper left",
             bbox_to_anchor=(0.39, 0.015),
             ncol=min(4, len(combined_handles)),
             columnspacing=1.25,
@@ -482,7 +482,7 @@ def draw_network(
         handles=species_handles,
         title="Species key",
         frameon=False,
-        loc="center right",
+        loc="upper left",
         bbox_to_anchor=(0.995, 0.5),
         handlelength=0.0,
         handletextpad=0.0,

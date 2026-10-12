@@ -40,7 +40,7 @@ def build_session(retries: int, backoff: float, timeout: int, user_agent: str) -
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=None,  # retry POSTs too
         raise_on_status=False,
-        respect_retry_after_header=True,
+        respect_retry_after_header=False,
     )
     adapter = HTTPAdapter(max_retries=retry, pool_connections=100, pool_maxsize=100)
     session.mount("http://", adapter)
@@ -97,6 +97,7 @@ def post_one(
         }
         resp = session.post(endpoint, files=files)
         resp.raise_for_status()
+        validate_response(resp.text)
         return resp.text
 
 
@@ -124,12 +125,30 @@ def validate_response(payload: str) -> None:
 
 def report_failure(args, statuses, message: str) -> int:
     """Quarantine incomplete data and stop without an application traceback."""
+    import csv
+    with args.output_file.with_suffix(".failures.tsv").open("w") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["file", "error"], delimiter="\t")
+        writer.writeheader()
+        writer.writerows({"file": row["file"], "error": row.get("error", "")} for row in statuses if row["status"] == "failed")
+    if getattr(args, "failure_policy", "fail") == "continue":
+        args.output_file.parent.mkdir(parents=True, exist_ok=True)
+        if not args.output_file.exists() or not args.output_file.stat().st_size:
+            args.output_file.write_text("Sequence_ID\thaplo\n")
+        status_path = args.output_file.with_suffix(".status.json")
+        status_path.write_text(json.dumps({
+            "status": "partial" if any(row["status"] == "success" for row in statuses) else "unavailable",
+            "endpoint": args.endpoint, "message": message, "chunks": statuses,
+            "failure_policy": "continue",
+        }, indent=2) + "\n")
+        print(f"[MITOMASTER INCOMPLETE] {message}; continuing with available remote evidence and local screening.", file=sys.stderr)
+        return 0
     partial = Path(str(args.output_file) + ".partial")
     if args.output_file.exists():
         args.output_file.replace(partial)
-    status_path = Path(str(args.output_file) + ".status.json")
+    status_path = args.output_file.with_suffix(".status.json")
     status_path.write_text(json.dumps({
         "status": "failed", "endpoint": args.endpoint, "message": message,
+        "failed_chunks": sum(row["status"] == "failed" for row in statuses),
         "chunks": statuses, "partial_output": str(partial) if partial.exists() else None,
     }, indent=2) + "\n")
     print("\n[MITOMASTER STOPPED] Remote screening is incomplete.", file=sys.stderr, flush=True)
@@ -162,9 +181,9 @@ def append_output(
     if mode not in {"full", "noheader"}:
         raise ValueError("mode must be 'full' or 'noheader'")
 
-    text = payload if mode == "full" else "\n".join(payload.splitlines()[1:])
     with lock:
         first_write = not out_path.exists() or out_path.stat().st_size == 0
+        text = payload if mode == "full" or first_write else "\n".join(payload.splitlines()[1:])
         with out_path.open("a") as out_f:
             # separate blocks with newline if not the first write and file doesn't end with newline
             if not first_write:
@@ -185,6 +204,8 @@ def process_first_then_pool(
     header_mode: str,
     log_prefix: str = "",
     statuses: Optional[list] = None,
+    failures: Optional[list] = None,
+    stop_on_probe_failure: bool = True,
 ) -> Tuple[int, int]:
     """
     Ensures the header is written first when header_mode='first'.
@@ -212,13 +233,15 @@ def process_first_then_pool(
             with lock:
                 err += 1
                 statuses.append({"file": fasta.name, "status": "failed", "error_type": type(e).__name__, "error": str(e)})
+                if failures is not None:
+                    failures.append({"file": fasta.name, "error": str(e)})
             print(f"{log_prefix}[MITOMASTER FAILED] {fasta.name}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
 
     if header_mode == "first":
         # Process first file synchronously to guarantee header at top
         head = files[0]
         _submit(head, "full")
-        if err:
+        if err and stop_on_probe_failure:
             return ok, err  # Do not submit the remaining chunks after the initial probe fails.
         rest = files[1:]
         if rest:
@@ -283,6 +306,7 @@ def parse_args() -> argparse.Namespace:
         help="HTTP User-Agent (browser-compatible default follows MITOMAP guidance)",
     )
 
+    p.add_argument("--failure-policy", choices=("fail", "continue"), default="fail")
     run = p.add_argument_group("Run")
     run.add_argument("--max-workers", type=int, default=8, help="Thread pool size")
     run.add_argument("--header-mode", choices=["first", "all", "none"], default="first",
@@ -357,13 +381,14 @@ def main():
         header_mode=args.header_mode,
         log_prefix=args.log_prefix,
         statuses=statuses,
+        stop_on_probe_failure=args.failure_policy == "fail",
     )
 
     session.close()
     if err:
         return report_failure(args, statuses, f"{ok} chunks succeeded; {err} failed after configured retries; "
                               f"{len(remaining) - ok - err} were not submitted. See the errors below.")
-    status_path = Path(str(args.output_file) + ".status.json")
+    status_path = args.output_file.with_suffix(".status.json")
     status_path.write_text(json.dumps({"status": "success", "endpoint": args.endpoint,
                                       "chunks": statuses, "checkpoint_skipped": len(all_fastas) - len(remaining)}, indent=2) + "\n")
     print(f"[MITOMASTER COMPLETE] {ok} chunks succeeded; 0 failed. Results: {args.output_file}", flush=True)

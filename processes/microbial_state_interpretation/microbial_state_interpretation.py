@@ -1837,8 +1837,8 @@ def curtain_outputs(
     mc_handles = [Patch(facecolor=mc_palette[label], label=label) for label in mc_labels]
     hybrid_handles.append(renewal_legend_handle())
     mc_handles.append(renewal_legend_handle())
-    axes[0].legend(handles=hybrid_handles, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False, fontsize=10)
-    axes[1].legend(handles=mc_handles, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=4, frameon=False, fontsize=10)
+    axes[0].legend(handles=hybrid_handles, loc="upper left", bbox_to_anchor=(0.5, -0.18), ncol=3, frameon=False, fontsize=10)
+    axes[1].legend(handles=mc_handles, loc="upper left", bbox_to_anchor=(0.5, -0.18), ncol=4, frameon=False, fontsize=10)
     fig.subplots_adjust(bottom=0.28, wspace=0.08)
     save(fig, plots / "hybrid_vs_microbial_compartment_curtain", formats)
 
@@ -1966,7 +1966,7 @@ def microbial_state_validation_outputs(
             ]
             legend_columns = 3 if index == 0 else 2
             ax.legend(
-                handles=handles, title=title, loc="upper center",
+                handles=handles, title=title, loc="upper left",
                 bbox_to_anchor=(0.5, -0.18), ncol=legend_columns,
                 handletextpad=0.45, columnspacing=0.9, frameon=False,
             )

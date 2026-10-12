@@ -864,7 +864,7 @@ def _plot_asv_module_pca_overlay(
     legend_ax.legend(
         handles=centroid_handles,
         title=r"Hybrid O$_2$-GMM centroid",
-        bbox_to_anchor=(0.0, 0.0), loc="lower left",
+        bbox_to_anchor=(0.0, 0.0), loc="upper left",
         frameon=False, fontsize=6.5, title_fontsize=8.5,
         handlelength=0.0, handletextpad=0.0,
         labelspacing=0.38,
@@ -899,7 +899,7 @@ def _plot_asv_module_pca_overlay(
         threshold = float(label_positions.selection_threshold.iloc[0]) * 100 if len(label_positions) else 1
         tax_legend = tax_ax.legend(handles=tax_handles, title=f"ASV showcase — mean relative abundance >{threshold:g}%",
                                   loc="upper left", frameon=False, fontsize=9.5, title_fontsize=11,
-                                  handletextpad=0.7, labelspacing=0.8)
+                                  handletextpad=0.7, labelspacing=0.8, bbox_to_anchor=(1.02, 1.0))
         for index in header_indices:
             tax_legend.get_texts()[index].set_fontweight("bold")
         output.with_suffix(".layout.json").write_text(json.dumps({

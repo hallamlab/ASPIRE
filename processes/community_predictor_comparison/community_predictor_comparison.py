@@ -358,7 +358,7 @@ def plot_model_comparison(table: pd.DataFrame, base: Path, formats: list[str], t
     ax.set_xlabel("")
     ax.set_title(title)
     ax.tick_params(axis="x", rotation=25)
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     fig.tight_layout()
     save_figure(fig, base, formats)
 
@@ -386,7 +386,7 @@ def plot_group_ordination(distance: np.ndarray, frame: pd.DataFrame, groups: lis
         plot["PCoA1"], plot["PCoA2"] = coords[:, 0], coords[:, 1] if coords.shape[1] > 1 else 0
         sns.scatterplot(data=plot, x="PCoA1", y="PCoA2", hue=group, s=45, alpha=0.8, ax=ax)
         ax.set_title(group)
-        ax.legend(frameon=False, fontsize=8)
+        ax.legend(frameon=False, fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     fig.suptitle("Matched-sample Bray–Curtis ordination", y=1.01)
     fig.tight_layout()
     save_figure(fig, base, formats)
@@ -406,7 +406,7 @@ def plot_compartments_within_cruise_groups(distance: np.ndarray, frame: pd.DataF
         subset = plot[plot[cruise_group_col].astype(str).eq(level)]
         sns.scatterplot(data=subset, x="PCoA1", y="PCoA2", hue=compartment_col,
                         s=45, alpha=.8, ax=ax)
-        ax.set_title(str(level)); ax.legend(frameon=False, fontsize=7)
+        ax.set_title(str(level)); ax.legend(frameon=False, fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0))
     fig.suptitle("Bottle compartments within environmental cruise groups", y=1.01)
     fig.tight_layout(); save_figure(fig, base, formats)
 

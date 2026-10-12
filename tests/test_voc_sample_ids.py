@@ -49,3 +49,16 @@ class VocSampleIdTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_airway_union_is_nondistinct_even_when_skin_is_biological():
+    tree = ast.parse(SCRIPT.read_text())
+    names = {'parse_csv_list', 'canonicalize_sample_type', 'isa_group_is_focus_specific'}
+    funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
+    ns = {'pd': pd}
+    exec(compile(ast.Module(body=funcs, type_ignores=[]), str(SCRIPT), 'exec'), ns)
+    airway = {'Oral Rinse','BAL','Bronchial Brush'}
+    f = ns['isa_group_is_focus_specific']
+    assert f('BAL+Bronchial Brush',airway,airway,True)
+    assert not f('Oral Rinse+BAL+Bronchial Brush',airway,airway,True)
+    assert not f('Skin Brush+Oral Rinse+BAL+Bronchial Brush',airway,airway,True)

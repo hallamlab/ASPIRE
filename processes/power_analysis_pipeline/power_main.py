@@ -39,6 +39,8 @@ def main():
     parser.add_argument("--sample-sizes-stype", default="10,15,20,25,30,40,50,60,70,80,90,100",
                        help="Sample sizes for sample type comparisons")
     parser.add_argument("--n-simulations", type=int, default=1000)
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Maximum simulation workers shared by sequential analysis families")
     parser.add_argument("--n-perm", type=int, default=199)
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
@@ -65,6 +67,8 @@ def main():
     parser.add_argument("--skip-isa", action='store_true')
 
     args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers must be a positive integer")
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -136,6 +140,7 @@ def main():
         if spike_scenarios:
             cmd.extend(['--spike-scenarios', str(spike_scenarios)])
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "1. Cancer vs Control - PERMANOVA (Stratified)"):
             completed.append("cancer_vs_control_permanova")
         else:
@@ -160,6 +165,7 @@ def main():
             '--scenarios', args.scenarios
         ]
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "2. Cancer vs Control - Shannon Mann-Whitney (Stratified)"):
             completed.append("cancer_vs_control_shannon")
         else:
@@ -186,6 +192,7 @@ def main():
             '--type-col', args.type_col
         ]
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "3. Sample Type Comparisons - PERMANOVA"):
             completed.append("sample_type_permanova")
         else:
@@ -206,6 +213,7 @@ def main():
             '--type-col', args.type_col
         ]
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "4. Sample Type Comparisons - Shannon Paired Wilcoxon"):
             completed.append("sample_type_shannon")
         else:
@@ -238,6 +246,7 @@ def main():
         if args.effect_sizes_dir:
             cmd.extend(['--effect-sizes-dir', str(args.effect_sizes_dir)])
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "5a. Taxonomic Abundance - Cancer vs Control (Phylum + Family)"):
             completed.append("taxonomic_abundance_cancer")
         else:
@@ -258,6 +267,7 @@ def main():
             '--type-col', args.type_col
         ]
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "5b. Taxonomic Abundance - Sample Type Comparison (Phylum + Family)"):
             completed.append("taxonomic_abundance_stype")
         else:
@@ -288,6 +298,7 @@ def main():
             '--scenarios', args.scenarios
         ]
 
+        cmd.extend(['--workers', str(args.workers)])
         if run_command(cmd, "6. Indicator Species Analysis - Cancer vs Control + Sample Type"):
             completed.append("isa")
         else:

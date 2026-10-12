@@ -216,12 +216,7 @@ def build_palette_from_table(df: pd.DataFrame, label_col: str, color_col: str) -
 
 
 def infer_index_map_from_sign_table(df: pd.DataFrame, idx_col: str, p_col: str, stat_col: str) -> dict:
-    """Infer index -> label mapping from group membership columns in a sign table.
-
-    For indicspecies-style tables with columns `s.<group>` and a numeric `index`,
-    decode `index` as a bitmask over the `s.<group>` column order, yielding labels
-    like `0`, `1`, `0+1`, `0+2+4`, etc.
-    """
+    """Read multipatt membership columns; its combination index is not a bitmask."""
     reserved = {
         "asv", "asv_id", "feature", "otu",
         "index", "stat", "p.value", "p_value", "q.value", "significant",
@@ -229,18 +224,17 @@ def infer_index_map_from_sign_table(df: pd.DataFrame, idx_col: str, p_col: str, 
     }
     s_cols = [str(c).strip() for c in df.columns if str(c).strip().startswith("s.")]
     if s_cols:
-        groups = [c.split("s.", 1)[1].strip() for c in s_cols]
-        groups = [g for g in groups if g]
-        if groups:
-            mapping: dict = {}
-            n = len(groups)
-            for i in range(1, (1 << n)):
-                members = [groups[b] for b in range(n) if (i >> b) & 1]
-                if members:
-                    label = "+".join(members) if len(members) > 1 else members[0]
-                    mapping[str(i)] = label
-                    mapping[i] = label
-            return mapping
+        mapping = {}
+        for _, row in df.iterrows():
+            key = _normalize_index_key(row[idx_col])
+            members = [col[2:].strip() for col in s_cols if pd.to_numeric(row[col], errors='coerce') == 1]
+            if not key or not members:
+                continue
+            label = normalize_combo('+'.join(members))
+            if key in mapping and mapping[key] != label:
+                raise ValueError(f'Inconsistent membership columns for ISA index {key}')
+            mapping[key] = label
+        return extend_digit_keys(mapping)
 
     membership_cols = []
     for col in df.columns:
@@ -1050,7 +1044,9 @@ def main():
         group1_index_map.update(
             infer_index_map_from_sign_table(g1_df, args.idx_col, args.p_col, args.stat_col)
         )
-    if not group1_index_map:
+    # A header-only table is valid when every association is the full-group union.
+    # There are no row indices to decode; retain empty tables and skip plots with no data.
+    if not group1_index_map and not g1_df.empty:
         raise ValueError("Provide group1 index mapping via --group1-index or metadata columns.")
     group1_index_map = normalize_label_mapping_values(group1_index_map)
     group1_index_map = extend_digit_keys(group1_index_map)
@@ -1075,7 +1071,7 @@ def main():
         group2_index_map.update(
             infer_index_map_from_sign_table(g2_df, args.idx_col, args.p_col, args.stat_col)
         )
-    if not group2_index_map:
+    if not group2_index_map and not g2_df.empty:
         raise ValueError("Provide group2 index mapping via --group2-index or metadata columns.")
     group2_index_map = normalize_label_mapping_values(group2_index_map)
     group2_index_map = extend_digit_keys(group2_index_map)

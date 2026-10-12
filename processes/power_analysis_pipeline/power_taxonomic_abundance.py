@@ -6,6 +6,8 @@ Power analysis for taxonomic differential abundance (phylum and family level).
 Tests Cancer vs Control within each sample type, with spike-in scenarios.
 """
 
+from power_parallel import run_replicates, add_parallel_arguments, configure_parallel
+
 import argparse
 import json
 import warnings
@@ -288,7 +290,10 @@ def run_power_simulation(count_matrix, patient_ids, case_status, taxa_names,
     sensitivity_sum = 0
     fdr_sum = 0
 
-    for i in range(n_simulations):
+    def replicate(i):
+        power_any = 0
+        sensitivity_sum = 0
+        fdr_sum = 0
         # Bootstrap with spike-in
         boot_counts, boot_patients, boot_case = bootstrap_patients_with_spike(
             count_matrix, patient_ids, case_status,
@@ -344,8 +349,12 @@ def run_power_simulation(count_matrix, patient_ids, case_status, taxa_names,
                 n_null_detected = np.sum(reject[null_idx])
                 fdr_sum += n_null_detected / len(null_idx) if len(null_idx) > 0 else 0
 
-        if (i + 1) % 100 == 0:
-            print(f"    {i+1}/{n_simulations}...", end='\r')
+        return (power_any, sensitivity_sum, fdr_sum,)
+
+    for result in run_replicates(replicate, n_simulations, locals()):
+        power_any += result[0]
+        sensitivity_sum += result[1]
+        fdr_sum += result[2]
 
     power = power_any / n_simulations
     sensitivity = sensitivity_sum / n_simulations if n_spiked > 0 else 0
@@ -375,7 +384,9 @@ def main():
     parser.add_argument("--contralateral-sample-types", default="Bronchial Brush,BAL")
     parser.add_argument("--scenarios", default="observed,null",
                        help="Comma-separated: observed, null, weak, moderate, strong")
+    add_parallel_arguments(parser)
     args = parser.parse_args()
+    configure_parallel(args.workers, args.checkpoint_dir or str(Path(args.outdir) / "checkpoints"))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

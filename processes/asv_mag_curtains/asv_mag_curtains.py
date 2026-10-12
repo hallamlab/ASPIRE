@@ -14,6 +14,10 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared_plot_style import install_publication_style
+install_publication_style()
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
@@ -527,7 +531,7 @@ def render_asv_figure(
     ]
     state_handles.append(renewal_legend_handle())
     fig.legend(
-        handles=state_handles, loc="lower center", bbox_to_anchor=(0.5, 0.015),
+        handles=state_handles, loc="upper left", bbox_to_anchor=(0.5, 0.015),
         ncol=min(5, max(1, len(state_handles))), frameon=False, title=state_name,
     )
     for col_index, modality in enumerate(modalities):
@@ -673,7 +677,7 @@ def render_contrast_figure(
     ]
     state_handles.append(renewal_legend_handle())
     fig.legend(
-        handles=state_handles, loc="lower center", bbox_to_anchor=(0.5, 0.01),
+        handles=state_handles, loc="upper left", bbox_to_anchor=(0.5, 0.01),
         ncol=min(5, max(1, len(state_handles))), frameon=False, title=state_name,
     )
     fig.subplots_adjust(bottom=0.17, top=0.91, wspace=0.08, right=0.84)

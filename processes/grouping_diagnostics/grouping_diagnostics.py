@@ -964,7 +964,7 @@ def plot_power(power: pd.DataFrame, outdir: Path, formats: list[str]) -> None:
     axes[1].set_ylabel("Median PERMANOVA R2")
     if axes[1].legend_:
         axes[1].legend_.remove()
-    fig.legend(handles, labels, title="Grouping", loc="outside lower center", ncol=2, frameon=False)
+    fig.legend(handles, labels, title="Grouping", loc="upper left", ncol=2, frameon=False, bbox_to_anchor=(1.02, 1.0))
     save_fig(fig, outdir / "plots" / "grouping_power", formats)
 
 

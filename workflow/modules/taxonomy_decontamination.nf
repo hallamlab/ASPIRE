@@ -95,6 +95,7 @@ process MITOMASTER {
   --output-file mitomaster_output.tsv \\
   --max-workers ${mitomasterWorkers} \\
   --timeout ${mitomasterTimeout} \\
+  --failure-policy "${mitomasterFailurePolicy}" \\
   --retries ${mitomasterRetries} \\
   --header-mode "${mitomasterHeaderMode}" \\
   --overwrite
@@ -165,7 +166,7 @@ process MITO_DECONTAM {
   --overwrite${noPlotsFlag}
 """
 }
-process FILTER_COUNTS {
+process FILTER_ASVS {
     cpus pipelineThreads
     conda "${filterCountsCondaEnvPath}"
     publishDir dirMap.asv, mode: 'copy', pattern: '*', saveAs: { filename ->
@@ -180,15 +181,20 @@ process FILTER_COUNTS {
 
     output:
     path("${filterCountsOutputName}"), emit: filtered_counts
+    path("${filterCountsOutputName}".replace('.tsv','.feature_qc.tsv')), optional: true, emit: feature_qc
     path("${filterCountsOutputName}".replace('.tsv','.micro.tsv')), optional: true, emit: filtered_micro
-    path("${filterCountsOutputName}".replace('.tsv','.mito.tsv')), emit: filtered_mito
+    path("${filterCountsOutputName}".replace('.tsv','.mito.tsv')), optional: true, emit: filtered_mito
     path("${filterCountsOutputName}".replace('.tsv','.decon.tsv')), optional: true, emit: filtered_decon
 
-    when:
-    filterCountsEnabled
+    path("ASV_filtered.tsv"), emit: initial_filtered
+    path("ASVs_filtered.fasta.gz"), emit: initial_fasta
+    path("ASVs_target.fasta.gz"), emit: filtered_fasta
+    path("filter_audit.tsv"), emit: audit
+    path("filter_removed_asvs.tsv"), emit: removed_asvs
 
     script:
     def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    def tableCfg = config.table_filter ?: [:]
     def metadataArg = filterCountsMetadataPath ? """  --metadata "${filterCountsMetadataPath}" \\\n""" : ''
     def groupArg = filterCountsGroupCol ? """  --group-col "${filterCountsGroupCol}" \\\n""" : ''
     def saveInterArg = filterCountsSaveIntermediates ? "  --save-intermediates \\\n" : ''
@@ -198,12 +204,21 @@ process FILTER_COUNTS {
         filterCountsExcludeTaxa.collect { item -> """  --exclude-taxon "${item}" \\\n""" }.join('') : ''
 """
 set -euo pipefail
+echo "Combined filter helpers: ${combinedFilterHash}"
+gzip -cd "${asv_fasta}" > input_ASVs.fasta
+"\${CONDA_PREFIX}/bin/python" "${tableScriptFile}" \\
+  "${count_table}" ASV_filtered.tsv \\
+  ${controlDecontamEnabled ? 0 : (tableCfg.min_sample_reads != null ? tableCfg.min_sample_reads : 5000)} \\
+  ${tableCfg.min_relative_abundance_pct != null ? tableCfg.min_relative_abundance_pct : 0.01} \\
+  input_ASVs.fasta ASVs_filtered.fasta
+if [[ "${filterCountsEnabled}" == "true" ]]; then
 echo "filter_nontarget.py md5: ${filterCountsScriptHash}"
 "\${CONDA_PREFIX}/bin/python" "${filterCountsScriptPath}" \\
-  --count-table "${count_table}" \\
+  --count-table ASV_filtered.tsv \\
   --nontarget-table "${nontarget_table}" \\
   --taxonomy-table "${taxonomy_table}" \\
 ${metadataArg}${groupArg}  --min-group-size ${filterCountsMinGroup} \\
+  --min-prevalence-fraction ${filterCountsMinPrevalence} \\
   --abundance-threshold ${filterCountsAbundance} \\
   --sample-id-col "${filterCountsSampleCol}" \\
   --min-consensus ${filterCountsMinConsensus} \\
@@ -213,5 +228,55 @@ ${metadataArg}${groupArg}  --min-group-size ${filterCountsMinGroup} \\
 ${mitoColsArg}${excludeTaxaArg}  --mito-output-dir "." \\
   --output "${filterCountsOutputName}" \\
 ${saveInterArg}
+else
+  cp ASV_filtered.tsv "${filterCountsOutputName}"
+fi
+"\${CONDA_PREFIX}/bin/python" "${finalizeFilterScriptPath}" \\
+  --input-counts "${count_table}" --table-counts ASV_filtered.tsv \\
+  --counts "${filterCountsOutputName}" --fasta ASVs_filtered.fasta \\
+  --output-fasta ASVs_target.fasta
+gzip -n ASVs_filtered.fasta ASVs_target.fasta
+"""
+}
+
+process CONTROL_DECONTAM {
+    cpus 1
+    conda "${controlDecontamCondaEnvPath}"
+    publishDir "${controlDecontamOutputDirAbs}", mode: 'copy', pattern: 'three_tier_results'
+    publishDir "${controlDecontamOutputDirAbs}", mode: 'copy', pattern: 'ASV_final_three_tier.tsv'
+
+    input:
+    tuple path(raw_counts), path(asv_fasta)
+    path(taxonomy_table)
+    path(metadata_source)
+    val(control_scripts_hash)
+    val(settings_json)
+
+    output:
+    tuple path("ASV_final_three_tier.tsv"), path("decontam_ASVs.fasta.gz"), emit: cleaned
+    path("three_tier_results"), emit: audit
+
+    script:
+    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    def technicalCommand = controlDecontamTechnicalEnabled ? """
+"\${CONDA_PREFIX}/bin/Rscript" "${controlDecontamDir}/run_prevalence.R" --counts three_tier_results/TECH_counts.tsv --metadata three_tier_results/TECH_metadata.tsv --threshold ${controlDecontamTechnicalThreshold} --output three_tier_results/TECH_scores.tsv | tee three_tier_results/TECH_run.log
+""" : ''
+    def bioControlCommand = controlDecontamBioControlEnabled ? """
+"\${CONDA_PREFIX}/bin/Rscript" "${controlDecontamDir}/run_prevalence.R" --counts three_tier_results/BIO_counts.tsv --metadata three_tier_results/BIO_metadata.tsv --threshold ${controlDecontamBioControlThreshold} --output three_tier_results/BIO_scores.tsv | tee three_tier_results/BIO_run.log
+""" : ''
+    """
+set -euo pipefail
+echo 'Control decontamination scripts: ${control_scripts_hash}'
+cat > decontam_settings.json <<'ASPIRE_DECONTAM_SETTINGS'
+${settings_json}
+ASPIRE_DECONTAM_SETTINGS
+mkdir -p three_tier_results
+"\${CONDA_PREFIX}/bin/python" "${controlDecontamDir}/control_decontam.py" prepare --counts "${raw_counts}" --metadata "${metadata_source}" --config decontam_settings.json --outdir three_tier_results | tee three_tier_results/prepare.log
+"\${CONDA_PREFIX}/bin/Rscript" "${controlDecontamDir}/plot_qc.R" three_tier_results/sample_qc.tsv three_tier_results
+${technicalCommand}
+${bioControlCommand}
+"\${CONDA_PREFIX}/bin/python" "${controlDecontamDir}/control_decontam.py" finalize --taxonomy "${taxonomy_table}" --outdir three_tier_results | tee three_tier_results/finalize.log
+cp three_tier_results/ASV_cleaned.tsv ASV_final_three_tier.tsv
+cp "${asv_fasta}" decontam_ASVs.fasta.gz
 """
 }

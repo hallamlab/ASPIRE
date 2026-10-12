@@ -1,0 +1,8 @@
+{
+  "source": "DECOI CAMI2-derived V4 synthetic patient fixture",
+  "source_study": "CAMI2_synthetic_patient_airway_oral_skin",
+  "source_seed": 42,
+  "source_registry_sha256": "838b7c21f68fe96ba26dcc570dcfcfcf44e7240a638af78af7487112a78f715d",
+  "selection": "28 distinct V4 sequences retained in the manuscript run, plus its four reference-filter fixtures. Counts and clinical labels are generated independently for installation testing.",
+  "feature_ids": "Original DECOI ASV identifiers and sequence hashes retained in features.tsv."
+}

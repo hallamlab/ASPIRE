@@ -35,10 +35,17 @@ def bray_curtis_from_counts(count_matrix):
 
 def permanova_r2(dist_matrix, group_labels):
     """Compute PERMANOVA R² (proportion of variance explained)."""
+    return _r2_from_gram(_centered_gram(dist_matrix), group_labels)
+
+
+def _centered_gram(dist_matrix):
     n = dist_matrix.shape[0]
     H = np.eye(n) - np.ones((n, n)) / n
     D_squared = dist_matrix ** 2
-    G = -0.5 * H @ D_squared @ H
+    return -0.5 * H @ D_squared @ H
+
+
+def _r2_from_gram(G, group_labels):
     SS_total = np.trace(G)
 
     unique_groups = np.unique(group_labels)
@@ -64,7 +71,8 @@ def permanova_permutation_test(dist_matrix, group_labels, patient_ids, n_perm=19
     np.random.seed(seed)
     
     # Observed R²
-    obs_r2 = permanova_r2(dist_matrix, group_labels)
+    gram = _centered_gram(dist_matrix)
+    obs_r2 = _r2_from_gram(gram, group_labels)
     
     # Permutation test (permute patient labels only)
     unique_patients = np.unique(patient_ids)
@@ -81,7 +89,7 @@ def permanova_permutation_test(dist_matrix, group_labels, patient_ids, n_perm=19
         
         # Apply to all samples
         perm_groups = np.array([shuffled_mapping[p] for p in patient_ids])
-        perm_r2.append(permanova_r2(dist_matrix, perm_groups))
+        perm_r2.append(_r2_from_gram(gram, perm_groups))
     
     # P-value
     p_value = (1 + np.sum(np.array(perm_r2) >= obs_r2)) / (n_perm + 1)

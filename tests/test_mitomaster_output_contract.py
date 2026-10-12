@@ -28,7 +28,7 @@ class MitomasterOutputContractTests(unittest.TestCase):
         with patch.object(sys, "argv", argv), patch.object(MODULE, "post_one", side_effect=replies) as post:
             rc = MODULE.main()
         import json
-        status = json.loads(Path(str(output) + ".status.json").read_text())
+        status = json.loads(output.with_suffix(".status.json").read_text())
         return rc, output, status, post.call_count
 
     def test_no_chunks_stops(self):

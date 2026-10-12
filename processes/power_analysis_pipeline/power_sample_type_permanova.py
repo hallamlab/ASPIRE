@@ -11,6 +11,9 @@ CRITICAL FIX: Now matches R analysis structure:
 - Both omnibus and pairwise tests
 """
 
+from power_permanova import _centered_gram, _r2_from_gram
+from power_parallel import run_replicates, add_parallel_arguments, configure_parallel
+
 import argparse
 import warnings
 from pathlib import Path
@@ -130,7 +133,8 @@ def permanova_permutation_test_blocked(dist_matrix, sample_types, patient_ids,
     """
     np.random.seed(seed)
 
-    obs_r2 = permanova_r2(dist_matrix, sample_types)
+    gram = _centered_gram(dist_matrix)
+    obs_r2 = _r2_from_gram(gram, sample_types)
 
     # Get unique patients and their sample types
     unique_patients = np.unique(patient_ids)
@@ -148,7 +152,7 @@ def permanova_permutation_test_blocked(dist_matrix, sample_types, patient_ids,
             shuffled = np.random.permutation(patient_stypes)
             perm_sample_types[patient_mask] = shuffled
 
-        perm_r2.append(permanova_r2(dist_matrix, perm_sample_types))
+        perm_r2.append(_r2_from_gram(gram, perm_sample_types))
 
     p_value = (1 + np.sum(np.array(perm_r2) >= obs_r2)) / (n_perm + 1)
 
@@ -218,7 +222,9 @@ def run_power_simulation_omnibus(count_matrix, patient_ids, sample_types,
     significant_count = 0
     r2_values = []
 
-    for i in range(n_simulations):
+    def replicate(i):
+        significant_count = 0
+        r2_values = []
         # Bootstrap patients
         boot_counts, boot_patients, boot_stypes = bootstrap_patients_sample_types(
             count_matrix, patient_ids, sample_types, n_patients, seed=seed+i
@@ -239,7 +245,7 @@ def run_power_simulation_omnibus(count_matrix, patient_ids, sample_types,
         agg_stypes = agg_stypes[mask]
 
         if len(np.unique(agg_stypes)) < 2:
-            continue
+            return (significant_count, r2_values,)
 
         # Compute Bray-Curtis
         bc_dist = bray_curtis_from_counts(agg_counts, transform=transform)
@@ -253,6 +259,11 @@ def run_power_simulation_omnibus(count_matrix, patient_ids, sample_types,
         r2_values.append(r2)
         if p_value < alpha:
             significant_count += 1
+        return (significant_count, r2_values,)
+
+    for result in run_replicates(replicate, n_simulations, locals()):
+        significant_count += result[0]
+        r2_values.extend(result[1])
 
     power = significant_count / n_simulations
     mean_r2 = np.mean(r2_values)
@@ -272,7 +283,9 @@ def run_power_simulation_pairwise(count_matrix, patient_ids, sample_types,
     significant_count = 0
     r2_values = []
 
-    for i in range(n_simulations):
+    def replicate(i):
+        significant_count = 0
+        r2_values = []
         # Bootstrap patients
         boot_counts, boot_patients, boot_stypes = bootstrap_patients_sample_types(
             count_matrix, patient_ids, sample_types, n_patients, seed=seed+i
@@ -299,7 +312,7 @@ def run_power_simulation_pairwise(count_matrix, patient_ids, sample_types,
         agg_stypes = agg_stypes[mask]
 
         if len(agg_counts) < 4:  # Need at least 2 patients
-            continue
+            return (significant_count, r2_values,)
 
         # Compute Bray-Curtis
         bc_dist = bray_curtis_from_counts(agg_counts, transform=transform)
@@ -313,6 +326,11 @@ def run_power_simulation_pairwise(count_matrix, patient_ids, sample_types,
         r2_values.append(r2)
         if p_value < alpha:
             significant_count += 1
+        return (significant_count, r2_values,)
+
+    for result in run_replicates(replicate, n_simulations, locals()):
+        significant_count += result[0]
+        r2_values.extend(result[1])
 
     power = significant_count / n_simulations
     mean_r2 = np.mean(r2_values)
@@ -336,7 +354,9 @@ def main():
     parser.add_argument("--sample-col", default="sample")
     parser.add_argument("--patient-col", default="Participant_ID")
     parser.add_argument("--type-col", default="type_group")
+    add_parallel_arguments(parser)
     args = parser.parse_args()
+    configure_parallel(args.workers, args.checkpoint_dir or str(Path(args.outdir) / "checkpoints"))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

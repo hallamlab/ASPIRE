@@ -31,6 +31,8 @@ suppressPackageStartupMessages({
 # ============================================================================
 
 option_list <- list(
+  make_option("--workers", type="integer", default=1, help="Maximum simulation processes"),
+  make_option("--checkpoint-dir", type="character", default=NULL, help="Persistent checkpoint directory"),
   make_option("--data-long", type="character",
               help="Long format data file (ASV_master_long.tsv)"),
   make_option("--data-wide", type="character",
@@ -92,6 +94,9 @@ parser <- OptionParser(
 )
 
 args <- parse_args(parser)
+if (is.na(args$workers) || args$workers < 1) stop("workers must be positive")
+script_path <- sub("^--file=", "", grep("^--file=", commandArgs(), value=TRUE)[1])
+source(file.path(dirname(script_path), "power_parallel.R"))
 
 # Enforce required options
 required <- c("data-long", "data-wide", "outdir")
@@ -770,7 +775,14 @@ run_isa_power_generic <- function(counts, patient_ids, grouping,
   fdr_conditional_sum <- 0
   n_with_discoveries <- 0
 
-  for (i in 1:n_simulations) {
+  checkpoint_inputs <- mget(names(formals(sys.function())), envir=environment())
+  replicate <- function(i) {
+    power_any <- 0
+    sensitivity_sum <- 0
+    fdr_sum <- 0
+    fdr_conditional_sum <- 0
+    n_with_discoveries <- 0
+    isa_result <- NULL
     # Bootstrap patients
     if (use_blocking) {
       # Within-patient design: sample patients and preserve sample-level labels
@@ -903,10 +915,16 @@ run_isa_power_generic <- function(counts, patient_ids, grouping,
       })
     }
 
-    if (i %% 50 == 0) {
-      cat(sprintf("\r      %d/%d...", i, n_simulations))
-      flush.console()
-    }
+    c(power_any, sensitivity_sum, fdr_sum, fdr_conditional_sum, n_with_discoveries)
+  }
+  results <- power_replicates(replicate, n_simulations, checkpoint_inputs,
+                              args$workers, args$`checkpoint-dir`, args$outdir, script_path)
+  for (result in results) {
+    power_any <- power_any + result[1]
+    sensitivity_sum <- sensitivity_sum + result[2]
+    fdr_sum <- fdr_sum + result[3]
+    fdr_conditional_sum <- fdr_conditional_sum + result[4]
+    n_with_discoveries <- n_with_discoveries + result[5]
   }
 
   cat("\n")

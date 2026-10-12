@@ -1,4 +1,6 @@
 #!/usr/bin/env nextflow
+import groovy.yaml.YamlSlurper
+import java.util.regex.Pattern
 nextflow.enable.dsl=2
 
 def projectRootDir = new File(projectDir.toString())
@@ -12,11 +14,112 @@ try {
 }
 
 def inlineKeys = [
-    'paths','resources','fastp','merge','filter','unoise',
+    'paths','resources','primer_trimming','fastp','merge','filter','unoise',
     'table_filter','filename_patterns','environments','config_root',
-    'pipeline_config'
+    'pipeline_config','core','standard','optional'
 ]
 def hasInlineConfig = inlineKeys.any { paramsMap.containsKey(it) }
+
+/*
+ * Human-facing YAML may group sections by execution tier.  Flatten those
+ * namespaces once at the configuration boundary so existing process code and
+ * legacy flat study configurations remain compatible.  A section may occur
+ * either at top level or in exactly one tier, never both.
+ */
+def flattenTieredConfig = { rawConfig ->
+    if( !(rawConfig instanceof Map) ) {
+        throw new IllegalArgumentException('ASPIRE configuration must be a YAML mapping')
+    }
+    def tiers = ['core', 'standard', 'optional']
+    def normalized = new LinkedHashMap()
+    rawConfig.each { key, value ->
+        if( !tiers.contains(key as String) ) {
+            normalized[key] = value
+        }
+    }
+    tiers.each { tier ->
+        def tierConfig = rawConfig[tier]
+        if( tierConfig == null ) {
+            return
+        }
+        if( !(tierConfig instanceof Map) ) {
+            throw new IllegalArgumentException("Configuration tier '${tier}' must be a mapping")
+        }
+        tierConfig.each { section, value ->
+            if( normalized.containsKey(section) ) {
+                throw new IllegalArgumentException(
+                    "Configuration section '${section}' is defined more than once (top level or tiered)"
+                )
+            }
+            normalized[section] = value
+        }
+    }
+    // Accept the previous section name, but reject ambiguous dual definitions.
+    if( normalized.containsKey('three_tier_decontam') ) {
+        if( normalized.containsKey('control_decontam') ) {
+            throw new IllegalArgumentException('Use only control_decontam; three_tier_decontam is its legacy alias')
+        }
+        normalized.control_decontam = normalized.remove('three_tier_decontam')
+    }
+    if( normalized.environments instanceof Map && normalized.environments.containsKey('three_tier_decontam') ) {
+        def envs = new LinkedHashMap(normalized.environments)
+        if( envs.containsKey('control_decontam') ) {
+            throw new IllegalArgumentException('Use only environments.control_decontam; duplicate legacy alias found')
+        }
+        envs.control_decontam = envs.remove('three_tier_decontam')
+        normalized.environments = envs
+    }
+    // Canonical parameter names expose units; aliases retain earlier run behavior.
+    def parameterAliases = [
+        voc_correlation: [isa_brush_groups: 'isa_focus_groups', isa_exclude_all_types_from_brush: 'isa_exclude_all_types_from_focus'],
+        table_filter: [min_sample_sum: 'min_sample_reads', min_asv_sum: 'min_relative_abundance_pct'],
+        filter_counts: [abundance_threshold: 'min_relative_abundance_pct'],
+        control_decontam: [technical_threshold: 'technical_score_threshold', bio_control_threshold: 'bio_control_score_threshold'],
+        spieceasi: [min_rel_abund: 'min_relative_abundance_fraction', min_prevalence: 'min_prevalence_fraction', force_keep_isa_asvs: 'force_keep_indicator_asvs'],
+        taxonomy_patient_aware: [min_prevalence: 'min_prevalence_fraction'],
+        measurement_association: [min_prevalence: 'min_prevalence_fraction']
+    ]
+    parameterAliases.each { section, aliases ->
+        if( normalized[section] instanceof Map ) {
+            def values = new LinkedHashMap(normalized[section])
+            aliases.each { legacy, current ->
+                if( values.containsKey(legacy) ) {
+                    if( values.containsKey(current) ) {
+                        throw new IllegalArgumentException("Use only ${section}.${current}; duplicate legacy parameter ${legacy} found")
+                    }
+                    def oldValue = values.remove(legacy)
+                    // Preserve the network CLI's historical percent shorthand.
+                    if( section == 'spieceasi' && oldValue != null ) {
+                        def number = oldValue as double
+                        if( number > 1 && number <= 100 ) oldValue = number / 100
+                    }
+                    values[current] = oldValue
+                }
+            }
+            normalized[section] = values
+        }
+    }
+    def fractionSections = ['filter_counts', 'spieceasi', 'taxonomy_patient_aware', 'measurement_association']
+    fractionSections.each { section ->
+        ['min_prevalence_fraction', 'min_relative_abundance_fraction'].each { key ->
+            if( normalized[section] instanceof Map && normalized[section][key] != null ) {
+                def value = normalized[section][key] as double
+                if( !Double.isFinite(value) || value < 0 || value > 1 ) {
+                    throw new IllegalArgumentException("${section}.${key} must be a fraction between 0 and 1; 0.05 means 5%")
+                }
+            }
+        }
+    }
+    ['table_filter', 'filter_counts'].each { section ->
+        if( normalized[section] instanceof Map && normalized[section].min_relative_abundance_pct != null ) {
+            def value = normalized[section].min_relative_abundance_pct as double
+            if( !Double.isFinite(value) || value < 0 || value > 100 ) {
+                throw new IllegalArgumentException("${section}.min_relative_abundance_pct must be between 0 and 100; 0.1 means 0.1%")
+            }
+        }
+    }
+    return normalized
+}
 
 def config
 File configFile = null
@@ -44,11 +147,11 @@ if( providedConfigPath ) {
     if( !configFile.exists() ) {
         exit 1, "Config file not found: ${configFile}"
     }
-    config = new groovy.yaml.YamlSlurper().parse(configFile)
+    config = flattenTieredConfig(new YamlSlurper().parse(configFile))
     configRoot = configFile.parentFile ?: projectRootDir
     log.info "Loaded config from ${configFile}"
 } else if( hasInlineConfig ) {
-    config = paramsMap
+    config = flattenTieredConfig(paramsMap)
     if( paramsMap.containsKey('config_root') ) {
         def rootPath = file(paramsMap.config_root)
         configRoot = rootPath.toFile()
@@ -60,7 +163,7 @@ if( providedConfigPath ) {
     if( !configFile.exists() ) {
         exit 1, "Config file not found: ${defaultConfigPath}"
     }
-    config = new groovy.yaml.YamlSlurper().parse(configFile)
+    config = flattenTieredConfig(new YamlSlurper().parse(configFile))
     configRoot = configFile.parentFile ?: projectRootDir
     log.info "Loaded default config from ${configFile}"
 }
@@ -126,6 +229,66 @@ def fastpTrimValues = [
     front_r2: fastpConfigMap.trim_front_r2 != null ? (fastpConfigMap.trim_front_r2 as int) : 0,
     tail_r2 : fastpConfigMap.trim_tail_r2  != null ? (fastpConfigMap.trim_tail_r2  as int) : 0
 ]
+def primerConfig = config.primer_trimming ?: [:]
+if( !(primerConfig instanceof Map) ) {
+    exit 1, "primer_trimming must be a YAML mapping"
+}
+def primerTrimmingEnabled = primerConfig.containsKey('enabled') ? (primerConfig.enabled as boolean) : false
+def primerDefaults = [
+    sample_reads: 5000, max_prefix: 12, min_pair_fraction: 0.5,
+    min_family_fraction: 0.01, min_family_reads: 5, error_rate: 0.1,
+    end_overlap: 12, minimum_length: 1, screen_error_rate: 0.0,
+    primers: [
+        [name: '515F_806R', forward: 'GTGYCAGCMGCCGCGGTAA', reverse: 'GGACTACNVGGGTWTCTAAT'],
+        [name: '515F_926R', forward: 'GTGYCAGCMGCCGCGGTAA', reverse: 'CCGYCAATTYMTTTRAGTTT']
+    ]
+]
+def primerSettings = new LinkedHashMap(primerDefaults)
+primerConfig.each { key, value ->
+    if( key != 'enabled' ) {
+        if( !primerDefaults.containsKey(key) ) { exit 1, "Unknown primer_trimming parameter: ${key}" }
+        primerSettings[key] = value
+    }
+}
+if( primerConfig.containsKey('enabled') && !(primerConfig.enabled instanceof Boolean) ) {
+    exit 1, "primer_trimming.enabled must be true or false (unquoted YAML boolean)"
+}
+['sample_reads', 'max_prefix', 'min_family_reads', 'end_overlap', 'minimum_length'].each { key ->
+    def value = primerSettings[key]
+    def minimum = key == 'max_prefix' ? 0 : 1
+    if( !(value instanceof Number) || value != value.intValue() || value < minimum || (key == 'max_prefix' && value > 100) ) {
+        exit 1, "primer_trimming.${key} must be an integer >= ${minimum}" + (key == 'max_prefix' ? ' and <= 100' : '')
+    }
+}
+['min_pair_fraction', 'min_family_fraction', 'error_rate', 'screen_error_rate'].each { key ->
+    def value = primerSettings[key]
+    def isErrorRate = key in ['error_rate', 'screen_error_rate']
+    if( !(value instanceof Number) || !Double.isFinite(value.doubleValue()) || value > (isErrorRate ? 0.25 : 1) || (isErrorRate ? value < 0 : value <= 0) ) {
+        exit 1, "primer_trimming.${key} must be " + (isErrorRate ? 'between 0 and 0.25' : 'greater than 0 and at most 1')
+    }
+}
+def primerNames = [] as Set
+if( !(primerSettings.primers instanceof List) || primerSettings.primers.isEmpty() ) {
+    exit 1, "primer_trimming.primers must be a nonempty list of name/forward/reverse mappings"
+}
+primerSettings.primers.each { entry ->
+    if( !(entry instanceof Map) || entry.keySet() != (['name', 'forward', 'reverse'] as Set) ||
+        !(entry.name instanceof String) || !(entry.name ==~ /[A-Za-z0-9][A-Za-z0-9_-]*/) || !primerNames.add(entry.name) ||
+        !['forward', 'reverse'].every { key -> entry[key] instanceof String && entry[key].toUpperCase() ==~ /[ACGTRYSWKMBDHVN]{8,100}/ } ) {
+        exit 1, "Invalid primer_trimming.primers entry: require a unique alphanumeric/_/- name and 8–100-base IUPAC forward/reverse sequences"
+    }
+}
+primerSettings.threads = sampleThreads
+def primerSettingsJson = groovy.json.JsonOutput.toJson(primerSettings)
+def primerRunner = new File("${projectDir}/processes/primer_trimming/primer_trimming.py")
+def primerUtility = new File("${projectDir}/scripts/trim_amplicon_primers.py")
+def primerEnvPath = resolvePath(config.environments?.primer_trimming ?: "${projectDir}/processes/primer_trimming/env.yml")
+if( primerTrimmingEnabled && fastpTrimValues.values().any { it != 0 } ) {
+    exit 1, "primer_trimming.enabled requires all four core.fastp.trim_* values to be zero to prevent double trimming"
+}
+if( primerTrimmingEnabled && allowSingleEnd ) {
+    exit 1, "primer_trimming currently requires paired-end inputs"
+}
 if( config.merge && !(config.merge instanceof Map) ) {
     log.warn "Ignoring non-map merge configuration (${config.merge.getClass()?.simpleName})"
 }
@@ -228,6 +391,15 @@ if( !filterCountsEnvFile.exists() ) {
     exit 1, "filter_counts conda environment YAML not found: ${filterCountsCondaEnvPath}"
 }
 log.info "Using filter_counts Conda/Mamba env definition: ${filterCountsCondaEnvPath}"
+
+def controlDecontamEnvConfigPath = config.environments?.control_decontam
+def resolvedControlDecontamEnvPath = controlDecontamEnvConfigPath ? resolveOptionalPath(controlDecontamEnvConfigPath, configRoot) : null
+def defaultControlDecontamEnvPath = new File("${projectDir}/processes/control_decontam/env.yml").canonicalPath
+def controlDecontamCondaEnvPath = resolvedControlDecontamEnvPath ?: defaultControlDecontamEnvPath
+if( !file(controlDecontamCondaEnvPath).exists() ) {
+    exit 1, "control decontamination conda environment YAML not found: ${controlDecontamCondaEnvPath}"
+}
+log.info "Using control decontamination Conda/Mamba env definition: ${controlDecontamCondaEnvPath}"
 
 def generalStatsEnvConfigPath = config.environments?.general_stats
 def resolvedGeneralStatsEnvPath = generalStatsEnvConfigPath ? resolveOptionalPath(generalStatsEnvConfigPath, configRoot) : null
@@ -341,6 +513,15 @@ if( !networkEnvFile.exists() ) {
     exit 1, "Network conda environment YAML not found: ${networkCondaEnvPath}"
 }
 log.info "Using network Conda/Mamba env definition: ${networkCondaEnvPath}"
+
+def networkTopologyEnvConfigPath = config.environments?.network_topology
+def resolvedNetworkTopologyEnvPath = networkTopologyEnvConfigPath ? resolveOptionalPath(networkTopologyEnvConfigPath, configRoot) : null
+def networkTopologyCondaEnvPath = resolvedNetworkTopologyEnvPath ?: new File("${projectDir}/processes/network_topology/env.yml").canonicalPath
+def networkTopologyEnvFile = file(networkTopologyCondaEnvPath)
+if( !networkTopologyEnvFile.exists() ) {
+    exit 1, "Network topology conda environment YAML not found: ${networkTopologyCondaEnvPath}"
+}
+log.info "Using network topology Conda/Mamba env definition: ${networkTopologyCondaEnvPath}"
 
 def networkModulesEnvConfigPath = config.environments?.network_modules
 def resolvedNetworkModulesEnvPath = networkModulesEnvConfigPath ? resolveOptionalPath(networkModulesEnvConfigPath, configRoot) : null
@@ -597,6 +778,8 @@ if( !preprocessDatasetValidateScriptFile.exists() ) {
 }
 def preprocessDatasetValidateScriptPath = preprocessDatasetValidateScriptFile.canonicalPath
 def preprocessingParametersJson = groovy.json.JsonOutput.toJson([
+    primer_trimming: [enabled: primerTrimmingEnabled, settings: primerSettings],
+    control_decontam: config.control_decontam ?: [:],
     filename_patterns: config.filename_patterns ?: [:],
     resources: [single_end: allowSingleEnd, sample_threads: sampleThreads],
     fastp: config.fastp ?: [:],
@@ -633,6 +816,7 @@ if( !mitomasterScriptFile.exists() ) {
     exit 1, "mitomaster.py not found in project directory"
 }
 def mitomasterScriptPath = mitomasterScriptFile.canonicalPath
+def mitomasterScriptHash = fileMd5(mitomasterScriptFile)
 def mitoCheckerScriptFile = new File("${projectDir}/processes/mito_decontam/mito_checker.py")
 if( !mitoCheckerScriptFile.exists() ) {
     exit 1, "mito_checker.py not found in project directory"
@@ -666,6 +850,7 @@ if( !outlierCheckerScriptFile.exists() ) {
     exit 1, "outlier_checker.py not found in project directory"
 }
 def outlierCheckerScriptPath = outlierCheckerScriptFile.canonicalPath
+def outlierCheckerScriptHash = fileMd5(outlierCheckerScriptFile)
 def collectorsCurveScriptFile = new File("${projectDir}/processes/collectors_curve/collectors_curve.py")
 if( !collectorsCurveScriptFile.exists() ) {
     exit 1, "collectors_curve.py not found in project directory"
@@ -677,6 +862,14 @@ if( !filterCountsScriptFile.exists() ) {
 }
 def filterCountsScriptPath = filterCountsScriptFile.canonicalPath
 def filterCountsScriptHash = fileMd5(filterCountsScriptFile)
+def finalizeFilterScriptPath = "${projectDir}/processes/filter_counts/finalize_filter.py"
+def combinedFilterHash = fileMd5(tableScriptFile.toFile()) + ':' + fileMd5(new File(finalizeFilterScriptPath))
+def controlDecontamDir = new File("${projectDir}/processes/control_decontam").canonicalPath
+def controlDecontamHash = ['control_decontam.py', 'run_prevalence.R', 'plot_qc.R'].collect { name ->
+    def scriptFile = new File(controlDecontamDir, name)
+    if( !scriptFile.exists() ) exit 1, "Control decontamination script not found: ${scriptFile}"
+    fileMd5(scriptFile)
+}.join(':')
 def calcDivScriptFile = new File("${projectDir}/processes/diversity_analysis/calc_div.py")
 if( !calcDivScriptFile.exists() ) {
     exit 1, "calc_div.py not found in project directory"
@@ -712,6 +905,7 @@ if( !plotIndicspeciesScriptFile.exists() ) {
     exit 1, "plot_indicspecies.py not found in project directory"
 }
 def plotIndicspeciesScriptPath = plotIndicspeciesScriptFile.canonicalPath
+def plotIndicspeciesScriptHash = fileMd5(plotIndicspeciesScriptFile)
 def plotIndicspeciesAlignedScriptFile = new File("${projectDir}/processes/indicspecies_aligned_plots/plot_indicspecies_aligned.py")
 if( !plotIndicspeciesAlignedScriptFile.exists() ) {
     exit 1, "plot_indicspecies_aligned.py not found in project directory"
@@ -749,6 +943,11 @@ def genomeCooccurrencePrepareScriptPath = genomeCooccurrencePrepareScriptFile.ca
 def genomeCooccurrenceInferenceScriptPath = genomeCooccurrenceInferenceScriptFile.canonicalPath
 def genomeCooccurrencePlotScriptPath = genomeCooccurrencePlotScriptFile.canonicalPath
 def genomeCooccurrenceScriptHash = "${fileMd5(genomeCooccurrencePrepareScriptFile)}:${fileMd5(genomeCooccurrenceInferenceScriptFile)}:${fileMd5(genomeCooccurrencePlotScriptFile)}"
+def networkTopologyScriptFile = new File("${projectDir}/processes/network_topology/network_topology_stats.py")
+if( !networkTopologyScriptFile.exists() ) {
+    exit 1, "network_topology_stats.py not found in project directory"
+}
+def networkTopologyScriptPath = networkTopologyScriptFile.canonicalPath
 def masterSummaryScriptFile = new File("${projectDir}/processes/master_summary/build_master_asv_summary.py")
 if( !masterSummaryScriptFile.exists() ) {
     exit 1, "summary/build_master_asv_summary.py not found in project directory"
@@ -989,6 +1188,9 @@ def rawInputFiles = generalStatsEnabled ? sampleRecords.collectMany { rec ->
     }
     return list
 }.unique() : []
+if( primerTrimmingEnabled && sampleRecords.any { !it.paired } ) {
+    exit 1, "primer_trimming requires both FASTQ mates for every manifest sample"
+}
 def fastpOutputFiles = generalStatsEnabled ? sampleRecords.collectMany { rec ->
     def outputs = [
         new File(dirMap.fastp, "${rec.sample_id}_R1.fastq.gz").absolutePath
@@ -1065,6 +1267,10 @@ def mitoChunkSize = mitoConfig.chunk_size ? (mitoConfig.chunk_size as int) : 10
 def mitomasterWorkers = mitoConfig.mitomaster_workers ? (mitoConfig.mitomaster_workers as int) : 8
 def mitomasterRetries = mitoConfig.mitomaster_retries ? (mitoConfig.mitomaster_retries as int) : 4
 def mitomasterTimeout = mitoConfig.mitomaster_timeout ? (mitoConfig.mitomaster_timeout as int) : 90
+def mitomasterFailurePolicy = mitoConfig.mitomaster_failure_policy ?: 'fail'
+if( !(mitomasterFailurePolicy in ['fail', 'continue']) ) {
+    exit 1, 'mito.mitomaster_failure_policy must be fail or continue'
+}
 def mitomasterHeaderMode = mitoConfig.mitomaster_header_mode ?: 'first'
 def mitoRunMitomaster = mitoConfig.containsKey('run_mitomaster') ? (mitoConfig.run_mitomaster as boolean) : true
 def mitoBlastThreads = mitoConfig.blast_threads ? (mitoConfig.blast_threads as int) : pipelineThreads
@@ -1094,7 +1300,8 @@ if( filterCountsEnabled && filterCountsMetadataPath && !new File(filterCountsMet
 def filterCountsOutputName = filterCountsConfig.output ?: 'ASV_target.tsv'
 def filterCountsGroupCol = filterCountsConfig.group_col ?: 'Depth'
 def filterCountsMinGroup = filterCountsConfig.min_group_size ? (filterCountsConfig.min_group_size as int) : 3
-def filterCountsAbundance = filterCountsConfig.abundance_threshold != null ? (filterCountsConfig.abundance_threshold as double) : 0.005d
+def filterCountsAbundance = filterCountsConfig.min_relative_abundance_pct != null ? (filterCountsConfig.min_relative_abundance_pct as double) : 0.005d
+def filterCountsMinPrevalence = filterCountsConfig.min_prevalence_fraction != null ? (filterCountsConfig.min_prevalence_fraction as double) : 0d
 def filterCountsSampleCol = filterCountsConfig.sample_id_col ?: 'longID'
 def filterCountsMinConsensus = filterCountsConfig.min_consensus != null ? (filterCountsConfig.min_consensus as double) : 0d
 def filterCountsTaxonCol = filterCountsConfig.taxon_col ?: 'Taxon'
@@ -1135,6 +1342,45 @@ if( filterCountsExcludeTaxaRaw instanceof List ) {
 def filterCountsSaveIntermediates = (filterCountsConfig.save_intermediates ?: false) as boolean
 def defaultFilterMitoDir = new File(dirMap.mito, "ASVs").canonicalPath
 def filterCountsMitoDir = filterCountsConfig.mito_output_dir ? resolveOutputRelative(filterCountsConfig.mito_output_dir.toString(), outputDir) : defaultFilterMitoDir
+def controlDecontamConfig = config.control_decontam ?: [:]
+def controlDecontamEnabled = controlDecontamConfig.containsKey('enabled') ? (controlDecontamConfig.enabled as boolean) : false
+def controlDecontamMetadataPath = controlDecontamConfig.metadata ? resolveOptionalPath(controlDecontamConfig.metadata.toString(), configRoot) : filterCountsMetadataPath
+if( controlDecontamEnabled && (!controlDecontamMetadataPath || !new File(controlDecontamMetadataPath).exists()) ) {
+    exit 1, "control_decontam.enabled requires an existing control_decontam.metadata (or filter_counts.metadata) file"
+}
+def controlDecontamOutputDir = controlDecontamConfig.output_dir ?: 'three_tier_decontam'
+def controlDecontamOutputDirAbs = resolveOutputRelative(controlDecontamOutputDir.toString(), outputDir)
+def controlDecontamMetadataSampleCol = controlDecontamConfig.metadata_sample_col ?: filterCountsSampleCol
+// Keep historical audit paths stable for downstream consumers.
+// Class labels are METADATA VALUES, never filename/sample-ID patterns.
+def controlDecontamClassCol = controlDecontamConfig.class_col ?: 'sample_class'
+def controlDecontamMinBiologicalReads = controlDecontamConfig.min_biological_reads != null ? controlDecontamConfig.min_biological_reads : 5000
+def controlDecontamTechnicalEnabled = controlDecontamConfig.technical_enabled != null ? (controlDecontamConfig.technical_enabled as boolean) : true
+def controlDecontamBioControlEnabled = controlDecontamConfig.bio_control_enabled != null ? (controlDecontamConfig.bio_control_enabled as boolean) : true
+def controlDecontamTechnicalThreshold = controlDecontamConfig.technical_score_threshold != null ? controlDecontamConfig.technical_score_threshold : 0.1
+def controlDecontamBioControlThreshold = controlDecontamConfig.bio_control_score_threshold != null ? controlDecontamConfig.bio_control_score_threshold : 0.1
+if( controlDecontamEnabled && !controlDecontamTechnicalEnabled && !controlDecontamBioControlEnabled ) {
+    exit 1, "Enable at least one of control_decontam.technical_enabled / bio_control_enabled"
+}
+if( controlDecontamEnabled && ['negative_control_labels', 'positive_control_labels', 'negative_control_col', 'positive_control_col', 'concentration_col', 'type_col', 'sample_types', 'sample_col', 'pooled_threshold', 'within_type_threshold', 'aggressive_threshold', 'combine_mode', 'biological_plausibility'].any { controlDecontamConfig.containsKey(it) } ) {
+    exit 1, "Legacy three-tier configuration detected. Migrate to metadata class_col/class labels and technical_score_threshold/bio_control_score_threshold; see docs/decontamination.md."
+}
+if( filterCountsEnabled && filterCountsMinPrevalence > 0 && !controlDecontamEnabled && !(filterCountsConfig.biological_only_input ?: false) ) {
+    exit 1, "filter_counts.min_prevalence_fraction requires control_decontam.enabled or explicit biological_only_input: true for a dataset containing only biological samples"
+}
+def controlDecontamSettings = groovy.json.JsonOutput.toJson([
+    sample_col: controlDecontamMetadataSampleCol,
+    class_col: controlDecontamClassCol,
+    min_biological_reads: controlDecontamMinBiologicalReads,
+    labels: [
+        biological: controlDecontamConfig.biological_labels != null ? controlDecontamConfig.biological_labels : ['biological'],
+        technical: controlDecontamConfig.technical_labels != null ? controlDecontamConfig.technical_labels : ['technical'],
+        bio_control: controlDecontamConfig.bio_control_labels != null ? controlDecontamConfig.bio_control_labels : ['bio_control'],
+        positive: controlDecontamConfig.positive_labels != null ? controlDecontamConfig.positive_labels : ['positive']
+    ],
+    technical: [enabled: controlDecontamTechnicalEnabled, threshold: controlDecontamTechnicalThreshold],
+    bio_control: [enabled: controlDecontamBioControlEnabled, threshold: controlDecontamBioControlThreshold]
+])
 if( mitoEnabled ) {
     ensureBlastReferenceExists(mitoBlastDbPath, mitoBlastFastaPath, 'mitochondrial')
     ensureBlastReferenceExists(mitoBiofDbPath, mitoBiofFastaPath, 'contaminant')
@@ -1192,6 +1438,13 @@ if( sankeyEnabled && !generalStatsEnabled ) {
 }
 def analysisCfg = parseMetadataAndBasicAnalysisConfig(config, configRoot, outputDir, filterCountsEnabled as boolean, generalStatsEnabled as boolean, pipelineThreads as int, dirMap)
 analysisCfg.each { key, value -> binding.setVariable(key as String, value) }
+if( controlDecontamEnabled ) {
+    // The new module is authoritative for biological inclusion and counts.
+    // Metadata plotting must never subtract controls or impose a second cutoff.
+    binding.setVariable('metadataPlotsSubtractionGroups', [])
+    binding.setVariable('metadataPlotsMinPreCorrectionSampleSum', 0)
+    log.info "Control prevalence decontamination enabled: disabling metadata control subtraction and secondary depth filtering"
+}
 
 def asvTimeDepthCurtainConfig = config.asv_time_depth_curtain ?: [:]
 boolean asvTimeDepthCurtainEnabled = (asvTimeDepthCurtainConfig.enabled ?: false) as boolean
@@ -1356,6 +1609,12 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         metadataIncludeRank = metadataIncludeRankRaw.toString().split(/[,|]/).collect { it.trim() }.findAll { it }
     }
     def metadataPlotsMitoThreshold = metadataPlotsConfig.mito_threshold_line != null ? (metadataPlotsConfig.mito_threshold_line as double) : 1000d
+    def metadataPlotsInputTable = (metadataPlotsConfig.input_table ?: 'filtered').toString().trim().toLowerCase()
+    if( metadataPlotsInputTable != 'filtered' ) {
+        exit 1, "metadata_plots.input_table must be filtered: FILTER_ASVS now supplies the complete filtered table; pre_filter_micro remains an audit output only"
+    }
+    def metadataPlotsMinPreCorrectionSampleSum = metadataPlotsConfig.min_pre_correction_sample_sum != null ? (metadataPlotsConfig.min_pre_correction_sample_sum as double) : 0d
+    boolean metadataPlotsDropZeroAsvs = metadataPlotsConfig.containsKey('drop_zero_asvs') ? (metadataPlotsConfig.drop_zero_asvs as boolean) : false
     boolean metadataPlotsRunMicro = metadataPlotsConfig.containsKey('run_micro') ? (metadataPlotsConfig.run_micro as boolean) : true
     boolean metadataPlotsRunMito = metadataPlotsConfig.containsKey('run_mito') ? (metadataPlotsConfig.run_mito as boolean) : true
     if( metadataPlotsEnabled && !metadataPlotsRunMicro && !metadataPlotsRunMito ) {
@@ -1363,6 +1622,20 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     }
     boolean metadataForceMicroOnly = metadataPlotsRunMicro && !metadataPlotsRunMito
     boolean metadataForceMitoOnly = metadataPlotsRunMito && !metadataPlotsRunMicro
+
+    def analysisCohortConfig = config.analysis_cohort ?: [:]
+    def analysisCohortExcluded = analysisCohortConfig.exclude_groups ?: []
+    if( !(analysisCohortExcluded instanceof List) ) {
+        exit 1, "analysis_cohort.exclude_groups must be a YAML list"
+    }
+    boolean analysisCohortEnabled = !analysisCohortExcluded.isEmpty()
+    def analysisCohortSettingsJson = groovy.json.JsonOutput.toJson([
+        sample_col: analysisCohortConfig.sample_col ?: metadataPlotsSampleCol,
+        group_col: analysisCohortConfig.group_col ?: metadataPlotsTypeCol,
+        exclude_groups: analysisCohortExcluded
+    ])
+    def analysisCohortScript = new File("${projectDir}/processes/analysis_cohort/select_cohort.py")
+    def analysisCohortScriptHash = fileMd5(analysisCohortScript)
 
     def batchCorrectionConfig = config.batch_correction ?: [:]
     boolean batchCorrectionEnabled = metadataPlotsEnabled && (batchCorrectionConfig.containsKey('enabled') ? (batchCorrectionConfig.enabled as boolean) : true)
@@ -1641,6 +1914,10 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
     boolean diversityPatientAwareRequireCompleteTypes = diversityPatientAwareConfig.containsKey('require_complete_types') ?
         (diversityPatientAwareConfig.require_complete_types as boolean) : false
     return [
+        analysisCohortEnabled: analysisCohortEnabled,
+        analysisCohortSettingsJson: analysisCohortSettingsJson,
+        analysisCohortScript: analysisCohortScript,
+        analysisCohortScriptHash: analysisCohortScriptHash,
         metadataPlotsMetadataPath: metadataPlotsMetadataPath,
         metadataPlotsSubDir: metadataPlotsSubDir,
         metadataPlotsSampleCol: metadataPlotsSampleCol,
@@ -1792,6 +2069,9 @@ def parseMetadataAndBasicAnalysisConfig(config, File configRoot, String outputDi
         metadataPlotsSubtractionGroups: metadataPlotsSubtractionGroups,
         metadataPlotsGroupOrder: metadataPlotsGroupOrder,
         metadataIncludeRank: metadataIncludeRank,
+        metadataPlotsInputTable: metadataPlotsInputTable,
+        metadataPlotsMinPreCorrectionSampleSum: metadataPlotsMinPreCorrectionSampleSum,
+        metadataPlotsDropZeroAsvs: metadataPlotsDropZeroAsvs,
         batchCorrectionEnabled: batchCorrectionEnabled,
         batchOptimize: batchOptimize,
         batchConqurLogisticLasso: batchConqurLogisticLasso,
@@ -1983,8 +2263,43 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     if( !(vocCorrelationDirection in ['positive','negative','both']) ) {
         exit 1, "voc_correlation.correlation_direction must be one of: positive, negative, both"
     }
+    def vocCorrelationIsaDirection = vocCorrelationConfig.isa_correlation_direction ?
+        vocCorrelationConfig.isa_correlation_direction.toString().trim().toLowerCase() : vocCorrelationDirection
+    if( !(vocCorrelationIsaDirection in ['positive','negative','both']) ) {
+        exit 1, "voc_correlation.isa_correlation_direction must be one of: positive, negative, both"
+    }
     def vocCorrelationCasePalette = vocCorrelationConfig.case_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationCaseCol] ?: '')
     def vocCorrelationIsaPalette = vocCorrelationConfig.isa_palette ?: (indicspeciesGroupPaletteMap[vocCorrelationTypeCol] ?: '')
+    def vocCorrelationIsaFocusGroupsRaw = vocCorrelationConfig.isa_focus_groups ?: ['Bronchial Brush', 'Lung Brush']
+    def vocCorrelationIsaFocusGroups = vocCorrelationIsaFocusGroupsRaw instanceof List ?
+        vocCorrelationIsaFocusGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        vocCorrelationIsaFocusGroupsRaw.toString().trim()
+    def vocCorrelationIsaAllTypeGroupsRaw = vocCorrelationConfig.isa_all_type_groups ?: metadataKeepTypes
+    def vocCorrelationIsaAllTypeGroups = vocCorrelationIsaAllTypeGroupsRaw instanceof List ?
+        vocCorrelationIsaAllTypeGroupsRaw.collect { it.toString().trim() }.findAll { it }.join(',') :
+        vocCorrelationIsaAllTypeGroupsRaw.toString().trim()
+    boolean vocCorrelationIsaExcludeAllTypes = vocCorrelationConfig.containsKey('isa_exclude_all_types_from_focus') ?
+        (vocCorrelationConfig.isa_exclude_all_types_from_focus as boolean) : true
+    def vocCorrelationIsaDistinctArg = vocCorrelationConfig.isa_exclude_nondistinct == true ? "--isa-exclude-nondistinct" : ""
+    def vocCorrelationIsaMinAbsRho = vocCorrelationConfig.isa_min_abs_rho != null ?
+        (vocCorrelationConfig.isa_min_abs_rho as double) : 0.0d
+    if( vocCorrelationIsaMinAbsRho < 0d || vocCorrelationIsaMinAbsRho > 1d ) {
+        exit 1, "voc_correlation.isa_min_abs_rho must be between 0 and 1"
+    }
+    def vocCorrelationSampleMinAbsZ = vocCorrelationConfig.sample_min_abs_z != null ?
+        (vocCorrelationConfig.sample_min_abs_z as double) : 0.0d
+    def vocPatientInference = vocCorrelationConfig.containsKey('patient_inference') ? (vocCorrelationConfig.patient_inference as boolean) : true
+    def vocPatientPermutations = vocCorrelationConfig.patient_permutations != null ? (vocCorrelationConfig.patient_permutations as int) : 9999
+    def vocPatientSeed = vocCorrelationConfig.patient_seed != null ? (vocCorrelationConfig.patient_seed as int) : 42
+    def vocPatientMinPatients = vocCorrelationConfig.patient_min_patients != null ? (vocCorrelationConfig.patient_min_patients as int) : 6
+    def vocPatientMinNonzero = vocCorrelationConfig.patient_min_nonzero != null ? (vocCorrelationConfig.patient_min_nonzero as int) : 3
+    def vocClrPseudocount = vocCorrelationConfig.clr_pseudocount != null ? (vocCorrelationConfig.clr_pseudocount as double) : 0.5d
+    if( vocPatientPermutations < 1 || vocPatientMinPatients < 3 || vocPatientMinNonzero < 1 || vocClrPseudocount <= 0d ) {
+        exit 1, "VOC patient inference requires positive permutations/nonzero minimum/pseudocount and at least 3 patients"
+    }
+    if( vocCorrelationSampleMinAbsZ < 0d ) {
+        exit 1, "voc_correlation.sample_min_abs_z must be non-negative"
+    }
 
     def measurementAssociationConfig = config.measurement_association ?: [:]
     boolean measurementAssociationRequested = measurementAssociationConfig.containsKey('enabled') ? (measurementAssociationConfig.enabled as boolean) : false
@@ -2051,7 +2366,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     }
     def measurementAssociationMaxAsvs = measurementAssociationConfig.max_asvs != null ? (measurementAssociationConfig.max_asvs as int) : 0
     def measurementAssociationMinTotal = measurementAssociationConfig.min_total != null ? (measurementAssociationConfig.min_total as double) : 0.0d
-    def measurementAssociationMinPrevalence = measurementAssociationConfig.min_prevalence != null ? (measurementAssociationConfig.min_prevalence as double) : 0.0d
+    def measurementAssociationMinPrevalence = measurementAssociationConfig.min_prevalence_fraction != null ? (measurementAssociationConfig.min_prevalence_fraction as double) : 0.0d
     def measurementAssociationTopCorrelations = measurementAssociationConfig.top_correlations ? (measurementAssociationConfig.top_correlations as int) : 100
     def measurementAssociationDirection = measurementAssociationConfig.correlation_direction ? measurementAssociationConfig.correlation_direction.toString().trim().toLowerCase() : 'both'
     if( !(measurementAssociationDirection in ['positive','negative','both']) ) {
@@ -2249,10 +2564,10 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         microbialCompartmentStabilityNearTieTolerance < 0 || microbialCompartmentStabilityNearTieTolerance > 1 ) {
         exit 1, "microbial_compartments stability quantile or near-tie tolerance is invalid"
     }
-    if( !microbialCompartmentStabilityBlockCol ) {
+    if( microbialCompartmentEnabled && !microbialCompartmentStabilityBlockCol ) {
         exit 1, "microbial_compartments.stability_block_col is required for within-block stability"
     }
-    if( microbialCompartmentBlockedRobustnessEnabled && !microbialCompartmentStabilityStratumCol ) {
+    if( microbialCompartmentEnabled && microbialCompartmentBlockedRobustnessEnabled && !microbialCompartmentStabilityStratumCol ) {
         exit 1, "microbial_compartments.stability_stratum_col is required when blocked robustness is enabled"
     }
     boolean indicspeciesRequiresMicrobialCompartments = indicspeciesGroupCols.contains('microbial_compartment') ||
@@ -2627,14 +2942,15 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     def spieceasiOutputDirAbs = new File(outputDir, spieceasiOutputDir).canonicalPath
     def spieceasiPrefix = spieceasiConfig.prefix ?: 'spieceasi'
     boolean spieceasiTranspose = spieceasiConfig.containsKey('transpose') ? (spieceasiConfig.transpose as boolean) : true
-    def spieceasiMinRelAbund = spieceasiConfig.min_rel_abund != null ? (spieceasiConfig.min_rel_abund as double) : 0d
-    def spieceasiMinPrevalence = spieceasiConfig.min_prevalence != null ? (spieceasiConfig.min_prevalence as double) : 0.25d
-    boolean spieceasiForceKeepIsaAsvs = spieceasiConfig.containsKey('force_keep_isa_asvs') ? (spieceasiConfig.force_keep_isa_asvs as boolean) : false
+    def spieceasiMinRelAbund = spieceasiConfig.min_relative_abundance_fraction != null ? (spieceasiConfig.min_relative_abundance_fraction as double) : 0d
+    def spieceasiMinPrevalence = spieceasiConfig.min_prevalence_fraction != null ? (spieceasiConfig.min_prevalence_fraction as double) : 0.25d
+    boolean spieceasiForceKeepIsaAsvs = spieceasiConfig.containsKey('force_keep_indicator_asvs') ? (spieceasiConfig.force_keep_indicator_asvs as boolean) : true
     if( indicspeciesRequiresMicrobialCompartments && spieceasiForceKeepIsaAsvs ) {
-        exit 1, "spieceasi.force_keep_isa_asvs cannot be enabled when ISA uses microbial_compartment because that would create a circular dependency"
+        exit 1, "spieceasi.force_keep_indicator_asvs cannot be enabled when ISA uses microbial_compartment because that would create a circular dependency"
     }
     boolean spieceasiForceKeepAsvMagAsvs = spieceasiConfig.containsKey('force_keep_asv_mag_asvs') ? (spieceasiConfig.force_keep_asv_mag_asvs as boolean) : false
     boolean spieceasiRemoveZeroVar = spieceasiConfig.containsKey('remove_zero_var') ? (spieceasiConfig.remove_zero_var as boolean) : true
+    boolean spieceasiForceKeepIndicatorAsvs = spieceasiConfig.containsKey('force_keep_indicator_asvs') ? (spieceasiConfig.force_keep_indicator_asvs as boolean) : true
     def spieceasiMethod = spieceasiConfig.method ?: 'glasso'
     def spieceasiLambdaMinRatio = spieceasiConfig.lambda_min_ratio != null ? (spieceasiConfig.lambda_min_ratio as double) : 0.1d
     def spieceasiNlambda = spieceasiConfig.nlambda ? (spieceasiConfig.nlambda as int) : 20
@@ -2658,6 +2974,19 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         exit 1, "spieceasi.network_enabled requires indicspecies.enabled to be true"
     }
     boolean networkEnabled = networkRequested && indicspeciesEnabled
+    def networkTopologyConfig = config.network_topology ?: [:]
+    boolean networkTopologyEnabled = networkTopologyConfig.containsKey('enabled') ? (networkTopologyConfig.enabled as boolean) : false
+    if( networkTopologyEnabled && !spieceasiEnabled ) {
+        exit 1, "network_topology.enabled requires spieceasi.enabled to be true"
+    }
+    def networkTopologyOutputDir = networkTopologyConfig.output_dir ?: spieceasiOutputDir
+    def networkTopologyOutputDirAbs = resolveOutputRelative(networkTopologyOutputDir.toString(), outputDir)
+    def networkTopologyNNull = networkTopologyConfig.n_null != null ? (networkTopologyConfig.n_null as int) : 1000
+    def networkTopologySeed = networkTopologyConfig.seed != null ? (networkTopologyConfig.seed as int) : 42
+    boolean networkTopologySkipNull = networkTopologyConfig.containsKey('skip_null') ? (networkTopologyConfig.skip_null as boolean) : false
+    if( networkTopologyNNull < 0 ) {
+        exit 1, "network_topology.n_null must be non-negative"
+    }
     def networkGraphAllPath = spieceasiConfig.graph_pos_all ? resolveOptionalPath(spieceasiConfig.graph_pos_all, configRoot) : new File(spieceasiOutputDirAbs, "${spieceasiPrefix}_network_pos_all.graphml").canonicalPath
     def networkGraphThrPath = spieceasiConfig.graph_pos_sub ? resolveOptionalPath(spieceasiConfig.graph_pos_sub, configRoot) : new File(spieceasiOutputDirAbs, "${spieceasiPrefix}_network_pos_thr.graphml").canonicalPath
     def networkNodeFeaturesPath = spieceasiConfig.node_features ? resolveOptionalPath(spieceasiConfig.node_features, configRoot) : new File(spieceasiOutputDirAbs, "${spieceasiPrefix}_node_features.csv").canonicalPath
@@ -3196,6 +3525,15 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         exit 1, "power_analysis.enabled requires metadata_plots.enabled to be true"
     }
     boolean powerAnalysisEnabled = powerAnalysisRequested
+    def powerAnalysisWorkersRaw = powerAnalysisConfig.workers
+    if (powerAnalysisWorkersRaw != null && !(powerAnalysisWorkersRaw.toString() ==~ /[1-9][0-9]*/)) {
+        exit 1, "power_analysis.workers must be a positive integer or null"
+    }
+    int powerAnalysisCpuBudget = Math.min((config.resources?.threads ?: pipelineThreads) as int, pipelineThreads)
+    int powerAnalysisWorkers = powerAnalysisWorkersRaw != null ?
+        Math.min(powerAnalysisWorkersRaw as int, powerAnalysisCpuBudget) : powerAnalysisCpuBudget
+    if (powerAnalysisWorkers < 1) exit 1, "Power-analysis CPU budget must be positive"
+    if (powerAnalysisEnabled) log.info "Power analysis: ${powerAnalysisWorkers} simulation workers (one CPU per worker)"
     def powerAnalysisOutputDir = powerAnalysisConfig.output_dir ?: 'power_analysis'
     def powerAnalysisOutputDirAbs = resolveOutputRelative(powerAnalysisOutputDir.toString(), outputDir)
     def powerAnalysisSampleCol = powerAnalysisConfig.sample_col ?: metadataPlotsSampleCol
@@ -3255,7 +3593,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
     boolean taxonomyPatientAwareRunComparison = taxonomyPatientAwareConfig.containsKey('run_comparison') ?
         (taxonomyPatientAwareConfig.run_comparison as boolean) :
         (!config.taxonomy_group_association || taxonomyPatientAwareComparisonGroups.toString().trim().length() > 0)
-    def taxonomyPatientAwareMinPrevalence = taxonomyPatientAwareConfig.min_prevalence != null ? (taxonomyPatientAwareConfig.min_prevalence as double) : 0.10d
+    def taxonomyPatientAwareMinPrevalence = taxonomyPatientAwareConfig.min_prevalence_fraction != null ? (taxonomyPatientAwareConfig.min_prevalence_fraction as double) : 0.10d
     boolean taxonomyPatientAwareExcludeContralateral = taxonomyPatientAwareConfig.containsKey('exclude_contralateral_in_cancer') ? (taxonomyPatientAwareConfig.exclude_contralateral_in_cancer as boolean) : true
     def taxonomyPatientAwareContralateralCol = taxonomyPatientAwareConfig.contralateral_col ? taxonomyPatientAwareConfig.contralateral_col.toString().trim() : 'lung_status'
     def taxonomyPatientAwareCancerSiteCol = taxonomyPatientAwareConfig.cancer_site_col ? taxonomyPatientAwareConfig.cancer_site_col.toString().trim() : 'Cancer_Site'
@@ -3345,6 +3683,19 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         vocCorrelationUseLegacySubset: vocCorrelationUseLegacySubset,
         vocCorrelationVocCols: vocCorrelationVocCols,
         vocCorrelationDirection: vocCorrelationDirection,
+        vocCorrelationIsaDirection: vocCorrelationIsaDirection,
+        vocCorrelationIsaFocusGroups: vocCorrelationIsaFocusGroups,
+        vocCorrelationIsaAllTypeGroups: vocCorrelationIsaAllTypeGroups,
+        vocCorrelationIsaExcludeAllTypes: vocCorrelationIsaExcludeAllTypes,
+        vocCorrelationIsaDistinctArg: vocCorrelationIsaDistinctArg,
+        vocCorrelationIsaMinAbsRho: vocCorrelationIsaMinAbsRho,
+        vocCorrelationSampleMinAbsZ: vocCorrelationSampleMinAbsZ,
+        vocPatientInference: vocPatientInference,
+        vocPatientPermutations: vocPatientPermutations,
+        vocPatientSeed: vocPatientSeed,
+        vocPatientMinPatients: vocPatientMinPatients,
+        vocPatientMinNonzero: vocPatientMinNonzero,
+        vocClrPseudocount: vocClrPseudocount,
         vocCorrelationCasePalette: vocCorrelationCasePalette,
         vocCorrelationIsaPalette: vocCorrelationIsaPalette,
         measurementAssociationEnabled: measurementAssociationEnabled,
@@ -3619,6 +3970,9 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         networkGraphAllPath: networkGraphAllPath,
         networkGraphThrPath: networkGraphThrPath,
         networkNodeFeaturesPath: networkNodeFeaturesPath,
+        networkTopologyOutputDirAbs: networkTopologyOutputDirAbs,
+        networkTopologyNNull: networkTopologyNNull,
+        networkTopologySeed: networkTopologySeed,
         networkLayoutSeed: networkLayoutSeed,
         networkLayoutScale: networkLayoutScale,
         networkDegreeScale: networkDegreeScale,
@@ -3755,6 +4109,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         powerAnalysisSampleSizesCancer: powerAnalysisSampleSizesCancer,
         powerAnalysisSampleSizesStype: powerAnalysisSampleSizesStype,
         powerAnalysisNSimulations: powerAnalysisNSimulations,
+        powerAnalysisWorkers: powerAnalysisWorkers,
         powerAnalysisNPerm: powerAnalysisNPerm,
         powerAnalysisAlpha: powerAnalysisAlpha,
         powerAnalysisSeed: powerAnalysisSeed,
@@ -3811,6 +4166,7 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         spieceasiEnabled: spieceasiEnabled,
         spieceasiTranspose: spieceasiTranspose,
         spieceasiRemoveZeroVar: spieceasiRemoveZeroVar,
+        spieceasiForceKeepIndicatorAsvs: spieceasiForceKeepIndicatorAsvs,
         spieceasiKeepNegative: spieceasiKeepNegative,
         spieceasiAllPosOnly: spieceasiAllPosOnly,
         spieceasiForceFilter: spieceasiForceFilter,
@@ -3819,6 +4175,8 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
         spieceasiForceKeepIsaAsvs: spieceasiForceKeepIsaAsvs,
         spieceasiForceKeepAsvMagAsvs: spieceasiForceKeepAsvMagAsvs,
         networkEnabled: networkEnabled,
+        networkTopologyEnabled: networkTopologyEnabled,
+        networkTopologySkipNull: networkTopologySkipNull,
         networkModes: networkModes,
         networkModuleBestOnly: networkModuleBestOnly,
         networkModuleIsaOnly: networkModuleIsaOnly,
@@ -3884,6 +4242,13 @@ def parseIndicatorAndNetworkConfig(config, File configRoot, String outputDir, in
 workflow ASPIRE_PREPROCESS {
     main:
     def rawReadsForAsv = rawReadsChannel
+    def primerAudit = Channel.value([])
+    if( primerTrimmingEnabled ) {
+        def primers = PRIMER_TRIM(rawReadsForAsv, Channel.value(file(primerRunner)), Channel.value(file(primerUtility)), primerSettingsJson)
+        def checked = PRIMER_TRIM_CHECK(primers.summary.collect(), Channel.value(file(primerRunner)))
+        primerAudit = checked.done
+        rawReadsForAsv = primers.reads.combine(checked.done).map { meta, r1, r2, audit -> tuple(meta, r1, r2) }
+    }
     def fastp_result = FASTP_QC(rawReadsForAsv)
     def reads_after_qc = fastp_result.reads
     def reads_after_merge = MERGE_READS(reads_after_qc)
@@ -3905,39 +4270,51 @@ workflow ASPIRE_PREPROCESS {
     def count_matrix_stage = CREATE_COUNT_MATRIX(concat_for_counts, nochi_input)
     def count_matrix_channel = count_matrix_stage.count_matrix
     def asv_counts_for_sankey = count_matrix_channel.map { tuple -> tuple[0] }
-    def filtered_stage = FILTER_TABLE(count_matrix_channel)
-    def filtered_channel = filtered_stage.filtered
-    def filtered_fasta_for_taxonomy = filtered_channel.map { tuple -> tuple[1] }
-    def sina_stage = SINA_TRIM(filtered_fasta_for_taxonomy)
+    // Assign taxonomy to ALL inferred ASVs, including control-only ASVs.
+    def all_asv_fasta = count_matrix_channel.map { parts -> parts[1] }
+    def sina_stage = SINA_TRIM(all_asv_fasta)
     def taxonomy_stage = TAXONOMY(sina_stage.trimmed_fasta)
+    def counts_for_feature_filter = count_matrix_channel
+    def sankeyControlAudit = Channel.value([])
+    def sankeyCleanedCounts = Channel.value([])
+    if( controlDecontamEnabled ) {
+        def decontam_stage = CONTROL_DECONTAM(
+            count_matrix_channel,
+            taxonomy_stage.taxonomy_table,
+            Channel.value(file(controlDecontamMetadataPath)),
+            controlDecontamHash,
+            controlDecontamSettings
+        )
+        counts_for_feature_filter = decontam_stage.cleaned
+        sankeyControlAudit = decontam_stage.audit
+        sankeyCleanedCounts = decontam_stage.cleaned.map { parts -> parts[0] }
+    }
+
     def runMitoStages = mitoEnabled || filterCountsEnabled
-    def filter_counts_stage = null
+    def nontargetForFiltering = Channel.value(file(emptyModulesPath))
     if( runMitoStages ) {
         def blast_database_stage = PREPARE_BLAST_DATABASES(
             mitoBlastFastaPath ?: mitoBlastDbPath,
             mitoBiofFastaPath ?: mitoBiofDbPath
         )
-        def mitomaster_stage = MITOMASTER(filtered_channel, blast_database_stage.databases)
+        def mitomaster_stage = MITOMASTER(counts_for_feature_filter, blast_database_stage.databases)
         def mito_summary = MITO_DECONTAM(mitomaster_stage.mito_artifacts, taxonomy_stage.taxonomy_table)
-        if( filterCountsEnabled ) {
-            filter_counts_stage = FILTER_COUNTS(filtered_channel, taxonomy_stage.taxonomy_table, mito_summary.nontarget_table)
-        }
+        nontargetForFiltering = mito_summary.nontarget_table
     }
-    if( metadataPlotsEnabled && filter_counts_stage == null ) {
+    if( metadataPlotsEnabled && !filterCountsEnabled ) {
         exit 1, "metadata_plots.enabled requires filter_counts outputs but filter_counts stage was not executed"
     }
+    def filter_counts_stage = FILTER_ASVS(counts_for_feature_filter, taxonomy_stage.taxonomy_table, nontargetForFiltering)
     def general_stats_stage = null
     if( generalStatsEnabled ) {
         general_stats_stage = GENERAL_STATS(concat_for_counts)
     }
 
-    if( filter_counts_stage == null || general_stats_stage == null ) {
-        exit 1, "Canonical preprocessing export requires filter_counts.enabled=true and general_stats.enabled=true"
-    }
+
     def preprocessing_dataset_stage = PREPROCESS_DATASET(
-        count_matrix_channel.map { tuple -> tuple[0] },
-        filtered_channel.map { tuple -> tuple[0] },
-        filtered_channel.map { tuple -> tuple[1] },
+        count_matrix_channel.map { parts -> parts[0] },
+        filter_counts_stage.filtered_counts,
+        filter_counts_stage.filtered_fasta,
         filter_counts_stage.filtered_counts,
         filter_counts_stage.filtered_micro,
         filter_counts_stage.filtered_mito,
@@ -3948,9 +4325,11 @@ workflow ASPIRE_PREPROCESS {
         general_stats_stage.filtered_stats,
         general_stats_stage.concat_stats,
         file(manifestPath, checkIfExists: true),
-        preprocessingParametersJson
+        preprocessingParametersJson,
+        primerAudit,
+        sankeyControlAudit,
+        sankeyCleanedCounts
     )
-
     emit:
     dataset = preprocessing_dataset_stage.dataset
 }
@@ -3962,6 +4341,17 @@ workflow ASPIRE_ANALYSIS {
     main:
     def validated_preprocessing = VALIDATE_PREPROCESS_DATASET(preprocessing_dataset)
     def datasetFile = { String name -> validated_preprocessing.dataset.map { directory -> file("${directory}/${name}") } }
+    def auditDeclared = { directory ->
+        def manifest = new groovy.json.JsonSlurper().parse(new File("${directory}/manifest.json"))
+        manifest.files.any { it.role == 'control_audit:sample_qc.tsv' }
+    }
+    def controlAudit = validated_preprocessing.dataset.map { directory ->
+        auditDeclared(directory) ? file("${directory}/control_audit") : file(emptyModulesPath)
+    }
+    def hasControlAudit = validated_preprocessing.dataset.map { directory -> auditDeclared(directory) }
+    def controlCleaned = validated_preprocessing.dataset.map { directory ->
+        auditDeclared(directory) ? file("${directory}/control_cleaned.tsv") : file(emptyModulesPath)
+    }
     def count_matrix_channel = datasetFile('asv_counts.tsv')
     def asv_counts_for_sankey = count_matrix_channel.map { it }
     def filtered_fasta_for_taxonomy = datasetFile('asv_sequences.filtered.fasta.gz')
@@ -4018,6 +4408,7 @@ workflow ASPIRE_ANALYSIS {
     def asvMagLinksForSpieceasi = asv_mag_link_stage != null ?
         asv_mag_link_stage.pairing :
         Channel.value(file(emptyModulesPath))
+    def networkTopologyStage = null
     def spieceasi_stage = null
     def graphAllForModules = null
     def graphAllForNetwork = null
@@ -4047,6 +4438,9 @@ workflow ASPIRE_ANALYSIS {
         nodeFeaturesForNetwork = spieceasi_stage.node_features
         nodeFeaturesForAsvMagNetwork = spieceasi_stage.node_features.map { it }
         nodeFeaturesForModuleMeasurement = spieceasi_stage.node_features.map { it }
+        if( networkTopologyEnabled ) {
+            networkTopologyStage = NETWORK_TOPOLOGY(spieceasi_stage.graph_thr.map { it })
+        }
     } else if( networkEnabled ) {
         graphAllForModules = Channel.value(file(networkGraphAllPath))
         graphAllForNetwork = Channel.value(file(networkGraphAllPath))
@@ -4364,7 +4758,11 @@ workflow ASPIRE_ANALYSIS {
             asv_counts_for_sankey,
             filter_counts_stage.filtered_decon,
             filter_counts_stage.filtered_micro,
-            sample_manifest
+            filter_counts_stage.filtered_counts,
+            controlAudit,
+            controlCleaned,
+            sample_manifest,
+            hasControlAudit
         )
     }
     if( masterSummaryEnabled ) {
@@ -4374,7 +4772,9 @@ workflow ASPIRE_ANALYSIS {
         def masterSummaryNetworkDone = graph_network_stage != null ? graph_network_stage.done : Channel.value(file(emptyModulesPath))
         def masterSummarySankeyDone = sankey_stage != null ? sankey_stage.done : Channel.value(file(emptyModulesPath))
         def masterSummaryAsvMagDone = asv_mag_link_stage != null ? asv_mag_link_stage.done : Channel.value(file(emptyModulesPath))
-        def masterSummaryOptionalDone = genome_cooccurrence_stage != null ? genome_cooccurrence_stage.done : Channel.value(file(emptyModulesPath))
+        def genomeDone = genome_cooccurrence_stage != null ? genome_cooccurrence_stage.done : Channel.value(file(emptyModulesPath))
+        def topologyDone = networkTopologyStage != null ? networkTopologyStage.done : Channel.value(file(emptyModulesPath))
+        def masterSummaryOptionalDone = genomeDone.combine(topologyDone).map { a, b -> [a, b] }
         MASTER_SUMMARY(
             asvMetaForMasterSummary,
             asvFinalForMasterSummary,
@@ -4466,6 +4866,13 @@ workflow RUN_METADATA_ANALYSES {
     asvFinalForLungStatus = baseAsvFinal.map { it }
     asvFinalForMasterSummary = baseAsvFinal.map { it }
 
+    if( analysisCohortEnabled && groupingDiagnosticsRunEarly ) {
+        diagnostic_cohort_stage = ANALYSIS_COHORT_DIAGNOSTICS(
+            metaMicroForGroupingDiagnostics, asvFinalForGroupingDiagnostics
+        )
+        metaMicroForGroupingDiagnostics = diagnostic_cohort_stage.metadata
+        asvFinalForGroupingDiagnostics = diagnostic_cohort_stage.counts
+    }
     grouping_diagnostics_stage = null
     if( groupingDiagnosticsRunEarly ) {
         grouping_diagnostics_stage = GROUPING_DIAGNOSTICS(
@@ -4506,10 +4913,6 @@ workflow RUN_METADATA_ANALYSES {
         asvMetaForMasterSummary = group_label_augmentation_stage.asv_meta_augmented.map { it }
     }
 
-    if( plotUpsetEnabled ) {
-        PLOT_UPSET(metaMicroForPlotUpset)
-    }
-
     batch_stage = null
     asvClrForOutlier = null
     if( batchCorrectionEnabled ) {
@@ -4533,7 +4936,7 @@ workflow RUN_METADATA_ANALYSES {
         asvFinalForLungStatus = batch_stage.asv_selected_counts_int.map { it }
         asvFinalForMasterSummary = batch_stage.asv_selected_counts_int.map { it }
         umapResultsForTrajectory = batch_stage.umap_results
-        if( bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
+        if( analysisCohortEnabled || bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled || vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled || powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled ) {
             corrected_asv_meta_stage = ASV_META_FROM_CORRECTED(
                 asvMetaSeedForCorrection,
                 batch_stage.asv_selected_counts_int
@@ -4549,6 +4952,50 @@ workflow RUN_METADATA_ANALYSES {
             asvMetaForMasterSummary = corrected_asv_meta_stage.asv_meta_corrected.map { it }
         }
     }
+    if( analysisCohortEnabled ) {
+        analysis_cohort_stage = ANALYSIS_COHORT(
+            metaMicroForIndicspecies,
+            asvFinalForIndicspecies,
+            asvMetaForVocCorrelation,
+            batchCorrectionEnabled ? asvClrForOutlier : Channel.value(file(emptyModulesPath))
+        )
+        metaMicroForCommunityPredictor = analysis_cohort_stage.metadata.map { it }
+        asvFinalForCommunityPredictor = analysis_cohort_stage.counts.map { it }
+        metaMicroForOutlier = analysis_cohort_stage.metadata.map { it }
+        metaMicroForPlotUpset = analysis_cohort_stage.metadata.map { it }
+        metaMicroForCollectors = analysis_cohort_stage.metadata.map { it }
+        metaMicroForIndicspecies = analysis_cohort_stage.metadata.map { it }
+        metaMicroForIndicspeciesPlots = analysis_cohort_stage.metadata.map { it }
+        metaMicroForClustermaps = analysis_cohort_stage.metadata.map { it }
+        metaMicroForNetwork = analysis_cohort_stage.metadata.map { it }
+        metaMicroForMeasurementAssociation = analysis_cohort_stage.metadata.map { it }
+        asvMetaForBubbleplotter = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForUmap = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForClustermaps = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForVocCorrelation = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForMeasurementAssociation = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForPowerAnalysis = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForTaxonomyPatientAware = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForLungStatus = analysis_cohort_stage.asv_metadata.map { it }
+        asvMetaForMasterSummary = analysis_cohort_stage.asv_metadata.map { it }
+        asvFinalForCollectors = analysis_cohort_stage.counts.map { it }
+        asvFinalForIndicspecies = analysis_cohort_stage.counts.map { it }
+        asvFinalForSpieceasi = analysis_cohort_stage.counts.map { it }
+        asvFinalForNetwork = analysis_cohort_stage.counts.map { it }
+        asvFinalForVocCorrelation = analysis_cohort_stage.counts.map { it }
+        asvFinalForMeasurementAssociation = analysis_cohort_stage.counts.map { it }
+        asvFinalForPowerAnalysis = analysis_cohort_stage.counts.map { it }
+        asvFinalForTaxonomyPatientAware = analysis_cohort_stage.counts.map { it }
+        asvFinalForLungStatus = analysis_cohort_stage.counts.map { it }
+        asvFinalForMasterSummary = analysis_cohort_stage.counts.map { it }
+        if( batchCorrectionEnabled ) {
+            asvClrForOutlier = analysis_cohort_stage.clr
+        }
+    }
+    if( plotUpsetEnabled ) {
+        PLOT_UPSET(metaMicroForPlotUpset)
+    }
+
     if( bubbleplotterEnabled ) {
         BUBBLEPLOTTER(asvMetaForBubbleplotter)
     }

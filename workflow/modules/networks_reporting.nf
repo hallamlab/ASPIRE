@@ -135,7 +135,7 @@ export VECLIB_MAXIMUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export RCPP_PARALLEL_NUM_THREADS=1
 
-Rscript "${spieceasiScriptPath}" \\
+"\${CONDA_PREFIX}/bin/Rscript" "${spieceasiScriptPath}" \\
   --counts "${asv_counts}" \\
   --outdir "${spieceasiOutputDirAbs}" \\
   --prefix "${spieceasiPrefix}" \\
@@ -203,7 +203,7 @@ process NETWORK_MODULES {
 set -euo pipefail
 mkdir -p "${spieceasiOutputDirAbs}"
 
-Rscript "${networkModulesScriptPath}" \\
+"\${CONDA_PREFIX}/bin/Rscript" "${networkModulesScriptPath}" \\
   --graph-sub "${graph_thr}" \\
   --graph-all "${graph_all}" \\
   --outdir "${spieceasiOutputDirAbs}" \\
@@ -923,5 +923,46 @@ ${asvTaxonomyConfidenceArg}${minCompletenessArg}${maxContaminationArg}${guncAsse
 
 ln -sf "${asvMagLinkOutputDirAbs}/tables/asv2mag_pairing.tsv" asv2mag_pairing.tsv
 touch asv_mag_link.done
+"""
+}
+
+process NETWORK_TOPOLOGY {
+    cpus 1
+    conda "${networkTopologyCondaEnvPath}"
+
+    when:
+    networkTopologyEnabled
+
+    input:
+    path(graph_thr, stageAs: 'network_graph_thresholded.graphml')
+
+    output:
+    path("network_topology_summary.tsv"), emit: summary
+    path("network_topology_null_draws.tsv"), emit: null_draws
+    path("network_topology.done"), emit: done
+
+    script:
+    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    def skipNullFlag = networkTopologySkipNull ? '1' : '0'
+    """
+set -euo pipefail
+mkdir -p "${networkTopologyOutputDirAbs}"
+
+TOPOLOGY_NULL_ARGS=()
+if [[ "${skipNullFlag}" == "1" ]]; then
+  TOPOLOGY_NULL_ARGS+=(--skip-null)
+fi
+
+"\${CONDA_PREFIX}/bin/python" "${networkTopologyScriptPath}" \\
+  --graphml "${graph_thr}" \\
+  --output "${networkTopologyOutputDirAbs}/network_topology_summary.tsv" \\
+  --null-output "${networkTopologyOutputDirAbs}/network_topology_null_draws.tsv" \\
+  --n-null ${networkTopologyNNull} \\
+  --seed ${networkTopologySeed} \\
+  "\${TOPOLOGY_NULL_ARGS[@]}"
+
+ln -sf "${networkTopologyOutputDirAbs}/network_topology_summary.tsv" network_topology_summary.tsv
+ln -sf "${networkTopologyOutputDirAbs}/network_topology_null_draws.tsv" network_topology_null_draws.tsv
+touch network_topology.done
 """
 }

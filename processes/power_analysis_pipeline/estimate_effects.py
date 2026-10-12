@@ -12,6 +12,8 @@ Outputs:
 - Patient-level summary statistics
 """
 
+from power_parallel import run_replicates, add_parallel_arguments, configure_parallel
+
 import argparse
 import warnings
 from pathlib import Path
@@ -183,7 +185,7 @@ def bootstrap_permanova_r2(count_matrix, group_labels, patient_ids, n_bootstrap=
     r2_bootstrap = []
 
     print(f"  Running {n_bootstrap} bootstrap replicates...")
-    for i in range(n_bootstrap):
+    def replicate(i):
         boot_patients = resample(unique_patients, replace=True, random_state=seed+i)
         boot_indices = []
         boot_groups = []
@@ -200,7 +202,9 @@ def bootstrap_permanova_r2(count_matrix, group_labels, patient_ids, n_bootstrap=
         patient_groups = np.array([patient_group_map[p] for p in boot_unique_patients])
         boot_dist = bray_curtis_from_counts(patient_matrix, transform=transform)
         boot_r2 = permanova_r2(boot_dist, patient_groups)
-        r2_bootstrap.append(boot_r2)
+        return boot_r2
+
+    r2_bootstrap = list(run_replicates(replicate, n_bootstrap, locals()))
 
     r2_bootstrap = np.array(r2_bootstrap)
     return (observed_r2, np.percentile(r2_bootstrap, 2.5), np.percentile(r2_bootstrap, 97.5),
@@ -319,10 +323,12 @@ def bootstrap_cohens_d(group1_values, group2_values, n_bootstrap=1000, seed=42):
     observed_d = cohens_d(group1_values, group2_values)
 
     d_bootstrap = []
-    for i in range(n_bootstrap):
+    def replicate(i):
         boot_g1 = resample(group1_values, replace=True, random_state=seed+i)
         boot_g2 = resample(group2_values, replace=True, random_state=seed+i)
-        d_bootstrap.append(cohens_d(boot_g1, boot_g2))
+        return cohens_d(boot_g1, boot_g2)
+
+    d_bootstrap = list(run_replicates(replicate, n_bootstrap, locals()))
 
     d_bootstrap = np.array(d_bootstrap)
     return (observed_d, np.percentile(d_bootstrap, 2.5), np.percentile(d_bootstrap, 97.5),
@@ -436,10 +442,14 @@ def taxonomic_effect_sizes(long_df, metadata, tax_level='Phylum',
         # Bootstrap CI
         np.random.seed(seed)
         d_boot = []
-        for i in range(n_bootstrap):
+        def replicate(i):
             boot_cancer = resample(cancer_vals, replace=True, random_state=seed+i)
             boot_control = resample(control_vals, replace=True, random_state=seed+i)
-            d_boot.append(cohens_d(boot_cancer, boot_control))
+            return cohens_d(boot_cancer, boot_control)
+
+        d_boot = list(run_replicates(replicate, n_bootstrap, {
+            "cancer_vals": cancer_vals, "control_vals": control_vals,
+            "seed": seed, "n_bootstrap": n_bootstrap, "taxon": taxon}))
 
         d_boot = np.array(d_boot)
 
@@ -476,7 +486,9 @@ def main():
     parser.add_argument("--transform", choices=["none", "rclr"], default="none")
     parser.add_argument("--exclude-contralateral-in-cancer", type=lambda x: str(x).lower()=="true", default=True)
     parser.add_argument("--contralateral-sample-types", default="Lung Brush,BAL")
+    add_parallel_arguments(parser)
     args = parser.parse_args()
+    configure_parallel(args.workers, args.checkpoint_dir or str(Path(args.outdir) / "checkpoints"))
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)

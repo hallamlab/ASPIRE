@@ -1,0 +1,190 @@
+# ASPIRE Process and I/O Reference
+
+This catalogue describes the available workflow processes. Exact filenames
+are inventoried after each run in
+`<output_dir>/summary/tables/module_output_manifest.tsv`; the paths below show
+the stable public destination or the principal intermediate family.
+
+Every process has a tier-qualified user-facing identifier. Use these identifiers
+with `./run_asv_pipeline.sh --rerun-from`; unqualified names remain accepted for
+compatibility:
+
+- `core:PROCESS`: ASV construction, taxonomy and configurable control decontamination.
+- `standard:PROCESS`: final-table preparation used by the usual analysis graph.
+- `optional:PROCESS`: selectable analyses and reporting stages.
+
+The launcher prints the same three groups before execution, so a user can
+distinguish the pipeline backbone from optional branches in the terminal.
+
+## Core ASV Workflow
+
+| Process | Principal input | Principal output | Purpose |
+|---|---|---|---|
+| `PRIMER_TRIM` | manifest FASTQ pairs and primer catalogue | `intermediates/primer_trimmed/`, `modules/primer_trimming/tables/` | Optional paired primer detection and Cutadapt removal, with discard audits. |
+| `PRIMER_TRIM_CHECK` | per-sample primer summaries | `modules/primer_trimming/tables/primer_cohort.json` | Require one amplicon family across the cohort before fastp. |
+| `FASTP_QC` | raw or primer-trimmed FASTQ pairs | `intermediates/fastp/` | Fixed trimming and read-level QC. |
+| `MERGE_READS` | trimmed paired reads | merged FASTQ/FASTA intermediates | Merge overlapping read pairs. |
+| `FILTER_READS` | merged reads | quality-filtered FASTA | Expected-error and length filtering. |
+| `RELABEL_FILTERED` | per-sample filtered FASTA | sample-labelled FASTA | Preserve sample identity in sequence headers. |
+| `CONCAT_FASTAS` | labelled sample FASTAs | concatenated read FASTA | Build study-wide denoising and mapping inputs. |
+| `DEREPLICATE` | concatenated reads | dereplicated sequences | Collapse identical sequences and retain abundance. |
+| `DENOISE` | dereplicated sequences | denoised ASV candidates | Remove inferred sequencing errors. |
+| `CHIMERA_CHECK` | ASV candidates | non-chimeric ASV FASTA | Remove chimeric sequences. |
+| `CREATE_COUNT_MATRIX` | labelled reads and ASV FASTA | raw ASV-by-sample matrix | Map reads back to ASVs. |
+| `SINA_TRIM` | all inferred ASV FASTA | aligned/region-trimmed ASVs | Identify and trim configured 16S variable regions. |
+| `TAXONOMY` | trimmed ASVs and SILVA artifacts | `modules/taxonomy/tables/` | Assign taxonomy and classification statistics. |
+| `CONTROL_DECONTAM` | raw ASV counts/FASTA, full taxonomy, class metadata | `modules/contamination_filtering/` | Biological-only depth QC, separate TECH/BIO prevalence tests, union removal before feature filtering. |
+
+## Non-Target Filtering and Final Tables
+
+| Process | Principal input | Principal output | Purpose |
+|---|---|---|---|
+| `PREPARE_BLAST_DATABASES` | configured BLAST databases or FASTAs | `references/reference/blast_databases/` | Archive/rebuild reproducible run databases. |
+| `MITOMASTER` | inferred ASV sequences | MITOMASTER result/chunk tables | Query candidate mitochondrial sequences when enabled. |
+| `MITO_DECONTAM` | taxonomy, MITOMASTER and local BLAST evidence | `modules/non_target_filtering/` | Combine non-target evidence and audit calls. |
+| `FILTER_ASVS` | decontaminated counts/FASTA, taxonomy, non-target calls, metadata | `ASV_target.tsv`, matching `ASVs_target.fasta.gz`, original intermediates and filter audits | Apply both initial and microbial abundance rules, group-size, non-target, taxonomy and nonzero-ASV filters. |
+| `PLOT_METADATA` | final microbial and mitochondrial counts, metadata | `modules/metadata_plots/` | Build `ASV_meta_micro.tsv`, `ASV_final.micro.tsv`, updated metadata and master tables. |
+
+`ASV_target.tsv` is the final microbial table emitted by `FILTER_ASVS`.
+`ASV_final.micro.tsv` is its downstream wide ASV-by-sample representation after
+metadata/control handling. Control decontamination occurs before these tables are constructed. Optional
+batch correction subsequently selects corrected counts for downstream analyses.
+
+## Descriptive and Metadata Processes
+
+| Process | Input | Public output |
+|---|---|---|
+| `GENERAL_STATS` | concatenated reads | `modules/general_stats/` |
+| `SANKEY` | stage count summaries and metadata | `modules/sankey/` |
+| `PLOT_UPSET` | metadata-linked ASV tables | `modules/upset/` |
+| `BUBBLEPLOTTER` | long ASV/metadata table | `modules/bubbleplotter/` |
+| `UMAP_CLUSTERING` | long ASV/metadata table | `modules/umap_clustering/` |
+| `OUTLIER_CHECKER` | ASV values and metadata | `modules/outlier_detection/` |
+| `COLLECTORS_CURVE` | wide ASV table and metadata | `modules/collectors_curve/` |
+| `CLUSTERMAPS` | long/wide ASV tables, metadata and ISA completion | `modules/clustermaps/` |
+
+## Ecological and Study-Design Processes
+
+| Process | Principal input | Principal output |
+|---|---|---|
+| `ASV_BATCH_CORRECTION` | metadata-linked ASV tables | `modules/batch_correction/` corrected counts and diagnostics |
+| `ASV_META_FROM_CORRECTED` | corrected wide counts and original long annotations | regenerated corrected long table for downstream modules |
+| `DIVERSITY_ANALYSIS` | downstream counts and metadata | `modules/diversity/` Shannon, Bray-Curtis, Jaccard, PERMANOVA/PERMDISP and figures |
+| `INDICSPECIES` | downstream counts and groups | `modules/indicator_analysis/tables/` complete and summary ISA tables |
+| `INDICSPECIES_PLOTS` | ISA tables and metadata | `modules/indicator_analysis/plots/` |
+| `INDICSPECIES_ALIGNED_PLOTS` | collected ISA tables | aligned ISA tables and figures |
+| `GROUP_POWER_ANALYSIS` | downstream ASV summaries and ISA completion | `modules/power_analysis/` simulation results and plots |
+| `TAXONOMY_GROUP_ASSOCIATION` | downstream ASV summaries | `modules/taxonomy/` patient-aware abundance tests and plots |
+| `PAIRED_GROUP_CONTRAST` | downstream ASV summaries and lung metadata | `modules/lung_status_analysis/` prepared cohorts, tests and plots |
+
+## Generalized Optional Processes and Aliases
+
+The generalized stage names below retain the older names as launcher aliases.
+Both flat legacy YAML and tiered YAML remain accepted; define a section only once.
+
+| Process | Inputs | Outputs / configuration |
+|---|---|---|
+| `GROUP_POWER_ANALYSIS` | downstream ASV tables and ISA completion | Same power analysis as `POWER_ANALYSIS_PIPELINE`; `optional.power_analysis` remains supported. |
+| `TAXONOMY_GROUP_ASSOCIATION` | downstream long/wide tables and grouping metadata | Taxonomic abundance tests; alias `TAXONOMY_PATIENT_AWARE`, configured with `optional.taxonomy_patient_aware`. |
+| `PAIRED_GROUP_CONTRAST` | downstream tables and paired-group metadata | Paired comparisons; alias `LUNG_STATUS_ANALYSIS`, configured with `optional.lung_status_analysis`. |
+| `GROUPING_DIAGNOSTICS` | downstream counts and sample metadata | Group separation, ordinations, optional balanced-resampling support, and optional proposed labels in `modules/grouping_diagnostics/`. |
+| `GROUP_LABEL_AUGMENTATION` | diagnostic assignments, validation summary, metadata and downstream long table | Audited augmented metadata/long table; only changes downstream labels when `optional.grouping_diagnostics.soft_labeling.apply_downstream` is enabled and validation gates pass. |
+| `MEASUREMENT_ASSOCIATION` (development extension; outside the publication workflow) | downstream counts/long table, metadata and a general measurement table | Generalized Spearman and CCA/RDA/dbRDA analyses; publication ASV–VOC associations use `VOC_CORRELATION` instead. |
+| `ASV_MAG_NETWORK` | inferred network, taxonomy, ASV-MAG links and optional MAG abundance/functions | Taxonomy-filtered network mappings and functional/abundance summaries in `modules/asv_mag_network/`. Requires ASV-MAG linking and network analysis. |
+
+These additional modules remain optional. Their full settings appear in the
+[parameter catalogue](CONFIG_PARAMETERS.md). Grouping diagnostics and label
+augmentation use the control-decontaminated counts/annotations when that filter is enabled.
+
+## VOC Process Details
+
+`VOC_CORRELATION` receives the downstream long and wide ASV tables, metadata,
+the configured VOC table, and collected ISA outputs. It publishes under
+`modules/voc_correlation/`:
+
+- matched sample and participant audit tables;
+- baseline ASV-VOC Spearman coefficients, p-values and FDR values;
+- direction- and magnitude-filtered ASV-VOC matrices and clustermaps;
+- ISA-focused all-sample-type and bronchial/lung subset tables and figures;
+- sample VOC z-score heatmaps and participant/case VOC displays.
+- patient-level relative-abundance permutation tests and CLR sensitivity tables;
+- patient-level focused clustermaps, testability reasons and a settings summary;
+- tie-aware permutation cancer–control VOC tests on patient averages.
+
+Baseline sample-level p-values are exploratory because they ignore repeated
+patients. Use the new patient-level inference tables for statistical reporting.
+See [VOC statistics](VOC_STATISTICS.md) for assumptions, FDR families and outputs.
+
+The sample VOC heatmaps display standardized VOC abundance, whereas ASV-VOC
+heatmaps display Spearman correlations. They are complementary outputs and
+must not be interpreted as the same statistic.
+
+## Network and Genome Processes
+
+| Process | Principal input | Principal output |
+|---|---|---|
+| `SPIECEASI` | downstream wide ASV table and optional ISA retention table | `modules/network_analysis/` matrices, GraphML, edge/node tables and cohort audit |
+| `NETWORK_TOPOLOGY` | thresholded SPIEC-EASI GraphML | observed topology summary and degree-preserving null draws |
+| `NETWORK_MODULES` | full and thresholded graphs | consensus module assignments and stability summaries |
+| `GRAPH_NETWORK` | graphs, ASV counts, metadata, taxonomy, ISA and modules | editable network figures and annotated node tables |
+| `ASV_MAG_LINK` | filtered ASV FASTA and genome/barrnap inputs | `modules/asv_mag_link/` match tables and plots |
+| `MODULE_MAG_ANCHORS` | module, node, taxonomy, abundance and ASV-MAG products | module anchor, sample score and summary tables |
+
+## Integrated Publication
+
+`MASTER_SUMMARY` joins the final ASV annotations with configured indicator,
+network, VOC, clustermap and optional MAG outputs, then writes integrated tables
+under `summary/tables/`. After Nextflow succeeds,
+`processes/output_layout/organize_outputs.py` atomically publishes the module
+tree, builds file/checksum inventories, archives logs and creates
+`summary/report/ASPIRE_run_report.html`.
+
+The report is the first review page; the TSV inventories and individual module
+tables remain the authoritative machine-readable results.
+
+## Study analysis cohort
+
+`ANALYSIS_COHORT_DIAGNOSTICS` selects raw counts and metadata for grouping diagnostics
+before optional label augmentation. `ANALYSIS_COHORT` selects synchronized counts,
+metadata, long ASV tables and CLR sample rows for subsequent analyses after batch
+preparation. Both use `optional.analysis_cohort.exclude_groups`; an empty list
+keeps every biological sample. The cohort audit is published under
+`modules/analysis_cohort/tables/`. ASVs with zero counts in the selected cohort are
+removed from its count/long tables; CLR retains its original feature basis.
+
+Excluded groups remain in input/QC, control decontamination, metadata plots,
+Sankey accounting and diversity. All other sample-based optional analyses use
+the selected cohort. Batch preparation uses the complete biological table so
+that diversity and the selected cohort share the same corrected measurements.
+
+Outlier reports distinguish unavailable detectors from inliers. HDBSCAN without
+any fitted clusters is unavailable; consensus is unavailable when fewer than
+the configured number of votes can be evaluated.
+
+## V2 ecological extensions and reusable preprocessing
+
+| Process | Principal input | Principal output | Purpose |
+|---|---|---|---|
+| `PREPROCESS_DATASET` | preprocessing tables, sequences, sample manifest and audits | preprocessing_dataset/manifest.json | Export a checksummed handoff for reproducible analysis-only runs. |
+| `VALIDATE_PREPROCESS_DATASET` | canonical preprocessing dataset | validated dataset channel | Verify artifact checksums before downstream execution. |
+| `ASV_TIME_DEPTH_CURTAIN` | metadata and configured BASINS layers | ASV time/depth figures | Place ASV occurrences in the environmental time/depth context. |
+| `COMMUNITY_PREDICTOR_COMPARISON` | sample metadata and biological count table | predictor comparison tables and figures | Compare metadata predictors of community structure. |
+| `TITAN_INSTALL` | pinned TITAN2 source revision | TITAN2 installation | Prepare the pinned R implementation. |
+| `TITAN_PREPARE` | retained ASVs and measurements | TITAN input tables | Match samples and apply per-variable eligibility checks. |
+| `TITAN_ANALYSIS` | TITAN input tables | TITAN fits | Estimate taxon and community change points along gradients. |
+| `TITAN_COLLECT` | TITAN fits | combined summaries | Collect change-point and bootstrap results. |
+| `TITAN_PLOTS` | combined TITAN summaries | threshold figures | Display reliable indicator responses and uncertainty. |
+| `MICROBIAL_COMPARTMENT_PREPARE` | retained ASVs and metadata | compartment inputs | Prepare compositional features for state inference. |
+| `MICROBIAL_COMPARTMENT_INFERENCE` | compartment inputs | cluster candidates and stability tables | Infer microbial states with resampling support. |
+| `MICROBIAL_COMPARTMENT_POSTHOC` | state assignments and metadata | annotated metadata | Join inferred states to sample context. |
+| `MICROBIAL_COMPARTMENT_PLOTS` | inference and posthoc tables | state figures | Display state structure and stability. |
+| `MICROBIAL_STATE_INTERPRETATION` | microbial states, network and measurements | state interpretation tables and figures | Compare ecological evidence supporting inferred states. |
+| `COMMUNITY_TURNOVER_PREPARE` | biological counts and metadata | turnover input tables | Prepare matched observations for turnover analysis. |
+| `COMMUNITY_TURNOVER_ANALYSIS` | turnover inputs | turnover summaries | Quantify changes in community composition. |
+| `COMMUNITY_TURNOVER_LCBD` | turnover inputs | LCBD summaries | Estimate local contributions to beta diversity. |
+| `COMMUNITY_TURNOVER_PLOTS` | turnover and LCBD summaries | turnover figures | Show changes across study observations. |
+| `MODULE_MEASUREMENT_ASSOCIATION` | network modules and measurement tables | module association summaries | Associate ecological modules with measured gradients. |
+| `GENOME_COOCCURRENCE` | genome abundance and metadata | genome network summaries | Infer genome-level proportionality patterns. |
+| `ASV_MAG_CURTAINS` | ASV–MAG mappings, recruitment and environmental layers | time/depth overlays | Place linked genome recruitment in environmental context. |
+| `GROUP_GUILD_FUNCTION` | network modules, ISA groups and genome functional calls | guild/function summaries | Summarize genome-supported functional evidence for ecological groups. |
+| `ECOLOGICAL_CONTEXT_ATLAS` | community states, network and environmental summaries | ecological atlas | Combine ecological context into coordinated summary figures. |

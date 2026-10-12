@@ -1,1010 +1,538 @@
 # ASPIRE Configuration Reference
 
-This document covers every public section and key in
-`asv_pipeline_nextflow.yml`. Copy the template into a run-specific file. Empty
-values mean “not set.” Lists are YAML lists unless a field explicitly uses a
-comma-separated string. Unknown keys may be ignored and are not a stable
-extension interface.
-
-Values in the template demonstrate the respiratory study and mock workflows.
-They are not universal biological defaults. In particular, adapt trimming and
-length limits, metadata columns, group labels/orders, palettes, patient-pairing
-fields, prevalence cutoffs, and statistical thresholds to the study design.
-
-## Module dependency guide
-
-Core FASTQ processing, ASV generation, SINA trimming, and taxonomy form the
-base path. Most later modules consume `FILTER_COUNTS` and/or `PLOT_METADATA`.
-Metadata plots require metadata with manifest-matching sample IDs. Diversity,
-indicator, clustermap, grouping, power, paired, and network overlays require
-their configured grouping columns. `VOC_CORRELATION` additionally needs a VOC
-table. `MEASUREMENT_ASSOCIATION` needs measurement columns in metadata or a
-joinable external table. MAG branches need genome-QC/barrnap or genome FASTA
-inputs. Disable a branch when its conditional inputs are absent.
-
-## Core input and sequence processing
-
-### `paths`, `resources`, and `filename_patterns`
-
-- `paths.input_dir`: directory searched for FASTQs when no manifest is given.
-- `paths.output_dir`: required public output directory.
-- `paths.manifest`: optional TSV with `sample_id`, `fastq_r1`, and `fastq_r2`.
-- `paths.runtime_dir`: persistent runtime root; defaults to
-  `<output_dir>/.aspire`.
-- `paths.keep_runtime_dir`: retain runtime/cache after success when true.
-- `paths.work_dir`, `paths.conda_cache_dir`: optional runtime subdirectory
-  overrides. Use storage with sufficient space and safe locking.
-- The launcher accepts `--phase all`, `--phase preprocess`, or
-  `--phase analysis`; `all` is the default. Preprocessing publishes the
-  checksum-validated canonical handoff under
-  `<output_dir>/preprocessing_dataset`. Analysis reads only this handoff and
-  cannot schedule raw-read processing.
-- The supported `--rerun-from STAGE` controller option advances persistent
-  per-stage cache generations under `paths.runtime_dir`. It preserves upstream
-  task identities and work directories; newly executed tasks remain normally
-  cacheable and resumable.
-- `cache usage`, `cache list`, `cache prune`, and `cache clear` report or manage
-  Nextflow run metadata and work directories. Destructive actions require
-  `--force`; `cache prune --keep 10` is dry-run by default and protects the
-  recorded phase resume targets. `--prune-cache-after-run 10` applies that
-  retention policy after a successful workflow. Conda environments are not
-  tied to individual runs and require the separate `--include-conda` option
-  with an explicit full-cache clear.
-- `resources.sample_threads`: CPUs assigned to each per-sample FASTP, merge,
-  and read-filter task. Use `1` to maximize sample concurrency.
-- `resources.analysis_threads`: CPU budget requested by dataset-level modules.
-- `resources.max_parallel_sample_tasks`: maximum concurrent instances of each
-  per-sample read-processing process. Nextflow's CPU scheduler still enforces
-  the total available CPU budget.
-- `resources.threads`: deprecated compatibility alias for `sample_threads`.
-- `resources.single_end`: allow samples without R2 when true.
-- `filename_patterns.r1_tokens`, `r2_tokens`: tokens identifying read mates.
-- `filename_patterns.ext_patterns`: regular expressions for accepted FASTQs.
-- `filename_patterns.sample_strip_regex`: removes lane/read suffixes to form
-  sample IDs. Verify generated IDs before matching metadata.
-
-### Read processing and ASV generation
-
-- `fastp.trim_front_r1`, `trim_tail_r1`, `trim_front_r2`, `trim_tail_r2`:
-  non-negative base counts removed from read ends; set for the actual assay.
-- `merge.max_diffs`: maximum overlap mismatches; `min_overlap`: minimum overlap
-  bases; `trunc_quality`: quality truncation threshold; `allow_stagger`: permit
-  staggered pairs.
-- `table_filter.min_sample_sum`: minimum total mapped reads per sample.
-- `table_filter.min_asv_sum`: minimum within-sample relative abundance in percent,
-  reached in at least one retained sample (despite the historical key name).
-  Explicit zero disables this abundance cutoff; all-zero ASVs are still removed.
-  `table_filter.script` is an optional developer script override.
-- `filter.max_ee`: maximum expected errors; `min_len` and `max_len`: retained
-  sequence length bounds in bases.
-- `concat.relabel`: relabel sequences; `concat.label_sep`: label separator.
-- `unoise.min_size`: minimum pooled input-sequence abundance for UNOISE;
-  workflow fallback is 8, while the full template explicitly specifies 3.
-  The SI example specifies 8. These are alternative study configurations.
-- `read_mapping.min_identity`: VSEARCH identity fraction in `(0, 1]`; fallback
-  is 0.999. The SI example uses 0.995. At 253 ungapped aligned bases these
-  permit zero and one substitutions, respectively. This is not a fixed edit-distance
-  cap and terminal gaps are excluded by the default identity definition.
-  Mapping currently accepts the first qualifying candidate; it does not exclude
-  tied best matches. See the expert guide before relaxing this threshold.
-- `swarm.distance`: Swarm clustering distance.
-
-## Alignment, taxonomy, and non-target filtering
-
-### `sina`
-
-`reference` is a local ARB reference and `reference_url` its download fallback;
-`download_subdir` names the cache. `regions` lists tested variable regions and
-`trim_to` selects the retained region. `batch_size`, `threads`, `keep_gaps`, and
-`verbose` control execution and output.
-
-### `taxonomy`
-
-`ref_taxonomy` and `ref_sequences` are local QIIME artifacts; corresponding
-`_url` keys are download fallbacks and `_filename` keys name cached files.
-`download_subdir` locates the cache. `output_dir`, `output_tsv`, `stats_tsv`,
-and `uppercase_fasta` name products; `threads` sets CPUs.
-
-### `mito`
-
-`enabled` enables screening. `run_mitomaster`, `chunk_dir`, `chunk_size`,
-`mitomaster_workers`, `mitomaster_retries`, `mitomaster_timeout`, and
-`mitomaster_header_mode` control MITOMASTER. `mito_db`/`biof_db` are BLAST
-database prefixes; `mito_fasta`/`contaminant_fasta` are preferred FASTA
-alternatives. `blast_threads`, `min_pident`, and `min_percov` control BLAST
-acceptance. `mitochondria_substring`, `feature_col`, `taxon_col`,
-`consensus_col`, `steps`, and `host_first_step` define evidence fields/order.
-`output_dir`, `prefix`, `formats`, `figsize`, `style`, `dpi`, and `no_plots`
-control products.
-
-### `filter_counts` and `general_stats`
-
-`filter_counts.enabled` enables final filtering. `metadata` and `sample_id_col`
-identify samples; `group_col` and `min_group_size` support group prevalence;
-`abundance_threshold` and `min_consensus` are filtering cutoffs.
-`exclude_taxa` is the rank-aware exclusion list. `taxon_col`, `consensus_col`,
-`biofactorial_col`, and `mito_cols` name evidence fields. `output`,
-`mito_output_dir`, and `save_intermediates` control products.
-`general_stats.enabled` toggles run statistics.
-
-## Metadata and visualization
-
-For all `sample_col` fields, values must match normalized manifest sample IDs.
-`color_col` names a metadata color field; `palette_file` supplies an external
-two-column palette; `*_palette` accepts `label=#RRGGBB` mappings.
-
-- `sankey`: `enabled`, `metadata`, `sub_dir`, `sample_col`, `group1_col`,
-  `color_col`, `palette_file`, `keep_types`, `vertical_order`, `arrangement`,
-  `output_prefix`, `title`, `make_labeled`, and `make_unlabeled` configure the
-  data-loss diagram.
-- `metadata_plots`: `enabled`, `metadata`, `sub_dir`, `sample_col`, `type_col`,
-  `color_col`, `palette_file`, `subtraction_group_col`, `subtraction_groups`,
-  `keep_types`, `group_order`, `include_rank`, `run_micro`, and `run_mito`.
-  BASIN integration fields include `biochem_assignments` and its join/include
-  fields, `stratification_timeseries` and its join/include fields, plus
-  `cruise_group_assignments`, `cruise_group_meta_join_col`,
-  `cruise_group_join_col`, and `cruise_group_include_cols`. Cruise-group fields
-  are renamed on import to `cruise_group`, `cruise_group_max_prob`,
-  `cruise_group_entropy`, `cruise_group_uncertain`, and optional prefixed PCs.
-  Nested `group_normalization.enabled`, `columns`, `pattern`, `replacement`,
-  and `preserve_source` normalize group labels while retaining provenance.
-- `asv_time_depth_curtain`: `enabled`, `output_dir`, sample/cruise/date/depth
-  fields, `group_col`, `palette`, and `group_order` configure a
-  hybrid-compartment time-depth curtain. With `source_mode: asv`, the surface
-  is estimated from ASPIRE metadata. With `source_mode: basin`, `basin_grid`
-  and `basin_cells` provide BASIN's canonical rendered surface and measurement
-  positions; ASPIRE preserves both and enlarges positions containing ASV data.
-  `base_point_size`, `asv_point_size`, and `asv_point_edge_width` control the
-  background BASIN markers and the larger, compartment-colored ASV markers
-  with black outlines.
-  `renewal_events` and `renewal_date_col` optionally add vertical dashed lines
-  for algorithmic renewal-onset dates. `exclude_label_pattern` removes
-  reporting-only labels such as `other` or `outlier` from the display support
-  surface without deleting sample audit rows. `maximum_depth`, `depth_step_m`,
-  `time_subdivisions_per_month` and `time_sigma_months` control the calendar
-  grid and longitudinal categorical-support smoothing. Every calendar month in
-  each represented year is included. No smoothing is applied across depth;
-  observed depth states define midpoint-bounded vertical layers.
-  `contour_visual_depth_sigma_m` optionally rounds the displayed categorical
-  boundaries only and does not modify assignments or the exported support
-  grid. `formats` controls plot export. BASIN mode consumes published BASIN
-  data products but does not import or execute BASIN plotting code.
-- `collectors_curve`: `enabled`, sample/group/color fields, `group_order`,
-  `permutations`, `seed`, `out_prefix`, `title`, `formats`, `xpad`, `max_cols`,
-  `show_perms`, and `presence_threshold`.
-- `plot_upset`: `enabled`, `sub_dir`, `domain`, `taxonomy_path`, sample/group/
-  color fields, `group_order`, `subset_groups`, `skip_venn`, `raw_only`,
-  `final_only`, `formats`, and `font_size`.
-- `bubbleplotter`: `enabled`, `output_prefix`, count/sample/group/color fields,
-  `group1_order`, `formats`, `figsize`, `bubble_scale`, and `no_auto_size`.
-- `umap_clustering`: the common output/count/group fields plus `normalize`,
-  `transform`, `no_scale`, `n_neighbors`, `min_dist`, `umap_metric`,
-  `min_cluster_size`, `min_samples`, and `hdbscan_metric`.
-
-## Batch correction and outliers
-
-### `batch_correction`
-
-`enabled`, `output_dir`, `sample_id_col`, `batch_col`, `asv_orientation`,
-`biological_covariates`, `biological_color_col`, `color_palette_col`, and
-`biological_palettes` define inputs and biological structure. ConQuR controls
-are `conqur_mode`, `conqur_num_core`, `conqur_batch_ref`,
-`conqur_logistic_lasso`, `conqur_quantile_type`, `conqur_simple_match`,
-`conqur_lambda_quantile`, `conqur_interplt`, `conqur_delta`, and
-`conqur_auto_install`. `correction_policy` selects raw, corrected, or `auto`;
-auto gates are `auto_min_sample_rho`, `auto_min_bray_rho`,
-`auto_max_batch_eta_ratio`, `auto_min_batch_eta_drop`, and
-`auto_min_bio_eta_ratio`. Diagnostic clustering uses `umap_neighbors`,
-`umap_min_dist`, `hdbscan_min_cluster_size`, `hdbscan_min_samples`,
-`hdbscan_selection_method`, `optimize_clustering`, `target_clusters`,
-`n_features_plot`, and `random_state`.
-
-Every biological grouping intended for downstream interpretation should be
-listed in `biological_covariates`; this prevents correction from treating its
-signal as unwanted batch structure. In the Saanich Inlet configuration these
-are depth, hybrid oxygen/GMM compartment, cruise group, and nitrate-qualified
-renewal phase.
-
-### `outlier_detection`
-
-`enabled`, `output_dir`, `sample_col`, `group_cols`, `transform`,
-`asv_orientation`, `pre_transformed`, and `scale` define data. `use_iso`,
-`use_svm`, and `use_hdb` select detectors; `vote_threshold` is required
-agreement. Isolation Forest uses `iso_contamination`, `iso_estimators`, and
-`iso_random_state`; SVM uses `svm_kernel`, `svm_gamma`, and `svm_nu`; HDBSCAN
-uses `hdbscan_min_cluster_size`, `hdbscan_min_samples`, and `hdbscan_metric`.
-
-## Ecological and association analyses
-
-### `diversity`
-
-`enabled`, `output_dir`, `mito_output_dir`, `mito_input`, sample/group/color/
-block fields, `exclude_groups`, `group_order`, `run_mito`, UMAP settings,
-`permanova_perms`, `random_state`, and `verbose` configure the general branch.
-Nested `patient_aware` fields enable the paired design and name sample, patient,
-case, type, and lung-side fields; `sample_types`, contralateral controls,
-`transform`, `permutations`, `seed`, and `require_complete_types` define its
-cohort and test.
-
-### `indicspecies`
-
-`enabled`, sample/color fields, `group_cols`, palettes/orders, focus labels,
-`block_col`, `blocked_cols`, `perms`, `seed`, `q_threshold`, and `min_n` control tests.
-`blocked_cols` lists the grouping analyses that use the repeated-measures design.
-If a listed group varies within a block, ASPIRE averages to one block-by-group
-profile and restricts permutations within blocks. If it is constant within a
-block (for example, a cruise-level environmental group), ASPIRE averages to one
-profile per block and permutes the independent block profiles.
-`stratified.enabled` and each `analyses` entry (`within_col`, `group_col`,
-`levels`) request nested tests. Plot fields are `focus_group1_label`,
-`label_focused_asvs`, `plot_enabled`, `plot_pairs_mode`, `plot_output_dir`,
-`aligned_plot_enabled`, `aligned_plot_output_dir`, `aligned_alpha`,
-`aligned_min_stat`, `aligned_top_n`, `venn`, and `taxonomy`. Legacy
-`group1_*`/`group2_*` fields remain supported.
-
-`INDICSPECIES` runs general multigroup `multipatt` (`duleg = FALSE`) only.
-Candidate associations include every single group and multigroup proper subset,
-but exclude the non-informative union of all represented groups during model
-fitting (`max.order = G - 1`). The output reports `association_group_count`, `association_groups`,
-`association_scope`, and `indicator_class`; DULEG-specific configuration and
-outputs are not generated. Successful runs replace the complete ISA table
-directory, removing obsolete files from earlier configurations.
-
-`INDICSPECIES_PLOTS` is deliberately bounded to the primary `group_cols` and
-their general multigroup summaries. With `plot_pairs_mode: all`, it
-renders all pairs among those primary groupings only; stratified per-state and
-pooled summaries are not crossed against unrelated ISA tables. The exact plan
-is saved as `isa_plot_plan.tsv`. Stratified ISA remains available to the
-network/guild/MAG/function evidence workflows with its state provenance intact.
-
-### `voc_correlation` and `measurement_association`
-
-- `voc_correlation`: `enabled`, metadata/patient/case/type fields,
-  `sample_types`, required `voc_table`, `output_dir`, `voc_sample_col`,
-  `sample_id_mode`, `use_legacy_voc_subset`, `correlation_direction`
-  (`positive`, `negative`, or `both`), and optional `voc_columns`.
-- `measurement_association`: `enabled`, `output_dir`, optional
-  `measurement_table`, sample/ASV IDs, paired metadata/measurement join lists,
-  `measurement_cols`, `exclude_cols`, group/palette, `asv_subset_source`
-  (`internal_filters` or `spieceasi_standard_filter`), optional `max_asvs`,
-  `min_total`, `min_prevalence`, `top_correlations`, direction,
-  `ordination_methods` (`cca,rda,dbrda`), `ordination_measurement_cols`,
-  `permutations`, `top_vectors`, and `formats`. `max_asvs: 0` disables a
-  fixed-number cap. The
-  `spieceasi_standard_filter` source requires `spieceasi.enabled: true` and
-  selects only rows with `passes_standard_filter=TRUE`; forced-retention and
-  final network-connectivity status do not affect this cohort.
-- `titan`: `enabled`, `output_dir`, optional `environmental_variables`,
-  `min_split`, `minimum_samples`, `minimum_occurrence`, `minimum_prevalence`,
-  `minimum_mean_relative_abundance`, `permutations`,
-  `bootstrap_count`, `seed`, `imax`, `iv_total`, `purity_cutoff`,
-  `reliability_cutoff`, `ncpus`, `memory`, `plot_enabled`,
-  `ranked_plot_top_n`, and `formats`. Enabling TITAN requires both
-  `measurement_association.enabled` and `spieceasi.enabled`. An empty
-  `environmental_variables` list inherits
-  `measurement_association.measurement_cols`; a nonempty list overrides it.
-  The ASV cohort is exactly SPIEC-EASI `retained_final`, not a second
-  prevalence-ranked subset. `minimum_occurrence` is applied independently
-  after restricting samples to observed values for each measurement and cannot
-  be below TITAN2's required occurrence of three. `minimum_samples` cannot be
-  below TITAN2's hard minimum of 10, while cohorts below 20 are retained with a
-  warning. `min_split` must be at least three and also imposes a structural
-  requirement of at least twice that many samples. `minimum_prevalence` is the
-  fraction of variable-specific measured samples with nonzero abundance, and
-  `minimum_mean_relative_abundance` is the taxon's mean relative abundance
-  across those samples. Both default to zero and therefore add no filter to the
-  inherited SPIEC-EASI cohort. `ncpus` cannot exceed
-  `resources.analysis_threads`. `ranked_plot_top_n: 0` displays all tested
-  taxa; this affects only the ranked figure, never computation or tables.
-- `microbial_compartments`: `enabled`, `output_dir`, `sample_col`, optional
-  `transpose`, `minimum_prevalence`, `minimum_max_relative_abundance`,
-  `zero_replacement` (`multiplicative` or `pseudocount`),
-  `multiplicative_delta`, `pseudocount`, `k_min`, `k_max`,
-  `min_cluster_size`, `min_cluster_fraction`, `min_mean_silhouette`,
-  `min_stability_ari`, `min_cluster_jaccard`, `stability_replicates`,
-  `stability_sample_fraction`, `stability_block_col`,
-  `stability_stratum_col`, `stability_primary_quantile`,
-  `stability_near_tie_tolerance`, `blocked_robustness_enabled`,
-  `prediction_strength_enabled`, `hierarchical_enabled`, `seed`, `ncpus`,
-  `environmental_compartment_cols`, `depth_col`, `date_col`,
-  `dominant_top_n`, `plot_enabled`, and `formats`. Enabling the branch requires
-  SPIEC-EASI and metadata processing. It inherits the ASV-table orientation and
-  uses exactly the SPIEC-EASI `retained_final` cohort before any optional
-  module-specific filtering. With `multiplicative_delta: 0`, the replacement
-  value is calculated as `1 / D^2`, where D is the retained ASV count; every
-  replacement is recorded in the zero-replacement audit. PAM is primary and
-  average-linkage hierarchical clustering is sensitivity-only. Primary stability
-  retains a configured fraction of samples separately within every block, thereby
-  preserving the cruise and seasonal composition of every replicate. A PAM result
-  is supported only when it satisfies minimum size, the configured lower-tail ARI,
-  and minimum per-cluster median-Jaccard criteria. Whole blocks are additionally
-  withheld within configured seasonal strata as a robustness analysis; blocked ARI
-  and prediction strength are reported but do not select K. The supported K with the
-  largest lower-tail ARI is selected, using the configured tolerance to define
-  near ties. Prediction strength is an independent held-out diagnostic; silhouette
-  is descriptive and does not gate selection. The block identifier controls
-  resampling only and is never supplied to PAM. Environmental labels, depth,
-  and date are accepted only by the separate post hoc stage and cannot
-  influence clustering.
-- `microbial_state_interpretation`: `enabled`, `output_dir`, `sample_col`,
-  `cruise_col`, `depth_col`, `season_col`, `date_col`,
-  `environmental_compartment_cols`, `hybrid_col`, `permutations`,
-  `bootstrap_replicates`, `seed`, `hybrid_palette`, `hybrid_order`,
-  `mc_palette`, `mc_order`, `asv_top_n`, `selected_asvs`,
-  `asv_selection_metric`, `maximum_depth`, `depth_step`,
-  `time_subdivisions_per_month`, `time_sigma_months`,
-  `depth_visual_sigma_m`, `contour_time_step_days`,
-  `contour_max_time_support_days`, `contour_max_depth_support_m`,
-  `contour_reference_grid`,
-  `exclude_curtain_label_pattern`, and `formats`.
-  This post hoc branch requires supported microbial compartments and network
-  modules. BASIN labels, depth, season, and time never enter microbial-state
-  inference. Correspondence permutations are restricted within cruise, and
-  predictive comparisons leave one complete cruise out. The selected-ASV audit
-  records whether curtain overlays came from the configured list or the ranked
-  list. In addition to the legacy longitudinal curtain, a BASIN-comparable
-  microbial-compartment contour is generated by converting each observed PAM
-  label to one-hot membership, interpolating those memberships jointly over
-  date and depth, renormalizing them, and displaying the maximum membership.
-  The three `contour_*` settings define its regular time step and the maximum
-  temporal and vertical distances over which interpolation is supported. When
-  supplied, `contour_reference_grid` fixes the displayed dates and depths to a
-  published BASIN continuous-compartment grid so the figures share identical
-  axes; unsupported ASPIRE regions remain gray.
-- `ecological_context_atlas`: `enabled`, `output_dir`, `sample_col`,
-  `cruise_col`, `depth_col`, `date_col`, `context_cols`, `network_variables`,
-  `linkage_q_threshold`, `selected_asvs`, `context_sheet_source`, and `formats`. This reporting-only
-  branch runs after TITAN, microbial-compartment inference, measurement/module
-  association, compartment/module association, SPIEC-EASI, and ASV–MAG network analysis. Every retained ASV is
-  preserved in normalized sample-context, continuous-response, categorical-
-  indicator, ASV–MAG/function, and multi-omics tables. `network_variables`
-  controls both SPIEC-EASI-only and heterogeneous ASV–MAG TITAN network views
-  but never filters tabular results. An empty or omitted list inherits every
-  TITAN-configured measurement; measurements without completed TITAN results
-  are omitted rather than rendered as empty networks.
-  `linkage_q_threshold` (0.05 in the Saanich Inlet run) identifies the reporting
-  subset in which the module–compartment, module–measurement, and direct
-  ASV–measurement tests all pass their source-process Benjamini–Hochberg
-  thresholds. It does not recompute or alter those source statistics.
-  `context_sheet_source: mag_linked` renders all eligible MAG-linked ASVs;
-  `explicit` renders only `selected_asvs`. No composite evidence score is used.
-- `community_turnover`: `enabled`, `output_dir`, `sample_col`, `profile_col`,
-  `date_col`, `depth_col`, optional `transpose`, `minimum_prevalence`,
-  `minimum_max_relative_abundance`, `zero_replacement`,
-  `multiplicative_delta`, `pseudocount`, `distance_metrics`, `primary_metric`,
-  `fixed_depth_min_profile_fraction`, `minimum_time_difference_days`,
-  `environmental_compartment_cols`, `primary_environmental_compartment_col`,
-  `lcbd_permutations`, `boundary_permutations`,
-  `boundary_bootstrap_replicates`, `within_profile_lcbd_enabled`,
-  `within_profile_lcbd_min_samples`, `seed`, `plot_enabled`, and `formats`.
-  The branch requires SPIEC-EASI and metadata processing and independently
-  inherits the exact `retained_final` ASV cohort. Fixed-depth temporal turnover
-  uses exact numeric equality and retains depths represented in at least
-  `fixed_depth_min_profile_fraction` of eligible profiles; no depth mismatch or
-  interpolation is permitted. Aitchison is primary, while Bray-Curtis is an
-  optional sensitivity result. Global LCBD uses the configured number of
-  `adespatial` permutations and BH correction; within-profile LCBD is
-  descriptive and requires at least the configured sample count. Cross-boundary
-  versus within-compartment turnover is paired at the cruise level; inference
-  uses the mean paired difference, a cruise bootstrap confidence interval, and
-  a two-sided paired sign-flip test with BH correction within distance metric.
-
-The supplied measurement table is authoritative when a measurement name also
-occurs in metadata. Empty, null, and nonnumeric cells remain unmeasured;
-negative values are also treated as unmeasured, while zero is retained as a
-measured value. ASV and ecological-module Spearman tests use pairwise-complete
-samples for each measurement and do not impute chemistry. Constrained
-ordinations use complete cases across `ordination_measurement_cols`, which
-should contain sufficiently covered core variables rather than sparse
-chemistry.
-
-Set `module_analysis_enabled: true` to relate SPIEC-EASI ecological modules to
-the same physicochemical measurements. This requires the network and network
-module branches. `sparse_measurement_cols` labels passive sparse chemistry,
-while `module_cruise_col`, `module_depth_col`, and `module_q_threshold` control
-coverage auditing and member-ASV support summaries. Optional `pca_scores`,
-`pca_loadings`, `pca_explained`, `hybrid_assignments`, and `hybrid_centroids`
-must be supplied together to render the BASIN-aligned environmental biplot.
-The module analysis writes pairwise-complete module correlations, per-variable
-coverage, member-ASV direction and enrichment summaries, module scores, and
-auditable module/vector coordinates. Core vectors use BASIN PCA loadings;
-sparse vectors are passive Spearman projections and do not alter the PCA.
-It also renders an axis-free environmental network in which each module's
-exact within-module SPIEC-EASI topology is laid out locally around that
-module's abundance-weighted BASIN PCA centroid. The configured
-`asv_mag_network.anchor_top_n` is shared with this renderer: an ASV is an
-anchor when it falls within that dense rank for degree, eigenvector centrality,
-or betweenness within its module. Between-module edges are retained in the
-audit edge table but omitted from the figure. Small display-only shifts prevent
-module islands and hybrid centroids from obscuring one another; tables retain
-both unmodified environmental centroids and displayed coordinates.
-The same fixed layout is also rendered with node area scaled independently by
-raw-count prevalence, degree, weighted strength, betweenness, eigenvector
-centrality, and among-module participation coefficient. Prevalence is computed
-from the post-filter observed count table, not a batch-correction pseudocount
-table. `module_network_metric_top_n` controls the number of globally leading
-ASVs labeled in each metric plot and reported per metric in the top-player
-table. The complete node table retains all metric values, global ranks,
-taxonomic assignments, module-anchor flags, and display coordinates.
-The sample-level correlations and their BH-adjusted rank-correlation p-values
-are descriptive associations; they are not adjusted for depth or repeated
-observations within cruise.
-
-### `grouping_diagnostics`
-
-General fields are `enabled`, output/sample/group fields, `baseline_group`,
-`primary_group`, palettes/orders, `distance_metrics`, `transform`,
-`permutations`, `random_state`, and `formats`. `soft_labeling` uses `enabled`,
-`k`, `target_cols`, `exclude_labels`, `min_class_samples`, `distance_quantile`,
-`apply_downstream`, `target_col`, `min_confidence`,
-`min_neighbor_agreement`, and `min_cv_balanced_accuracy`. Nested `power` uses
-`enabled`, `sample_sizes`, `simulations`, `permutations`, `alpha`, and
-`min_groups`. Observed labels are not overwritten; excluded labels are neither
-training classes nor predictions. For publication-primary analyses, keep
-`apply_downstream: false`. Inferred labels and cross-validated performance then
-remain an explicit grouping-diagnostics sensitivity analysis, while ISA,
-networks, and guild inference use observed BASIN assignments only.
-
-`cruise_level_group_cols` adds categorical cruise labels without treating every
-bottle as an independent replicate. The module constructs one equal-depth-
-weighted Hellinger water-column profile per cruise using `cruise_col`,
-`depth_col`, and `cruise_depth_min_prevalence`. Output rows explicitly report
-`analysis_unit=cruise`; bottle groupings report `analysis_unit=bottle`.
-Set `require_cruise_level_groups: true` when cruise-level results are required.
-Validation then stops immediately if `cruise_level_group_cols` is empty instead
-of silently producing bottle-only results.
-
-### `community_predictor_comparison`
-
-`enabled`, `output_dir`, `sample_col`, `cruise_col`, `year_col`, `date_col`, `season_col`,
-and `depth_col` define the matched cohorts and blocking structure.
-`cruise_depth_min_prevalence` controls which anchored depths enter cruise-level
-microbial water-column profiles; missing retained depths are interpolated and
-reported in `cruise_depth_profile_coverage.tsv`. `pea_col`
-and `centroid_col` select the cruise-level continuous predictors;
-`cruise_group_col`, `cruise_group_probability_col`, and
-`cruise_group_uncertain_col` select the neutral BASIN cruise assignment and its
-confidence fields. `renewal_group_col` selects BASIN's cruise-level,
-nitrate-qualified renewal phase (normally `renewal_phase`). The expected
-levels are `baseline`, `renewal`, `post-renewal`, and `unknown`; the latter
-retains unresolved nitrate coverage or separately classified O2-only anomalies
-without promoting them to renewal. The phase is evaluated from one
-depth-standardized microbial profile per cruise, with
-season adjustment, within-year permutations, PERMDISP, and leave-year-out
-cross-validation;
-the SI configuration also imports the renewal event identifier, onset and
-termination flags, nitrate-support measurements, inference provenance, and raw
-O2-anomaly fields for audit, but these fields are not substituted for
-`renewal_phase` in the fitted comparisons.
-`o2_group_col`, `gmm_group_col`, and `hybrid_group_col` select the bottle-level organizations.
-`assignment_source_col` plus `observed_source_label` restrict the categorical
-comparison to observed BASIN assignments. `min_group_n` excludes unstable rare
-hybrid categories from both matched models. `permutations`, `seed`, and
-`formats` configure inference and output. Cruise models use leave-year-out
-validation; bottle models use cruise-restricted permutations and
-leave-one-cruise-out validation. When `date_col` is available, consecutive-cruise
-turnover tables and leave-year-out prediction plots are also generated.
-When cruise groups are present, the module compares season, PEA, centroid,
-combined PEA+centroid, and cruise-group models on the same cruise cohort, reports
-season-adjusted PERMANOVA and PERMDISP for the groups, plots their Bray-Curtis
-ordination, and repeats cross-validation after excluding uncertain assignments.
-It also tests hybrid-compartment community structure separately within each
-environmental cruise group and within each nitrate-qualified renewal phase. These
-stratified tests adjust for depth and season,
-restrict permutations within cruise, report PERMDISP, and use leave-one-cruise-out
-validation. Pairwise compartment contrasts are reported with within-cruise-group
-Benjamini-Hochberg correction and pair-specific PERMDISP. The corresponding stratified ISA identifies taxa associated with
-compartments inside each cruise state without using ASVs to define the groups.
-ISA is run in both directions for both state systems: compartments within each
-cruise state, and cruise states within each compartment.
-
-## Study-design analyses
-
-- `power_analysis`: `enabled`, output and sample/patient/case/type fields,
-  `sample_sizes_cancer`, `sample_sizes_stype`, `n_simulations`, `n_perm`,
-  `alpha`, `seed`, `skip_estimate`, `skip_plot`, `transform`, and contralateral
-  controls.
-- `taxonomy_patient_aware`: `enabled`, output and cohort fields, `count_col`,
-  `tax_levels`, `sample_types`, `min_prevalence`, contralateral/lung-side
-  controls, `skip_omnibus`, `transform`, `alpha`, and `top_n`.
-- `lung_status_analysis`: `enabled`, output and sample/type/case/patient fields,
-  site/side/status fields, `status_a_value`, `status_b_value`,
-  `reference_status_value`, `permutations`, and `seed`.
-
-Generalized aliases are `group_power_analysis` for `power_analysis`,
-`taxonomy_group_association` for `taxonomy_patient_aware`, and
-`paired_group_contrast` for `lung_status_analysis`. Use only one name for each
-module in one configuration.
-
-## Clustermaps and networks
-
-### `clustermaps`
-
-Fields cover enable/output/mitochondrial/ISA paths; sample, sample-code, ASV,
-count, and up to four grouping columns; orders, exclusions and palettes;
-`ranks`, per-rank `topN`, ISA statistic/significance fields and threshold;
-`formats`, `figwidth`, `row_height`, `min_height`, `max_height`, and
-`mito_sample_mode`.
-
-### `spieceasi`
-
-`enabled`, output/prefix, and `network_enabled` control the branch. Inference
-uses `transpose`, abundance/prevalence/zero-variance filters, `method`,
-`lambda_min_ratio`, `nlambda`, `rep_num`, `thresh`, `pulsar_criterion`,
-`ncores`, and `seed`. Module detection uses `modules_enabled`,
-`module_methods`, `module_primary_method`, `module_resolutions`, `module_reps`,
-consensus/stability/min-size gates, best-only options, and ISA filters. Graph
-inputs/overlays include module/position/node paths, `network_modes`, metadata,
-group palettes/orders/focus, and ISA groups. Rendering uses edge, layout,
-degree, ISA, and abundance size/scale fields plus `keep_negative` and
-`force_filter`, `force_spieceasi`, and `force_graphs`.
-
-`module_subnetworks_enabled` adds one phylum-colored induced subnetwork per
-ecological module. These figures retain the exact complete-network SPIEC-EASI
-node coordinates in both the figure and audit table; network nodes are never
-repositioned. Integers remain centered on isolated nodes, whereas integers for
-substantially overlapping nodes are moved to external circular callouts joined
-to their source nodes by short leader lines. Taxonomy controls node fill, an analysis-eligible
-ASV-genome link controls border width, and node area represents a consortium
-prominence index. The index is the equal-weight mean of within-module empirical
-percentiles for `module_subnetwork_prominence_metrics`; the SI configuration
-uses maximum relative abundance, eigenvector centrality, and participation
-coefficient. ASVs at or above `module_subnetwork_prominence_threshold` are
-marked as high-prominence ASVs with diamond symbols.
-`module_subnetwork_label_top_n` labels the leading index values in addition to
-all high-prominence ASVs and every genome-linked ASV. Integer node labels map to an
-ASV key containing only phylum, family, and genus. Marker areas are bounded by
-`module_subnetwork_prominence_min_area` and
-`module_subnetwork_prominence_max_area`. The node-audit and plot-manifest
-tables preserve every component percentile, the composite score and rank,
-legacy anchor ranks, label counts, encodings, and coordinates.
-`module_high_prominence_asvs.tsv` is the thresholded reporting subset;
-`module_subnetwork_node_audit.tsv` remains the complete unfiltered inventory.
-
-`pulsar_criterion: stars` requests ordinary StARS. The ASPIRE compatibility
-value `bstars` requests bounded StARS by passing `criterion=stars` with lower
-and upper StARS bounds enabled; `bstars` itself is never passed to SPIEC-EASI
-as an unsupported criterion.
-
-### MAG and summary modules
-
-- `genome_cooccurrence`: independently infers metagenomic and metatranscriptomic
-  species-level proportionality co-occurrence networks from the non-normalized
-  `read_count` field in the configured genome-level long-format recruitment
-  tables. With `input_feature_level: genome`, `genome_col` identifies genome
-  records and `genome_qc` supplies their species mapping. A complete
-  genome-by-sample grid is constructed, absent combinations are assigned zero,
-  positive counts below `minimum_read_count` are set to zero, and the remaining
-  values are averaged across every eligible genome within each species. Thus,
-  species values represent mean per-genome recruitment rather than summed or
-  deduplicated species read counts. `genome_qc` also supplies the shared quality/taxonomy table;
-  `expected_species` is a fail-fast assertion on the deterministic one-genome-
-  per-species selection; and the sample/genome/value fields identify the exact
-  abundance columns. Species-level counts drive inference, while representative
-  selection supplies one stable node identifier and its metadata. Selection
-  prioritizes MIMAG high over
-  medium, then greater assembly length, greater completeness, lower
-  contamination, greater N50, and genome identifier. With
-  `input_scale: raw_counts`, the assay-specific matrices retain raw counts until
-  inference. Each sample is then closed to unit sum, zeros are replaced
-  multiplicatively using `zero_replacement_fraction` times that sample's
-  smallest positive part, and the composition is CLR transformed. Pairwise
-  association is Lovell/Erb proportionality, rho-p. `min_rel_abund` and
-  `min_prevalence` control species filtering. Whole cruises are resampled with
-  replacement within season for `bootstrap_iterations`; an edge must reach
-  `min_abs_rho`, `min_bootstrap_recovery`, and `min_sign_consistency`. Empirical
-  p-values use `permutations` independent species-wise shuffles within the
-  configured `permutation_strata` and are Benjamini-Hochberg adjusted; `max_q`
-  is the adjusted-significance cutoff. `seed` makes resampling, permutation,
-  community detection, and plotting deterministic. `closure_total` applies
-  only to the optional `input_scale: closed_abundance` preparation mode and is
-  not used by the configured SI analysis. Degree-zero species are retained in
-  the 24-species GraphML files and plots so a lack of supported co-occurrence is
-  not hidden. Positive edges indicate concordant relative-recruitment profiles;
-  negative edges indicate contrasting profiles. Neither direction establishes
-  direct ecological interaction. Descriptive native proportionality clusters use
-  absolute selected-edge weights and are labeled `MG-PC#` or `MT-PC#`. Separate
-  fixed-layout overlays report phylum, family, mean abundance, proportionality
-  cluster, degree, betweenness, eigenvector centrality,
-  closeness, and descriptive annotations propagated through eligible ASV-
-  genome links: ASV ecological module, hybrid ISA, microbial-compartment ISA,
-  and TITAN response. Propagated overlays are annotations of linked ASVs, not
-  direct genome-level tests.
-
-- `asv_mag_link`: `enabled`, optional `master_tsv`, `genome_qc_dir` or
-  `genome_qc_dirs`, `id_token_indexes`, `barrnap_dir` or `genome_fasta_dir`,
-  `output_dir`, `threads`, `min_pident`, `min_qcov`, optional inclusive
-  `asv_taxonomy_min_confidence` (0-1), optional hard
-  `min_completeness` (inclusive) and `max_contamination` (exclusive) MAG
-  quality gates, optional `gunc_assessment_value` requiring both
-  `gunc_assessment` and `gunc_strict_assessment` to equal that value,
-  optional `require_species_assignment` to exclude MAGs without a classified
-  species, optional `min_rrna_marker_count` requiring each of the 16S, 23S,
-  and 5S rRNA marker counts to meet the configured minimum,
-  `top_n`, and `plot_top_n`. When configured, missing assessment columns are
-  fatal rather than silently retaining MAGs. A usable retained 16S/barrnap
-  reference remains required independently of the selected quality gate.
-- `asv_mag_network`: `enabled`, output/prefix, `graph_variant`, `anchor_top_n`, link identity/
-  coverage gates, taxonomy sources, `mag_id_mode`, optional `mag_abundance`,
-  its format and genome/sample/value fields, optional `cruise_metadata`
-  containing cruise dates for all-metagenome monthly recruitment profiles,
-  `min_shared_samples`,
-  `mag_knn` (up to this many strongest positive and this many strongest
-  negative abundance-correlation neighbors selected per MAG within an
-  ASV-linked MAG subnetwork; the undirected union is plotted),
-  `abundance_transform`, `mag_abundance_normalization`,
-  `functional_module_min_fraction`, and
-  `functional_annotations`.
-
-`asv_mag_network.anchor_top_n` is shared by the network renderer and the
-module-anchor summary. ASVs are ranked independently within each ecological
-module by degree, eigenvector centrality, and betweenness centrality. An ASV is
-an anchor when its dense rank is at most `anchor_top_n` for at least one of the
-three metrics; it is not required to qualify for all three. The default is 1,
-and metric ties are retained.
-
-`asv_mag_network.biochemical_groupings` selects biochemical ISA overlays for
-the locked ecological-module network (for example,
-`[o2_subcompartment_final, cruise_group]`), and `isa_q_threshold` controls
-which indicator associations receive a colored node rim. Node fill remains the
-ecological-module palette, so fill/rim overlap can be compared without changing
-ASV positions or edges. Single-group indicators use that biochemical level's
-configured color, multigroup indicators use a black rim, and non-significant
-ASVs retain a thin gray rim. These shared, modality-independent panels are
-written as
-`asv_mag_network_ecological_modules_by_<grouping>.{pdf,png,svg}` and indexed in
-the network panel manifest.
-
-Direct grouping diagnostics are configured with
-`grouping_diagnostic_sample_col`, `grouping_diagnostic_cruise_col`,
-`grouping_diagnostic_groups`, `grouping_diagnostic_cruise_level_groups`, and
-`grouping_diagnostic_permutations`. The default comparison set is
-`Depth`, `Season`, legacy `o2_compartment`, `gmm_component`, hybrid
-`o2_subcompartment_final`, and `cruise_group`. Put labels that describe an
-entire cruise, normally `Season` and `cruise_group`, in
-`grouping_diagnostic_cruise_level_groups`; those tests aggregate to one profile
-per cruise rather than treating bottles from the same cruise as independent. Feature
-selection is independent of ASV–MAG linkage: the ASV model uses every processed
-ASV, the MetaG model uses every MAG recruitment profile, and the MetaT model
-uses every MAG expression profile. Joint ASV+MetaG, ASV+MetaT, and
-ASV+MetaG+MetaT models use all features from their component blocks on the
-samples shared by those blocks. Each standardized omics block receives equal
-total weight in joint distances so feature count alone cannot make one modality
-dominate.
-
-Bottle-level grouping tests retain samples as the analysis units and restrict
-label permutations and cross-validation folds by cruise. Cruise-level tests first
-average all sampled depths into one MAG/community profile per cruise, then
-permute and cross-validate those independent cruise profiles. Outputs in
-`asv_mag_network/group_diagnostics/` include multivariate effect size,
-permutation significance, blocked nearest-centroid balanced accuracy,
-chance-adjusted balanced accuracy, classification permutation significance,
-per-feature effect/FDR tables, group-mean feature heatmaps, and a common
-grouping-comparison figure. Chance adjustment permits predictive comparisons
-among groupings with different numbers of levels. These results test whether each grouping captures
-repeatable community, population-abundance, or expression structure; they do
-not require the grouping to agree with every individual feature.
-
-For nonexclusive MAG recruitment counts, supply the SeqKit paired-end summary
-used for recruitment as `mag_abundance_seqkit` and, independently for RNA,
-`mag_transcript_abundance_seqkit`. ASPIRE parses common `_pe.1/_pe.2`,
-`_R1/_R2`, and `_1/_2` filename suffixes, requires equal R1/R2 `num_seqs`, and
-uses the number of read pairs—not their sum—as the input-fragment denominator.
-With `mag_abundance_normalization: auto`, a supplied SeqKit table selects
-input-fragment FPM; without one, ASPIRE stops rather than silently changing the
-normalization. Set `provided_fpkm` or `provided_tpm` to validate and retain
-an upstream-normalized value column without further library-size correction.
-Median-ratio normalization remains available only through an explicit
-`median_ratio` setting. Do not directly divide values having different units;
-the ecological-context atlas accepts paired TPM/TPM log2-ratio and standard-error
-matrices through `rna_dna_log2_tpm_ratio` and `rna_dna_log2_tpm_se`.
-After the configured transformation, each MAG profile is standardized across
-samples. MAG-MAG subnetwork edges are Spearman correlations of these normalized
-profiles. FPM is noncompositional: sums across genomes may exceed one million
-when a fragment maps to multiple genomes. `relative` is therefore retained only
-for mutually exclusive assignments, while `raw` skips sequencing-depth
-normalization.
-- `master_summary`: `enabled`, `output_dir`, source-module directories,
-  `max_direct_cols`, and the filename `whitelist` eligible for integration.
-
-## `environments`
-
-Every value is a process-specific Conda YAML. Keys are `main`, `sina`,
-`taxonomy`, `mitomaster`, `mito_checker`, `filter_counts`, `general_stats`,
-`sankey`, `plot_metadata`, `asv_time_depth_curtain`, `batch_correction`, `outlier_checker`,
-`collectors_curve`, `plot_upset`, `bubbleplotter`, `umap_clustering`,
-`diversity`, `indicspecies`, `voc_correlation`, `measurement_association`, `titan`,
-`grouping_diagnostics`, `community_predictor_comparison`,
-`group_label_augmentation`, `clustermaps`,
-`power_analysis`, `taxonomy_patient_aware`, `lung_status_analysis`,
-`spieceasi`, `network_modules`, `network`, `master_summary`, `asv_mag_link`, and
-`asv_mag_network`. Keep committed values for ordinary runs. Overrides are for
-dependency development and change the reproducibility environment.
-
-## Remaining field glossary
-
-The following less-common fields are listed explicitly so configuration review
-does not require searching the workflow source:
-
-- Taxonomy cache names: `ref_taxonomy_url`, `ref_taxonomy_filename`,
-  `ref_sequences_url`, and `ref_sequences_filename`.
-- General join and identifier fields: `metadata_sample_col`, `asv_id_col`,
-  `metadata_join_cols`, `measurement_join_cols`, and `sample_code_col`.
-- Patient/lung design fields: `cancer_site_col`, `contralateral_col`,
-  `contralateral_sample_types`, `contralateral_value`,
-  `exclude_contralateral_in_cancer`, `keep_contralateral_in_cancer`,
-  `lung_code_col`, `lung_side_col`, `lung_status_col`, `tumor_side_col`, and
-  `healthy_col`.
-- Clustermap fields: `isa_file`, `exclude_group1`, `group2_col`,
-  `group3_col`, `group4_col`, `group1_palette`, `group2_palette`,
-  `group3_palette`, `group4_palette`, `group2_order`, `isa_min_stat`,
-  `isa_significance_cols`, `isa_stat_cols`, and `plot_asv_level`.
-  Set `plot_asv_level: false` to retain `clustermap_ASV_ID_plot.tsv` while
-  skipping the expensive ASV-resolution figures; higher taxonomic-rank
-  clustermaps are unaffected.
-- Shared grouping maps: `group_palettes`, `group_orders`, and `focus_labels`.
-- Master-summary source locations: `clustermaps_dir`, `indicspecies_dir`,
-  `spieceasi_dir`, and `asv_mag_dir`.
-- Network module fields: `module_seed`, `module_consensus_threshold`,
-  `module_best_only`, `module_best_min_size`, `module_best_min_stability`,
-  `module_best_top_n`,
-  `module_isa_only`, `module_color_by_isa`, `module_isa_source`,
-  `module_isa_min_stat`, and `module_isa_max_q`.
-- Optional network input/overlay fields: `modules_sub`, `modules_all`,
-  `graph_pos_sub`, `graph_pos_all`, `node_features`, and `isa_overlay_groups`.
-- Network filtering/rendering fields: `min_rel_abund`, `min_prevalence`,
-  `force_keep_isa_asvs`, `remove_zero_var`,
-  `edge_threshold`, `edge_width_scale`, `layout_iters`, `layout_seed`,
-  `layout_scale`, `degree_scale`, `degree_size_mode`, `degree_min_area`,
-  `isa_scale`, `abundance_size_mode`, `abundance_reference`,
-  `abundance_reference_area`, `abundance_min_area`, `abundance_max_area`, and
-  `abundance_scale_power`. `max_labels` caps collision-adjusted labels per
-  network plot (default `100`; use `0` only when an unlimited labeled plot is
-  known to fit in memory).
-
-`min_rel_abund` is the minimum maximum within-sample relative abundance and
-`min_prevalence` is the minimum fraction of samples containing an ASV; an ASV
-must satisfy both. `force_keep_isa_asvs` defaults to `false`. Enabling it restores
-significant primary-ISA ASVs that fail network filtering and can substantially
-increase model size, so it should be treated as an explicit sensitivity choice
-rather than a default.
-
-For example, `min_rel_abund: 0.005` and `min_prevalence: 0.01` retain an ASV only
-when it is observed in at least 1% of samples and reaches at least 0.5% relative
-abundance in one or more samples. The abundance parameter is therefore a
-minimum threshold applied to each ASV's maximum observed relative abundance; it
-is not an upper abundance limit.
-
-Degree-zero ASVs in the primary ASV network remain documented in the filtering
-and adjacency tables but are removed from GraphML files, module detection, and
-rendered networks because they have no inferred association. The explicitly
-bounded genome networks retain their degree-zero species for audit. Multigroup
-ISA nodes are rendered as
-segmented circles using the exact component colors shown in the legend; colors
-are never averaged into an unlisted blended color.
-
-When `module_best_only` is enabled, `module_best_min_size` and
-`module_best_min_stability` are hard eligibility filters. Eligible modules are
-then ranked using internal edge weight, edge density, conductance, weighted
-modularity contribution, and mean node stability. `module_best_top_n` limits
-highlighted module figures to the strongest N modules by this composite quality
-ranking. The complete module assignment and diagnostic tables are still
-written, so this setting changes visualization focus rather than discarding
-module membership evidence. When `module_best_only` is disabled (the default),
-every inferred module receives its own label and color in both the SPIEC-EASI
-and downstream ASV–MAG ecological-module figures. The quality-ranking table is
-still written for audit and review but does not filter the displayed modules.
-
-`ncores` controls the number of independent pulsar/StARS R workers. ASPIRE
-forces BLAS, OpenMP, BLIS, MKL, NumExpr, and RcppParallel to one thread inside
-each worker, preventing nested numerical-library threading from oversubscribing
-the host. Thus `ncores: 25` requests approximately 25 computational workers,
-not 25 workers each attempting to use every CPU.
-
-For the SI production network, `thresh: 0.05` is the StARS instability target,
-`lambda_min_ratio: 0.01` expands the fitted sparsity path, and
-`edge_threshold: 0.0` retains the nonzero edges selected by SPIEC-EASI rather
-than applying a second arbitrary partial-correlation cutoff. Review the selected
-lambda index and stability path after fitting; a boundary solution indicates
-that the lambda path should be widened or sampled more finely.
-- MAG taxonomy and abundance schema fields: `asv_taxonomy_source`,
-  `mag_taxonomy_source`, `mag_abundance_format`, `mag_abundance_genome_col`,
-  `mag_abundance_sample_col`, and `mag_abundance_value_col`.
-
-Path/column fields name inputs or exact case-sensitive columns. Boolean fields
-toggle the behavior named by the key. Size, scale, threshold, and iteration
-fields are numeric and should retain template values unless the corresponding
-analysis design is being deliberately changed.
-
-## Production preflight checklist
-
-- All active paths exist and reference compatible files.
-- Manifest IDs are unique, pairing is correct, and metadata IDs match exactly.
-- Every active group, color, patient, lung-side, and measurement field exists.
-- Palette labels and orders cover observed metadata values.
-- Trimming, merge, length, and error parameters match the assay.
-- Optional modules without their conditional inputs are disabled.
-- A representative run has been reviewed for read retention, filtering,
-  taxonomy, sample accounting, and metadata joins before the full cohort run.
-### `group_guild_function`
-
-Integrates ISA group evidence with ecological network modules, ASV–MAG mappings,
-and MAG functional modules. It requires `indicspecies`, `network_modules`, and
-`asv_mag_network`. `groupings` controls all tabled comparisons, while
-`primary_groupings` limits only the focused plot and does not remove results.
-Set `target_modules: [auto_n_s]` to audit all KEGG modules whose definitions
-describe environmental nitrogen or sulfur transformations and retain every
-module represented in at least one linked MAG at
-`asv_mag_network.functional_module_min_fraction`. The selection and excluded
-modules are recorded in `tables/nitrogen_sulfur_module_selection.tsv`.
-Explicit KEGG module IDs remain supported when a fixed hypothesis set is
-required.
-
-Supplying `pca_scores`, `pca_explained`, `hybrid_assignments`, and
-`hybrid_centroids` adds a BASIN PC1–PC2 overlay for the ecological-network
-ASVs; the workflow also consumes the ASPIRE taxonomy-stage output. All four
-external BASIN paths must be supplied together. Each network ASV is positioned
-at the relative-abundance-weighted barycenter of the BASIN sample coordinates
-where it was observed. Multiple ASV libraries mapped to the same cruise-depth
-coordinate are consolidated by their median relative abundance before
-positioning. For display, these ASV positions are pooled into one
-abundance-weighted point per ecological-module/phylum combination; no
-abundance or prevalence cutoff is applied. The plotted coordinates are
-therefore observed distribution summaries, not predicted niches.
-`ecological_module_asv_pca_positions.tsv` retains every ASV-level coordinate,
-while `ecological_module_phylum_pca_positions.tsv` records the plotted
-module–phylum coordinates, constituent ASVs, and abundance weights.
-
-Both standalone and stratified ISA tables are propagated. Every stratified row
-retains `stratified_within_col` and `stratified_within_value` through the
-indicator-ASV, ecological-network-module, MAG, and target-function evidence
-tables. Network-module abundance is also tested for hybrid-compartment effects
-inside each cruise group and nitrate-qualified renewal phase using cruise-restricted
-permutations.
-
-Three complementary outputs quantify ecological-module agreement with the
-biochemical groupings. `group_ecological_module_association.tsv` reports the
-permutation-tested omnibus effect size (`effect_eta_squared`) and FDR-adjusted
-significance for each module/grouping pair.
-`group_level_ecological_module_abundance.tsv` reports effect direction using
-group-level means, medians, differences, and ratios.
-`indicator_asv_module_enrichment.tsv` tests whether significant indicator ASVs
-are overrepresented within particular ecological modules. Finally,
-`ecological_module_biochemical_group_concordance.tsv` reports Cramér's V and a
-permutation p-value across significant single-group indicators. Cramér's V is
-an overlap measure, not evidence that the classifications are interchangeable;
-multigroup indicators remain visible in the network but are excluded from this
-one-label contingency statistic.
-
-The mapping input contains every sequence- and taxonomy-eligible MAG candidate.
-Ambiguous ASVs therefore remain in the evidence chain; `eligible_mag_count` and
-`asv_link_weight` preserve mapping multiplicity for auditing and weighted
-summaries. Unique-only mappings remain available as a sensitivity subset.
-
-The ASV–MAG heterogeneous network retains the complete SPIEC-EASI ASV network
-as pale context and adds every eligible MAG link. MAG-paired ASVs are emphasized
-as larger gray circles and MAGs are smaller black circles. ASV–MAG identity is
-defined by the sequence evidence; Spearman correlation of relative-abundance
-profiles is attached to each sequence edge as supporting evidence, not used to
-invent or discard identity links. Terminal ASV sample suffixes such as
-`_plate8` are removed automatically only when doing so increases overlap with
-the MAG recruitment sample IDs. The selected harmonization mode and overlap
-counts are recorded in
-`qc/asv_mag_network_metagenome_abundance_sample_harmonization.tsv`.
-Metagenome recruitment produces
-`network/asv_mag_network_metagenome_heterogeneous_network.{pdf,png,svg}`.
-When `mag_transcript_abundance` is configured, an otherwise identical
-metatranscriptome network is written as
-`network/asv_mag_network_metatranscriptome_heterogeneous_network.{pdf,png,svg}`.
-The former uses MAG–MAG abundance-profile correlations; the latter uses
-MAG–MAG expression-profile correlations. Both retain the same SPIEC-EASI ASV
-backbone and sequence-derived ASV–MAG links. Modality is explicit in every
-associated network, correlation-table, and lineage-profile filename.
-
-`max_modules` limits guild abundance-heatmap figures to the highest-ranked
-ecological modules; it does not remove modules from the evidence tables.
-`heatmap_top_asvs` caps the all-ASV heatmap at the most variable ASVs within
-those modules so labels remain reviewable. Guild analysis does not redraw a
-separate network. Its canonical network panels are emitted by
-`ASV_MAG_NETWORK`, preserving the exact SPIEC-EASI ASV backbone, eligible
-ASV–MAG links, MAG–MAG associations, central ASV coordinates, external MAG
-subnetwork coordinates, ellipses, and anchor lines used by the base
-heterogeneous-network panel.
-
-`asv_mag_network.ambiguity_target_modules` selects functions displayed in the
-one-ASV-to-many-MAG figures and functional network overlays. With
-`[auto_n_s]`, the same data-driven N/S coverage audit described above is used.
-The network directory contains one ecological-module/anchor overlay and one
-KEGG contributor overlay per selected module and abundance modality. Every
-overlay is rendered by the same specialized heterogeneous-network renderer,
-so only its evidence styling changes. Contributor tables and
-`network/asv_mag_network_network_panel_manifest.tsv` provide the evidence and
-file index for assembling a multi-panel figure. PDF, PNG, and SVG ambiguity
-output is generated for every ASV having at least two eligible MAG candidates.
-Dense mappings are paginated at 10 MAGs per page without filtering candidates.
-No example is automatically selected for the main text.
-
-In each KEGG contributor panel, linked contributing ASVs retain the same
-selected ecological-module colors used in panels 1–2. A dark black outline
-marks functional contribution on those ASVs. The external MAG subnetworks keep
-the exact MAG-node and MAG-association styling of the corresponding base
-heterogeneous network. A contributing ASV's external ellipse and its straight
-ASV-to-ellipse anchor are bold black, but nothing inside that subnetwork is
-restyled. All ASVs in selected ecological modules retain pale versions of their
-module colors as structural context, while contributing ASVs use the saturated
-version; unselected modules remain pale gray. Thus hue identifies
-ecological-module membership and the black outline independently identifies
-KEGG-module evidence. Orange and blue remain reserved for positive and negative
-MAG abundance or expression associations.
-
-MAG marker area is constant across every external subnetwork; marker size does
-not vary with subnetwork density or any unreported quantity. Ecological-module
-legend entries use natural numeric order (`M1`, `M2`, …, `M10`), and each
-linked-ASV callout includes its module label, for example `ASV1 [M1]`.
-
-Monthly lineage-recruitment profiles are generated for every
-analysis-eligible ASV–MAG-linked ASV, including ASVs with only one eligible MAG
-link. The two-or-more-MAG requirement applies only to the ambiguity diagnostic
-figures and tables. Each monthly profile renders the observed cruise-level
-measurements and a cyclic smoothed trace for every linked lineage without
-confidence bands, keeping single- and multi-lineage comparisons uncluttered.
-
-When ASV counts are available, these profiles also underlay the linked ASV's
-relative abundance on a labeled secondary percent axis. The ASV calculation
-uses every ASV sample having a resolvable cruise identifier and date, not only
-the samples overlapping the MetaG or MetaT recruitment table. Counts are
-converted to within-sample relative abundance, averaged across sampled depths
-within each cruise, and then displayed as cruise observations plus a cyclic
-smoothed gray curve on a secondary percent axis. The cruise-level values are
-written beside each figure as
-`*_asv_relative_abundance_by_cruise.tsv`.
-
-The canonical network figure progression is explicitly indexed in the
-manifest: (1) all ASVs colored only by ecological module, with no MAG cue or
-subnetwork; (2) the same ASV view with centrality-based ecological anchors
-enlarged; (3) the full ASV–MAG heterogeneous network; and (4) one otherwise
-identical heterogeneous-network overlay for every selected N/S KEGG module.
-Panels 1–2 use the same seeded ASV coordinates as panels 3–4 but crop to the
-ASV network so the MAG-free views remain readable.
-
-Because panels 1–2 do not use MAG abundance or expression, they are emitted
-once with modality-neutral filenames
-`asv_mag_network_ecological_modules.*` and
-`asv_mag_network_ecological_modules_and_anchors.*`. MetaG/MetaT filename
-variants are reserved for panels whose MAG–MAG associations actually use the
-corresponding abundance or expression profiles.
-
-For panels 1–2, only modules marked `is_best=true` by the existing
-`module_best_min_size`, `module_best_min_stability`, and
-`module_best_top_n` selection are assigned distinct colors; other modules
-remain as gray network context. An ecological anchor is an ASV ranked first
-within its selected module for degree, eigenvector centrality, or betweenness
-centrality. In panel 2, ordinary ASVs are small and all anchors share one
-larger size. A dark black outline on that large marker indicates that the
-anchor has at least one analysis-eligible MAG link; anchors without such a
-link retain the same size with only the standard light outline.
-
-### ASV-level ecological-module PCA overlays
-
-With the four BASIN PCA inputs configured, `group_guild_function` creates the original module–phylum plot plus `ecological_module_asv_pca_overlay_asv_level` and `ecological_module_asv_pca_overlay_asv_level_abundant_asvs_labeled` in each configured format. Both new plots show individual observed ASV positions. The labeled variant places ASV IDs locally within the point axes, searches nearby collision-free positions with short noncrossing leader lines, and adds a diamond-keyed phylum/family/genus legend. Layout constraints reject intersecting leaders, overlapping labels, labels over scatter markers, and leaders through other labels. Point coordinates never move. A `.layout.json` audit accompanies the labeled figure.
-
-```yaml
-group_guild_function:
-  pca_label_min_mean_abundance_pct: 1.0
+This guide describes the configuration shipped with this documentation version. The
+authoritative complete template is
+{download}`asv_pipeline_nextflow.yml <../asv_pipeline_nextflow.yml>`. Its exhaustive
+[parameter catalogue](CONFIG_PARAMETERS.md) defines every key and template
+value. Copy the template for a production run and retain the resolved copy with
+the results. Private study YAMLs are intentionally excluded from the repository
+because they contain machine-specific paths and study provenance.
+
+## Template enable/disable defaults
+
+The template starts the current paired-read, control-aware study workflow.
+Replace all input/reference path placeholders and configure the assay and sample
+classes before running. `core.control_decontam.metadata: null` reuses the
+`standard.filter_counts.metadata` table.
+
+| Component | Template default |
+|---|---|
+| Cutadapt primer trimming | Enabled; choose the primer family and matching SINA region for your assay. |
+| fastp | Quality/adapter processing remains active; all four fixed clipping lengths are zero. |
+| TECH/BIO decontamination | Enabled; both arms enabled. Disable the unused arm for TECH-only or BIO-only studies. |
+| Biological depth inclusion | 5,000 post-QC counts; nonzero controls are exempt. |
+| Final ASV filters | 0.1% RA in at least one biological sample AND 5% nonzero biological prevalence. |
+| Taxonomy filtering | Excludes human, mammalian and vertebrate assignments; requires assigned taxonomy and a minimum consensus of 0.05. |
+| Mitochondrial screening | Local screening and MITOMASTER enabled; API failures are audited and local screening continues. |
+| Diversity, ISA, ordination, heatmaps and network inference | Enabled. |
+| Network topology | Enabled, with 1,000 null draws. |
+| Power analysis | Enabled, with 1,000 simulations and 999 permutations; requires the configured patient and group metadata. |
+| VOC/other measurements and MAG linkage | Disabled until their additional input tables or references are supplied. |
+| Batch correction, grouping diagnostics, patient-aware diversity/taxonomy and lung-status contrasts | Opt-in; configure the study design before enabling. |
+
+Power analysis uses patient counts `4,6,8,10,15,20,30,40,50` for the cancer
+comparison and sample counts `10,15,20,25,30,40,50` for sample-type comparisons,
+with alpha `0.05`, seed `42`, and both estimation and plotting enabled. These
+settings match SPARK and newly generated large-mock configurations; the
+quickstart uses a shorter grid with 10 simulations and 49 permutations.
+
+VOC analysis starts with exact sample-ID matching and legacy VOC subsets disabled
+when you enable it and provide the measurement table.
+
+Already primer-trimmed or single-end inputs require disabling paired primer
+trimming and choosing assay-appropriate QC settings. Existing run YAMLs keep
+their own explicit settings; copying the updated template starts a new configuration.
+
+## Filtering parameter names and units
+
+Names ending in `_pct` use a percentage from 0 to 100. Names ending in
+`_fraction` use a fraction from 0 to 1. A decontam `_score_threshold` is a
+classification-score cutoff, not an abundance or sample-prevalence percentage.
+
+| Parameter | Current mock value | Exact meaning |
+|---|---:|---|
+| `core.control_decontam.min_biological_reads` | 5000 | Include biological samples with at least this many raw post-QC ASV counts. Nonzero controls are exempt. |
+| `core.control_decontam.technical_score_threshold` | 0.1 | Flag ASVs with TECH decontam prevalence score strictly below 0.1. |
+| `core.control_decontam.bio_control_score_threshold` | 0.1 | Flag ASVs with BIO decontam prevalence score strictly below 0.1. |
+| `core.table_filter.min_sample_reads` | 5000 | Fallback sample-depth cutoff only when control decontamination is disabled. |
+| `core.table_filter.min_relative_abundance_pct` | 0 | Initial abundance filter inside FILTER_ASVS; zero disables abundance exclusion. All-zero ASVs are still removed. |
+| `standard.filter_counts.min_relative_abundance_pct` | 0.1 | Keep an ASV reaching 0.1% in at least one retained biological sample, using microbial totals after non-target removal. |
+| `standard.filter_counts.min_prevalence_fraction` | 0.05 | Fraction of retained biological samples with nonzero counts; an ASV must pass this and the independent RA gate. |
+| `optional.spieceasi.min_relative_abundance_fraction` | 0.001 | Network-specific abundance filter: at least 0.1% in one network-input sample. |
+| `optional.spieceasi.min_prevalence_fraction` | 0.05 | Network-specific prevalence filter: nonzero count in at least 5% of network-input samples. |
+
+The mock applies **5% nonzero prevalence across retained biological samples**
+in `FILTER_ASVS`, before `PLOT_METADATA`. Its separate abundance gate requires
+0.1% RA in at least one biological sample. Both gates must pass. Prevalence uses
+all biological columns remaining after sample-group filtering, including any
+whose counts became zero after feature removal. Controls do not enter this table.
+The general template enables the same gates and `core.control_decontam.enabled`
+to establish the biological cohort. Disabling decontamination requires setting
+the final prevalence gate to zero.
+
+Network gates operate on the selected network table, after optional batch
+correction. Force-kept indicator ASVs bypass the network abundance and prevalence
+gates, but still face zero-variance filtering. In a 50-sample network input, a
+5% prevalence gate requires at least three nonzero samples. It does not require
+0.1% abundance in each of those three samples: the two gates are independent.
+Other analysis modules have their own explicitly documented prevalence fractions.
+See [migration notes](decontamination.md#migration-and-historical-reproduction)
+for prior names; defining both names for one setting is an error.
+
+## How Configuration Is Applied
+
+Run ASPIRE through the supported wrapper:
+
+```bash
+./run_asv_pipeline.sh my_run.yml
 ```
 
-The threshold is a percentage: 1.0 selects ASVs with mean relative abundance **strictly greater than 1%**, calculated over the full input ASV count matrix before restricting to plotted network members. It does not select the top 1% of ranked ASVs. Valid values are 0 (all positive-mean ASVs) through values below 100. The default is 1.0. `tables/ecological_module_asv_pca_overlay_labels.tsv` records selected ASVs, abundances, coordinates, and whether a position was available. Individual ASV coordinates are abundance-weighted environmental PCA positions, not a new community ordination. Module–phylum colored circles in the original plot are pooled positions.
+The wrapper supplies the same resolved YAML to the controller and Nextflow.
+The complete template and generated mock configuration organize process
+sections into three top-level namespaces:
 
-The ASV legend also reports module ID and “Module peak”: the hybrid compartment with the highest aggregate module mean in `compartment_matched_ecological_module_association.tsv`. This is a module-level maximum, not necessarily the individual ASV maximum. The selection audit records the module peak label and mean.
+- `core`: always-scheduled ASV construction and taxonomy settings.
+- `standard`: canonical final-table preparation required by the usual
+  downstream analysis graph.
+- `optional`: independently selectable analytical and reporting branches.
 
-The ASV taxonomy legend is grouped under bold module/peak headers in numeric module order (M1, M2, …, M10). Member ASVs are ordered by their numeric ASV identifier within each module, retaining the colored diamonds and phylum/family/genus assignments.
+`environments` remains top-level because it is an operational software mapping
+shared by all tiers. A branch with `enabled: false` is not scheduled. An
+optional branch may intentionally be `enabled: true` in the mock benchmark;
+enabled-by-default does not mean mandatory. Enabling a branch does not create
+missing biological inputs: its metadata columns, reference files, control
+labels, VOC table, or genome inputs must also be supplied.
 
-### Optional matched cohort for diversity
+Legacy flat YAML configurations remain supported. A section must appear either
+flat or inside one tier, never in both places.
 
-`diversity.matched_cohort.table` optionally supplies an exact sample cohort TSV
-using `diversity.sample_col`. The existing microbial diversity tests
-use that cohort and write to the normal diversity outputs. Descriptive plots,
-UMAP, and abundance inputs retain their normal sample coverage. Missing requested
-samples cause an error. Leave it null for general ASPIRE sample eligibility.
-The SI configuration supplies the saved 310-sample BASIN community cohort;
-this setting does not restrict other ASPIRE processes or mitochondrial analyses.
+## Module Dependency Guide
+
+| Section | Required upstream data | Additional required input | Main published module |
+|---|---|---|---|
+| `standard.mito` | filtered ASVs and taxonomy | BLAST databases/FASTAs; MITOMASTER network access when enabled | `non_target_filtering` |
+| `standard.filter_counts` | taxonomy and non-target evidence | metadata | `non_target_filtering` |
+| `core.control_decontam` | raw count matrix and full taxonomy | explicit sample-class metadata | `contamination_filtering` |
+| `standard.metadata_plots` | final microbial/mitochondrial tables | metadata | `metadata_plots` |
+| `optional.batch_correction` | metadata-linked ASV tables | batch and biological-covariate columns | `batch_correction` |
+| `optional.outlier_detection` | metadata-linked ASV table | configured grouping columns | `outlier_detection` |
+| `optional.diversity` | downstream ASV counts | metadata/group columns | `diversity` |
+| `optional.indicspecies` | downstream ASV counts | grouping columns; optional patient block | `indicator_analysis` |
+| `optional.voc_correlation` | downstream ASV tables and optional ISA results | VOC table and sample/patient matching columns | `voc_correlation` |
+| `optional.power_analysis` | downstream ASV tables and ISA completion | patient, case and type columns | `power_analysis` |
+| `optional.taxonomy_patient_aware` | downstream ASV tables | patient/case/type metadata | `taxonomy` |
+| `optional.lung_status_analysis` | downstream ASV tables | patient, cancer-site and lung-side metadata | `lung_status_analysis` |
+| `optional.spieceasi` | downstream wide ASV table | none beyond configured filters | `network_analysis` |
+| `optional.network_topology` | enabled SPIEC-EASI thresholded graph | none | `network_analysis` |
+| `optional.asv_mag_link` | filtered ASV sequences | genome-QC, barrnap, and/or genome FASTA inputs | `asv_mag_link` |
+| `optional.master_summary` | metadata-linked ASV tables | enabled branch outputs are incorporated when available | `summary` |
+
+When control decontamination is enabled, its cleaned biological counts
+enter feature filtering before metadata-stage tables and downstream analyses. When
+batch correction is enabled, its corrected count table replaces those counts
+for the downstream branches that support correction. These are analytical
+choices, not merely extra plots.
+
+## Core Input and Runtime
+
+### `core.paths`
+
+- `input_dir`: directory searched for FASTQs when no manifest is supplied.
+- `output_dir`: public result directory. Use a new directory for an independent
+  analysis.
+- `manifest`: optional TSV mapping `sample_id`, R1 and optional R2 FASTQs.
+- `runtime_dir`: persistent Nextflow work, Conda cache and staging root;
+  defaults to `<output_dir>/.aspire`.
+- `keep_runtime_dir`: retain runtime state after success. Keep `true` for
+  resume and targeted reruns.
+- `work_dir`, `conda_cache_dir`: optional granular runtime overrides.
+
+### `core.resources`
+
+- `threads`: CPU request used by per-sample read-processing tasks.
+- `single_end`: set `true` only for single-end data; paired-end is the default.
+
+### `core.filename_patterns`
+
+`r1_tokens`, `r2_tokens`, `ext_patterns`, and `sample_strip_regex` control FASTQ
+discovery and sample-ID normalization. Prefer an explicit manifest when names
+do not follow a consistent convention. Confirm the normalized
+`summary/tables/run_manifest.tsv` before interpreting results.
+
+## Read Processing and ASV Generation
+
+| Section | Important fields | Effect |
+|---|---|---|
+| `core.fastp` | `trim_front_r1`, `trim_tail_r1`, `trim_front_r2`, `trim_tail_r2` | Fixed end trimming before merging. Values are read-specific base counts. |
+| `core.merge` | `max_diffs`, `min_overlap`, `trunc_quality`, `allow_stagger` | Paired-read merge requirements. |
+| `core.filter` | `max_ee`, `min_len`, `max_len` | Expected-error and merged-length filters. |
+| `core.concat` | `relabel`, `label_sep` | Preserves sample identity when filtered FASTAs are concatenated. |
+| `core.unoise` | `min_size` | Minimum dereplicated abundance supplied to denoising. |
+| `core.swarm` | `distance` | ASV clustering/mapping distance setting. |
+| `core.table_filter` | `min_sample_reads`, `min_relative_abundance_pct` | Initial step inside `FILTER_ASVS`, after control decontamination. `min_sample_reads` is a read count, bypassed when biological depth QC already ran; `min_relative_abundance_pct` is a per-sample percentage. |
+
+Read-processing changes can alter inferred ASVs. `core.table_filter` changes
+apply later, inside `FILTER_ASVS`; rerun from that stage for those settings.
+
+## Alignment and Taxonomy
+
+### `core.sina`
+
+Set either `reference` to a local SINA ARB reference or `reference_url` to a
+downloadable archive. `regions` lists accepted variable-region annotations and
+`trim_to` selects the desired region. `batch_size`, `threads`, `keep_gaps`, and
+`verbose` control execution rather than biological filtering.
+
+### `core.taxonomy`
+
+`ref_taxonomy` and `ref_sequences` point to local QIIME2 artifacts; their URL
+counterparts permit retrieval when local files are absent. Output names and
+`download_subdir` control organization. Pin local reference artifacts when an
+exact historical classification must be reproduced.
+
+## Non-Target and Host Filtering
+
+### `standard.mito`
+
+- `enabled`: run mitochondrial/contaminant evidence generation.
+- `run_mitomaster`: contact the external MITOMASTER service. Set `false` for an
+  intentionally offline run; local taxonomy and BLAST evidence still run.
+- `chunk_size`, `mitomaster_workers`, `mitomaster_retries`,
+  `mitomaster_timeout`, `mitomaster_header_mode`: API chunking and retry policy.
+- `min_pident`, `min_percov`: local BLAST identity and coverage cutoffs.
+- `mito_db`, `biof_db`: existing nucleotide database prefixes.
+- `mito_fasta`, `contaminant_fasta`: FASTA alternatives that take precedence
+  and are rebuilt into run-specific databases.
+- `steps`, `host_first_step`, `mitochondria_substring`: evidence labels and
+  reporting order.
+
+### `standard.filter_counts`
+
+- `metadata`, `sample_id_col`, `group_col`: sample/group mapping.
+- `min_group_size`: minimum group size considered by group-aware filtering.
+- `min_relative_abundance_pct`: per-sample percentage; an ASV must meet it in at least
+  one retained biological sample. The general and mock templates both use 0.1%.
+  Controls are excluded upstream when control decontamination is enabled.
+- `min_consensus`: minimum taxonomy consensus value.
+- `exclude_taxa`: explicit exact rank/value exclusions such as
+  `Species:Homo sapiens` or `Class:Mammalia`.
+- `taxon_col`, `consensus_col`, `biofactorial_col`, `mito_cols`: input evidence
+  column names.
+- `save_intermediates`: retain `.decon`, `.micro`, and mitochondrial audit
+  tables required by data-loss reporting.
+
+Unassigned ASVs, blank taxonomy values and ASVs missing from the taxonomy table
+are excluded from the final microbial table. An assigned higher rank (for example
+Bacteria) is sufficient; an unresolved genus or species alone does not cause removal.
+The feature QC audit records `taxonomy_assigned` alongside `retained_final`.
+
+The final downstream microbial table is `ASV_target.tsv`. The `.micro.tsv` and
+`.decon.tsv` files are audit intermediates, not authoritative replacements.
+
+### `core.control_decontam`
+
+This module now runs two independent cohort-level decontam prevalence tests,
+TECH and BIO, after taxonomy and before biological feature filtering.
+See the [migration notes](decontamination.md#migration-and-historical-reproduction)
+for older configuration files.
+
+- `metadata`, `metadata_sample_col`, `class_col`: source metadata and identifiers.
+- `biological_labels`, `technical_labels`, `bio_control_labels`, `positive_labels`:
+  explicit values in the class column, never sample IDs.
+- `min_biological_reads`: biological-only post-QC inclusion cutoff (default 5000);
+  low-depth controls are intentionally exempt.
+- `technical_enabled`, `bio_control_enabled`: independent arm switches.
+- `technical_score_threshold`, `bio_control_score_threshold`: independent prevalence thresholds.
+
+The union of the two calls removes ASVs from QC-passing biological samples.
+Retained counts pass unchanged into feature filtering, with biological depth inclusion already complete. Read [decontamination](decontamination.md) for migration,
+class validation, pairing preservation, QC artifacts and score interpretation.
+
+## Metadata, QC and Visualization
+
+### `standard.metadata_plots`
+
+`metadata` and `sample_col` establish sample matching. `type_col`, `color_col`,
+`palette_file`, `group_order`, and `include_rank` control annotations.
+Control decontamination supplies biological counts with retained values unchanged. `keep_types` restricts
+retained biological types. `input_table` must be `filtered`; pre-filter tables are audit-only;
+`min_pre_correction_sample_sum` is an additional sample read-count threshold.
+`drop_zero_asvs` removes features that become all zero. `run_micro` and
+`run_mito` select table families.
+
+### Other descriptive branches
+
+- `standard.general_stats`: enables run-level FASTQ and sequence summaries.
+- `optional.sankey`: maps sample/group columns and ordering into data-loss diagrams.
+- `optional.plot_upset`: configures domain, groups, Venn/UpSet behavior and formats.
+- `optional.bubbleplotter`: controls count/group columns, output formats and sizing.
+- `optional.umap_clustering`: controls normalization, UMAP and HDBSCAN settings.
+- `optional.collectors_curve`: controls grouping, permutations, seed and presence rule.
+- `optional.clustermaps`: selects ranks, top-N limits, ISA threshold columns, palettes,
+  sizes, formats and mitochondrial-table behavior.
+
+## Batch Correction and Outliers
+
+`optional.batch_correction.enabled` activates ConQuR-based correction using `batch_col`
+and `biological_covariates`. Its `conqur_*` fields configure the correction;
+the UMAP/HDBSCAN fields configure diagnostics. Enabling it changes the count
+table used by downstream analyses and should be justified in the study design.
+
+`optional.outlier_detection` configures Isolation Forest, one-class SVM and HDBSCAN.
+`group_cols` defines the strata, `vote_threshold` controls consensus, and the
+`iso_*`, `svm_*`, and `hdbscan_*` fields tune individual detectors. Outlier
+results are diagnostic unless a separately documented process removes samples.
+
+## Ecological and Association Analyses
+
+### `optional.diversity`
+
+`sample_col`, `group1_col`, `group2_col`, `color_col`, `group_order`, and
+`exclude_groups` define cohorts. `block_col` supplies the participant/block for
+repeated measures. `permanova_perms` and `random_state` control inference;
+`umap_neighbors` and `umap_min_dist` control visualization. The nested
+`patient_aware` block configures patient/case/type columns, contralateral rules,
+permutations, transformation and complete-type requirements.
+
+### `optional.indicspecies`
+
+`group_cols` lists primary groupings and `block_col` optionally restricts
+permutations. `perms`, `seed`, `q_threshold`, and `min_n` control tests.
+`stratified.analyses` requests a `group_col` analysis separately within selected
+levels of another column. Palette/order fields control display only.
+`plot_enabled` and `aligned_plot_enabled` independently schedule the two plot
+families; aligned plot thresholds are configured with `aligned_*` fields.
+
+### `optional.voc_correlation`
+
+- `voc_table`, `voc_sample_col`: VOC matrix and its identifier.
+- `metadata_sample_col`, `patient_col`, `case_col`, `type_col`: matching and
+  grouping fields.
+- `sample_types`: eligible sample types.
+- `sample_id_mode`, `use_legacy_voc_subset`: matching/subsetting behavior for
+  established datasets.
+- `correlation_direction`: reported direction for the baseline ASV-VOC output.
+- `isa_correlation_direction`: direction for ISA-focused correlation outputs.
+- `isa_focus_groups`, `isa_all_type_groups`,
+  `isa_exclude_all_types_from_focus`: membership rules for focused ISA/VOC figures.
+- `isa_exclude_nondistinct`: exclude indicators containing every configured
+  `isa_all_type_groups` group from all ISA-specific VOC outputs; exclusions are audited.
+- `isa_min_abs_rho`: minimum absolute Spearman magnitude for focused rows and
+  columns.
+- `sample_min_abs_z`: minimum absolute sample VOC z-score for focused displays.
+- `voc_columns`: explicit VOC list; empty permits numeric discovery.
+
+Patient-level inference is enabled by default within VOC analysis. Configure
+`patient_inference`, `patient_permutations`, `patient_seed`,
+`patient_min_patients`, `patient_min_nonzero`, and `clr_pseudocount`.
+See [VOC statistics](VOC_STATISTICS.md) for normalization, permutation tests,
+FDR families, outputs, and limitations of the legacy sample-level plots.
+
+### Study-design modules
+
+- `optional.power_analysis`: cancer/type-group sample-size grids, simulation and
+  permutation counts, alpha, seed, transformation and contralateral handling.
+- `optional.taxonomy_patient_aware`: taxonomic levels, prevalence, patient/case/type
+  columns, contralateral handling, transformation, alpha and top-N display.
+- `optional.lung_status_analysis`: patient, case, cancer-site, lung-side and derived
+  tumour-side/contralateral/healthy label columns.
+
+#### Power-analysis execution and precision
+
+For a full study analysis, a useful starting configuration is:
+
+```yaml
+optional:
+  power_analysis:
+    enabled: true
+    workers: 32
+    sample_sizes_cancer: 4,6,8,10,15,20,30,40,50
+    sample_sizes_stype: 10,15,20,25,30,40,50
+    n_simulations: 1000
+    n_perm: 999
+    alpha: 0.05
+```
+
+Both grids count **patients**, rather than libraries or reads. The cancer grid
+specifies cancer patients: the control count remains at the observed pilot count
+until the requested cancer count exceeds it, then both groups use the requested
+count. The sample-type grid resamples shared patient profiles for paired type
+comparisons. Interpret observed-effect, null and artificial-effect simulations
+according to their labels; extrapolation depends on the pilot cohort’s effects
+and variability. These results guide patient recruitment, not sequencing depth.
+`n_simulations` controls repeated simulations; `n_perm` controls the inner
+permutation tests. The quickstart deliberately uses smaller values for execution
+checks and should not determine a study’s sample size.
+
+Power analysis distributes independent simulation replicates across worker processes.
+This covers cancer/control and sample-type PERMANOVA, Shannon and taxonomic
+power, plus **indicator-species power simulations** inside this module. The main
+ISA analysis is unchanged. Effect-size bootstrap replicates also use workers;
+input preparation and plotting remain serial. Analysis families run sequentially
+and share the worker budget; permutations within a replicate remain serial.
+BLAS/OpenMP libraries are limited to one thread per worker to avoid nested pools.
+
+`workers: null` (the template default) inherits `core.resources.threads`, capped
+at the CPUs visible to Nextflow. A positive integer sets a lower module-specific
+limit, also capped at that budget. For a 32-thread run, use
+`core.resources.threads: 32` and either `workers: null` or `workers: 32`.
+`workers: 1` runs serially. Standalone execution supports
+`run_power_analysis_pipeline.sh --workers N`. Parallel execution requires Linux
+or another POSIX platform supporting fork, with enough memory for worker-local
+bootstrap matrices. The robust simulation counts and patient grids are unchanged.
+
+Replicate seeds and result aggregation order are independent of worker count.
+PERMANOVA reuses the centered distance matrix within each permutation test.
+Sample-type taxonomic power also precomputes patient/type means and uses its
+validated exact signed-rank optimization, with a native SciPy fallback.
+Existing sample-size stopping rules remain unchanged.
+
+Checkpoints live under `power_analysis/effect_sizes/checkpoints/` and
+`power_analysis/results/checkpoints/` in runtime publication staging. The existing
+sample-type taxonomic checkpoints remain in
+`power_analysis/results/.taxonomic_sample_type_checkpoints/`. Python saves every
+25 completed replicates; indicator-species power saves batches of up to
+`max(25, workers)` replicates. Keys include inputs, scientific settings, source
+and library versions. Compatible checkpoints are reused across worker counts;
+changed inputs/settings/code start new checkpoints. Keep the runtime directory
+to retain these files. Progress messages report completed/cached replicates and
+elapsed time.
+
+To adopt this implementation during an existing run, first stop the old run and
+wait for its tasks to exit, then restart with the same YAML and runtime directory:
+
+```bash
+./run_asv_pipeline.sh /path/to/study.yml --rerun-from GROUP_POWER_ANALYSIS
+```
+
+The controller reuses eligible upstream results and reruns power and subsequent
+stages. Old serial work without checkpoints cannot recover its in-memory progress.
+Do not launch concurrent runs writing the same results/runtime directory.
+
+There is no universal required number of simulations. Keep `n_simulations: 1000`
+for the full study and large-mock analysis; the quickstart uses a shorter execution check.
+For an estimated power of 0.80, 1,000 simulations give Monte Carlo standard error
+about 0.013 (approximately ±2.5 percentage points at 95%); 100 give about 0.040
+(±7.8 points). This measures simulation precision, not uncertainty from the
+original study or adequacy of its sample size. The inner `n_perm` setting is
+separate. See [Morris et al. (2019)](https://doi.org/10.1002/sim.8086).
+
+## Networks and MAG Linkage
+
+### Additional optional modules
+
+The complete template includes `optional.grouping_diagnostics`
+(group separation and optional validated label augmentation), and
+`optional.asv_mag_network` (taxonomy-filtered ASV–MAG network mapping). These are
+disabled by default and do not replace the dedicated VOC or network processes.
+ASV-associated chemical analyses in the publication workflow use Volatile Organic Compounds (VOCs) through `optional.voc_correlation`. The general `optional.measurement_association` extension is outside this publication workflow.
+
+Their inputs and outputs are described in [Process Reference](PROCESS_REFERENCE.md)
+and all declared parameters appear in [Parameter Catalogue](CONFIG_PARAMETERS.md).
+
+For batch correction, `correction_policy` chooses `always` (corrected counts),
+`never` (raw counts), or `auto` (quality-gated selection); check the emitted decision
+table before interpreting downstream results. SPIEC-EASI's `pulsar_criterion`
+chooses `stars` or `bstars` (bounded StARS). Set these explicitly when reproducing
+an existing analysis rather than relying on defaults.
+
+The generalized config aliases `group_power_analysis`, `taxonomy_group_association`,
+and `paired_group_contrast` are accepted in place of `power_analysis`,
+`taxonomy_patient_aware`, and `lung_status_analysis`, respectively. Use only one
+name for each module. The corresponding terminal stages have generalized names
+under the same `optional:` tier; old rerun names remain supported.
+
+### `optional.spieceasi`
+
+`min_relative_abundance_fraction`, `min_prevalence_fraction`, and `remove_zero_var` define the network ASV
+cohort. `method`, `lambda_min_ratio`, `nlambda`, `rep_num`, `thresh`, `ncores`,
+and `seed` configure inference. `edge_threshold` and `keep_negative` control the
+reported graph. `force_keep_indicator_asvs` should be enabled only when the
+study explicitly requires indicator taxa to bypass the standard cohort filter.
+
+`network_enabled` schedules graph rendering. `modules_enabled`,
+`module_methods`, `module_resolutions`, `module_reps`,
+`module_consensus_threshold`, and `module_seed` control consensus module
+detection. The remaining palette, sizing, layout, and ISA-overlay fields affect
+figures rather than inference.
+
+### `optional.network_topology`
+
+`n_null` is the number of seeded degree-preserving configuration-model draws;
+`seed` makes them reproducible. `skip_null: true` reports observed topology
+without the null comparison. The input is the thresholded SPIEC-EASI graph, so
+`optional.spieceasi.enabled` is required.
+
+### `optional.asv_mag_link`
+
+Supply one or more of `genome_qc_dir`, `genome_qc_dirs`, or `barrnap_dir`, plus
+genome FASTAs where required. `min_pident` and `min_qcov` control ASV-to-SSU
+matching; `threads`, `top_n`, and `plot_top_n` control execution and reporting.
+Leave the module disabled when no genome/MAG data exist.
+
+## Summary and Environments
+
+`optional.master_summary` builds integrated ASV tables. Its directory fields identify
+the enabled analysis products and `whitelist` specifies files eligible for
+direct integration. `max_direct_cols` protects the output from unbounded wide
+joins.
+
+`environments` maps logical process groups to committed Conda YAMLs. Most users
+should not change these paths. A change alters software provenance and should
+be recorded with the run configuration and Git commit.
+
+## Production Preflight Checklist
+
+1. Copy `asv_pipeline_nextflow.yml` and use a new `core.paths.output_dir`.
+2. Validate every absolute path and remove unused placeholder paths.
+3. Confirm manifest sample IDs against metadata and all external tables.
+4. Confirm primer trimming, read length and expected-error settings.
+5. Pin taxonomy/SINA references when exact reproducibility matters.
+6. Decide explicitly whether MITOMASTER, host filtering, control
+   decontamination and batch correction apply.
+7. Disable branches lacking required columns or inputs.
+8. Record the Git commit and preserve the resolved YAML, manifest, report,
+   checksums and logs.
+
+## Optional primer removal
+
+Enable [Cutadapt primer trimming](primer-trimming.md) to detect and remove paired primers before fastp. Set all four fixed fastp clipping values to zero when enabling this module. The primer audit records retained and discarded pairs, and a cohort check requires a single amplicon family before ASV construction.
+
+## Retaining descriptive sample groups
+
+Use `optional.analysis_cohort.exclude_groups` for biological study groups that
+belong in QC, metadata plots and diversity but not the other downstream analyses:
+
+```yaml
+optional:
+  analysis_cohort:
+    sample_col: Sample
+    group_col: Type_Group
+    exclude_groups: [Skin Brush]
+  voc_correlation:
+    isa_all_type_groups: [Oral Rinse, BAL, Bronchial Brush]
+    isa_exclude_nondistinct: true
+```
+
+The VOC rule excludes memberships spanning every listed airway group from all
+ISA-specific outputs. ISA membership is read from explicit `s.<group>` columns;
+configured palette colours follow those memberships. Cohort selection does not
+alter the biological sample classification, depth QC or upstream feature-filter
+denominators. Diversity retains the complete final biological cohort.
+
+The report embeds the raw, all-library Sankey. Explicit TECH, BIO, positive-control
+and depth-failure bands show where libraries leave the analysis cohort. Removed
+bands occupy the lower lane; retained bands and the final type split keep their
+order. HTML and SVG share the same geometry, with constrained vertical dragging
+and a reset button in HTML.
+
+## MITOMASTER API availability
+
+`standard.mito.run_mitomaster: true` enables external queries. Requests use
+`mitomaster_timeout` seconds and `mitomaster_retries` retries with exponential
+backoff. With `mitomaster_failure_policy: continue`, exhausted connection/HTTP
+failures or invalid responses are audited and local mitochondrial/contaminant
+BLAST plus taxonomic screening continue. Successful API responses are retained.
+`mitomaster_output.status.json` distinguishes complete, partial and unavailable
+API evidence; `mitomaster_output.failures.tsv` lists failed chunks. With `fail`
+(the template default), an incomplete API screen stops the process.

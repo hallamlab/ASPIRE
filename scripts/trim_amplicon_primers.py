@@ -10,6 +10,7 @@ import gzip
 import itertools
 import json
 import logging
+import math
 import re
 import shutil
 import subprocess
@@ -107,7 +108,27 @@ def load_primers(path):
     return families
 
 
-def screen(r1, r2, families, sample_reads, max_prefix):
+def primer_position(sequence, primer, pattern, max_prefix, error_rate):
+    """Find a complete primer allowing substitutions, but no indels."""
+    prefix = sequence[:max_prefix + len(primer)]
+    exact = pattern.search(prefix)
+    if exact:
+        return exact.start()
+    allowed = math.floor(error_rate * len(primer))
+    if not allowed:
+        return None
+    for offset in range(min(max_prefix, len(sequence) - len(primer)) + 1):
+        errors = 0
+        for base, code in zip(sequence[offset:offset + len(primer)], primer):
+            errors += base not in IUPAC[code]
+            if errors > allowed:
+                break
+        if errors <= allowed:
+            return offset
+    return None
+
+
+def screen(r1, r2, families, sample_reads, max_prefix, error_rate=0):
     patterns = {s: re.compile(''.join('['+IUPAC[b]+']' for b in s))
                 for f in families for s in [f['forward'], f['reverse']]}
     counts, offsets = Counter(), {}
@@ -122,8 +143,7 @@ def screen(r1, r2, families, sample_reads, max_prefix):
                     primers.reverse()
                 positions = []
                 for read, seq in zip(reads, primers):
-                    match = patterns[seq].search(read[1][:max_prefix + len(seq)])
-                    positions.append(match.start() if match else None)
+                    positions.append(primer_position(read[1], seq, patterns[seq], max_prefix, error_rate))
                 if all(pos is not None and pos <= max_prefix for pos in positions):
                     key = (i, orientation)
                     hits.append(key)
@@ -172,15 +192,16 @@ def parse_args(argv=None):
     p.add_argument('--min-pair-fraction', type=float, default=.5, help='Minimum screened fraction with a supported primer pair')
     p.add_argument('--min-family-fraction', type=float, default=.01, help='Minimum screened fraction for a family/orientation to be used')
     p.add_argument('--min-family-reads', type=int, default=5)
-    p.add_argument('--error-rate', type=float, default=.1, help='Cutadapt mismatch rate; screening uses exact IUPAC matches')
+    p.add_argument('--screen-error-rate', type=float, default=0, help='Screening substitution rate, 0 for exact IUPAC matches; no indels')
+    p.add_argument('--error-rate', type=float, default=.1, help='Cutadapt mismatch rate; screening tolerance is configured separately')
     p.add_argument('--end-overlap', type=int, default=12, help='Minimum matching bases for optional 3-prime read-through trimming')
     p.add_argument('--minimum-length', type=int, default=1, help='Shorter processed pairs go to too_short/')
     p.add_argument('--log-file', type=Path, help='Additional progress log (default OUTPUT/run.log)')
     args = p.parse_args(argv)
     if any(x < 1 for x in [args.threads,args.sample_reads,args.min_family_reads,args.end_overlap,args.minimum_length]):
         p.error('Threads, read counts, overlap and minimum length must be positive')
-    if not 0 <= args.max_prefix <= 30 or not 0 <= args.error_rate <= .25:
-        p.error('max-prefix must be 0–30 and error-rate 0–0.25')
+    if not 0 <= args.max_prefix <= 100 or not 0 <= args.error_rate <= .25 or not 0 <= args.screen_error_rate <= .25:
+        p.error('max-prefix must be 0–100; error-rate and screen-error-rate must be 0–0.25')
     if not 0 < args.min_pair_fraction <= 1 or not 0 < args.min_family_fraction <= 1:
         p.error('Fractions must be in (0,1]')
     return args
@@ -210,7 +231,7 @@ def main(argv=None):
     log.parent.mkdir(parents=True,exist_ok=True)
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s',handlers=[logging.StreamHandler(sys.stdout),logging.FileHandler(log)],force=True)
     config = {k:str(v) if isinstance(v,Path) else v for k,v in vars(args).items()}
-    config.update(cutadapt_version=version,primer_families=families,screening='exact IUPAC matches in the first N pairs; family counts may overlap',variant_caveat='Family-level compatibility does not identify exact degenerate oligo formulation')
+    config.update(cutadapt_version=version,primer_families=families,screening=f'IUPAC matches with substitution rate <= {args.screen_error_rate} in the first N pairs; no indels; family counts may overlap',variant_caveat='Family-level compatibility does not identify exact degenerate oligo formulation')
     (out/'run_config.json').write_text(json.dumps(config,indent=2)+'\n')
     summaries, detection, inputs = [], [], []
     for number,(sample,mates) in enumerate(pairs.items(),1):
@@ -219,7 +240,7 @@ def main(argv=None):
             stat=path.stat();inputs.append(dict(sample_id=sample,mate=mate,path=str(path),bytes=stat.st_size,mtime_ns=stat.st_mtime_ns))
         row = dict(sample_id=sample,status='failed',screened_pairs=0,supported_screen_pairs=0,ambiguous_screen_pairs=0,selected_families='',input_pairs='',trimmed_pairs='',unmatched_pairs='',too_short_pairs='',fastq_r1='',fastq_r2='',message='')
         try:
-            n, supported, ambiguous, counts, offsets = screen(mates[1],mates[2],families,args.sample_reads,args.max_prefix)
+            n, supported, ambiguous, counts, offsets = screen(mates[1],mates[2],families,args.sample_reads,args.max_prefix,args.screen_error_rate)
             selected = [key for key,c in sorted(counts.items()) if c >= args.min_family_reads and c/max(n,1) >= args.min_family_fraction]
             row.update(screened_pairs=n,supported_screen_pairs=supported,ambiguous_screen_pairs=ambiguous,selected_families=';'.join(families[i]['name']+':'+o for i,o in selected))
             for i,f in enumerate(families):

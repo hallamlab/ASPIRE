@@ -8,7 +8,12 @@ process SANKEY {
     path(asv_counts)
     path(asv_decon_counts)
     path(asv_micro_counts)
+    path(asv_final_counts)
+    path(control_audit, stageAs: 'control_audit')
+    path(cleaned_counts, stageAs: 'cleaned_counts.tsv')
+
     path(sample_manifest)
+    val(has_control_audit)
 
     output:
     path("sankey.done"), emit: done
@@ -20,6 +25,7 @@ process SANKEY {
     def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
     def keepTypesArg = sankeyKeepTypes && !sankeyKeepTypes.isEmpty() ? "  --keep-types \"${sankeyKeepTypes.join(',')}\" \\\n" : ''
     def verticalOrderArg = sankeyVerticalOrder && !sankeyVerticalOrder.isEmpty() ? "  --vertical-order \"${sankeyVerticalOrder.join(',')}\" \\\n" : ''
+    def controlAuditArgs = has_control_audit ? "--sample-qc \"\${PWD}/${control_audit}/sample_qc.tsv\" --asv-cleaned \"\${PWD}/${cleaned_counts}\"" : ''
     def rawOutputPrefix = "${sankeyOutputPrefix}_raw"
     def labeledFlag = sankeyMakeLabeled ? "  --make-labeled \\\n" : ''
     def unlabeledFlag = sankeyMakeUnlabeled ? "  --make-unlabeled \\\n" : ''
@@ -40,6 +46,7 @@ ${keepTypesArg}${verticalOrderArg}  --fastq-stats "\${PWD}/${fastq_stats}" \\
   --asv-raw "\${PWD}/${asv_counts}" \\
   --asv-decon "\${PWD}/${asv_decon_counts}" \\
   --asv-micro "\${PWD}/${asv_micro_counts}" \\
+  --asv-final "\${PWD}/${asv_final_counts}" ${controlAuditArgs} \\
   --title "${sankeyTitle}" \\
   --arrangement "${sankeyArrangement}" \\
   --output-prefix "${sankeyOutputPrefix}" \\
@@ -58,6 +65,7 @@ ${verticalOrderArg}  --fastq-stats "\${PWD}/${fastq_stats}" \\
   --asv-raw "\${PWD}/${asv_counts}" \\
   --asv-decon "\${PWD}/${asv_decon_counts}" \\
   --asv-micro "\${PWD}/${asv_micro_counts}" \\
+  --asv-final "\${PWD}/${asv_final_counts}" ${controlAuditArgs} \\
   --title "${sankeyTitle}" \\
   --arrangement "${sankeyArrangement}" \\
   --output-prefix "${rawOutputPrefix}" \\
@@ -67,6 +75,7 @@ ${labeledFlag}${unlabeledFlag}  --all-samples \\
 touch sankey.done
 """
 }
+
 process GENERAL_STATS {
     cpus pipelineThreads
     conda "${generalStatsCondaEnvPath}"
@@ -161,7 +170,7 @@ cmd=(
   --data-dir "${outputDir}"
   --sub-dir "${metadataPlotsSubDir}"
   --metadata "${metadataPlotsMetadataPath}"
-  --taxonomy "${asvTaxTable}"
+  --taxonomy "${taxonomy_table}"
   --asv-micro "${asv_micro}"
   --asv-mito "${asv_mito}"
   --sample-id-col "${metadataPlotsSampleCol}"
@@ -174,6 +183,10 @@ cmd=(
   --verbose
 )
 cmd+=( --subtraction-groups "${metadataSubtractionGroupsCsv}" )
+if [[ "${metadataPlotsMinPreCorrectionSampleSum}" != "0.0" && "${metadataPlotsMinPreCorrectionSampleSum}" != "0" ]]; then
+  cmd+=( --min-pre-correction-sample-sum "${metadataPlotsMinPreCorrectionSampleSum}" )
+fi
+${metadataPlotsDropZeroAsvs ? 'cmd+=( --drop-zero-asvs )' : ''}
 ${includeRankAppend}
 if [[ -n "${metadataKeepTypesCsv}" ]]; then
   cmd+=( --keep-types "${metadataKeepTypesCsv}" )
@@ -342,10 +355,10 @@ process PLOT_UPSET {
     def skipVennArg = plotUpsetSkipVenn ? "  --skip-venn \\\n" : ''
     def rawOnlyArg = plotUpsetRawOnly ? "  --raw-only \\\n" : ''
     def finalOnlyArg = plotUpsetFinalOnly ? "  --final-only \\\n" : ''
-    def rawMicroMetadataPath = "${outputDir}/metadata/metadata_updated_micro_raw.tsv"
+    def rawMicroMetadataPath = analysisCohortEnabled ? "\${PWD}/${metadata_table}" : "${outputDir}/metadata/metadata_updated_micro_raw.tsv"
     def rawMicroFinalAsvPath = "${outputDir}/ASVs/ASV_final_raw.micro.tsv"
     def rawMicroAsvTargetPath = "${outputDir}/ASVs/ASV_target.micro.tsv"
-    def rawMitoMetadataPath = "${outputDir}/mito/metadata/metadata_updated_mito_raw.tsv"
+    def rawMitoMetadataPath = analysisCohortEnabled ? "\${PWD}/${metadata_table}" : "${outputDir}/mito/metadata/metadata_updated_mito_raw.tsv"
     def rawMitoFinalAsvPath = "${outputDir}/mito/ASVs/ASV_final_raw.mito.tsv"
     def rawMitoAsvTargetPath = "${outputDir}/mito/ASVs/ASV_target.mito.tsv"
     def rawMetadataPathSingle = plotUpsetDomain == 'mito' ? rawMitoMetadataPath : rawMicroMetadataPath
@@ -358,12 +371,12 @@ set -euo pipefail
   --data-dir "${outputDir}" \\
   --subdir "${plotUpsetSubDir}" \\
   --domain "${plotUpsetDomain}" \\
+  --metadata-path "\${PWD}/${metadata_table}" \\
 ${taxonomyArg}  --sample-id-col "${plotUpsetSampleIdCol}" \\
   --group-col "${plotUpsetGroupCol}" \\
   --color-col "${plotUpsetColorCol}" \\
 ${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}  --formats "${plotUpsetFormats}" \\
-  --font-size ${plotUpsetFontSize} \\
-  --max-intersections ${plotUpsetMaxIntersections}
+  --max-intersections ${plotUpsetMaxIntersections} --font-size ${plotUpsetFontSize}
 
 if [[ "${plotUpsetDomain}" == "both" ]]; then
   "\${CONDA_PREFIX}/bin/python" "${plotUpsetScriptPath}" \\
@@ -373,9 +386,8 @@ if [[ "${plotUpsetDomain}" == "both" ]]; then
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
-    --font-size ${plotUpsetFontSize} \\
-    --max-intersections ${plotUpsetMaxIntersections} \\
+${groupPaletteArg}${groupOrderArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+    --max-intersections ${plotUpsetMaxIntersections} --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMicroMetadataPath}" \\
     --asv-raw-path "${rawMicroAsvTargetPath}" \\
     --asv-final-path "${rawMicroFinalAsvPath}" \\
@@ -388,9 +400,8 @@ ${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${vennSubsetGroupsArg}${skip
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
-    --font-size ${plotUpsetFontSize} \\
-    --max-intersections ${plotUpsetMaxIntersections} \\
+${groupPaletteArg}${groupOrderArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+    --max-intersections ${plotUpsetMaxIntersections} --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMitoMetadataPath}" \\
     --asv-raw-path "${rawMitoAsvTargetPath}" \\
     --asv-final-path "${rawMitoFinalAsvPath}" \\
@@ -403,9 +414,8 @@ else
 ${taxonomyArg}    --sample-id-col "${plotUpsetSampleIdCol}" \\
     --group-col "${plotUpsetGroupCol}" \\
     --color-col "${plotUpsetColorCol}" \\
-${groupPaletteArg}${groupOrderArg}${subsetGroupsArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
-    --font-size ${plotUpsetFontSize} \\
-    --max-intersections ${plotUpsetMaxIntersections} \\
+${groupPaletteArg}${groupOrderArg}${vennSubsetGroupsArg}${skipVennArg}${rawOnlyArg}${finalOnlyArg}    --formats "${plotUpsetFormats}" \\
+    --max-intersections ${plotUpsetMaxIntersections} --font-size ${plotUpsetFontSize} \\
     --metadata-path "${rawMetadataPathSingle}" \\
     --asv-raw-path "${rawAsvTargetPathSingle}" \\
     --asv-final-path "${rawFinalAsvPathSingle}" \\
@@ -415,6 +425,7 @@ fi
 touch plot_upset.done
 """
 }
+
 process BUBBLEPLOTTER {
     cpus pipelineThreads
     conda "${bubbleplotterCondaEnvPath}"
@@ -548,15 +559,16 @@ process ASV_BATCH_CORRECTION {
     def umapResultsFile = "${batchCorrectionOutputDirAbs}/umap_hdbscan_results.tsv"
     """
 set -euo pipefail
+export PATH="\${CONDA_PREFIX}/bin:\${PATH}"
 
 "\${CONDA_PREFIX}/bin/python" "${batchCorrectionScriptPath}" \\
-  --data-dir "${outputDir}" \\
-  --asv "\$PWD/${asv_counts}" \\
-  --metadata "\$PWD/${metadata_table}" \\
-  --asv-meta "\$PWD/${asv_meta}" \\
+  --data-dir "." \\
+  --asv "${asv_counts}" \\
+  --metadata "${metadata_table}" \\
+  --asv-meta "${asv_meta}" \\
   --sample-id-col "${batchCorrectionSampleIdCol}" \\
   --batch-col "${batchCorrectionBatchCol}" \\
-  --output-dir "${batchCorrectionOutputDir}" \\
+  --output-dir "${batchCorrectionOutputDirAbs}" \\
   --asv-orientation "${batchCorrectionOrientation}" \\
   --conqur-mode "${batchConqurMode}" \\
   --correction-policy "${batchCorrectionPolicy}" \\
@@ -643,6 +655,7 @@ fi
 ln -sf "${umapResultsFile}" umap_hdbscan_results.tsv
 """
 }
+
 process ASV_META_FROM_CORRECTED {
     cpus 1
     conda "${batchCorrectionCondaEnvPath}"
@@ -655,11 +668,7 @@ process ASV_META_FROM_CORRECTED {
     path("ASV_meta_micro.corrected.tsv"), emit: asv_meta_corrected
 
     when:
-    batchCorrectionEnabled && (
-        bubbleplotterEnabled || umapClusteringEnabled || clustermapsEnabled ||
-        vocCorrelationEnabled || measurementAssociationEnabled || masterSummaryEnabled ||
-        powerAnalysisEnabled || taxonomyPatientAwareEnabled || lungStatusAnalysisEnabled
-    )
+    batchCorrectionEnabled
 
     script:
     def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
@@ -717,6 +726,7 @@ print(f"[i] Rows: {len(out)}")
 PY
 """
 }
+
 process OUTLIER_CHECKER {
     cpus pipelineThreads
     conda "${outlierCondaEnvPath}"
@@ -737,16 +747,18 @@ process OUTLIER_CHECKER {
     def preTransFlag = outlierPreTransformed ? "  --pre-transformed \\\n" : ''
     def scaleFlag = outlierScale ? "  --scale \\\n" : ''
     def hdbMinSamplesArg = outlierHdbMinSamples != null ? "  --hdbscan-min-samples ${outlierHdbMinSamples} \\\n" : ''
-    def asvClrAfterFile = "${batchCorrectionOutputDirAbs}/asv_clr_after_correction.tsv"
+    def updated_metadata = "\${PWD}/${metadata_table}"
+    def asvClrAfterFile = "\${PWD}/${asv_clr}"
 
 
     """
 set -euo pipefail
 
+# outlier script: ${outlierCheckerScriptHash}
 "\${CONDA_PREFIX}/bin/python" "${outlierCheckerScriptPath}" \\
   --data-dir "${outputDir}" \\
   --asv "${asvClrAfterFile}" \\
-  --metadata "\$PWD/${metadata_table}" \\
+  --metadata "${updated_metadata}" \\
   --sample-id-col "${outlierSampleIdCol}" \\
   --output-dir "${outlierOutputDirAbs}" \\
   --group-cols "${groupColsArg}" \\
@@ -764,6 +776,7 @@ ${hdbMinSamplesArg}  --hdbscan-metric "${outlierHdbMetric}" \\
   --verbose
 """
 }
+
 process COLLECTORS_CURVE {
     cpus pipelineThreads
     conda "${collectorsCondaEnvPath}"
@@ -892,7 +905,7 @@ if [[ "${diversityPatientAwareEnabledFlag}" == "1" ]]; then
     DIVERSITY_PATIENT_AWARE_ARGS+=(--require-complete-types)
   fi
 
-  Rscript "${brayPatientAwareScriptPath}" \\
+  "\${CONDA_PREFIX}/bin/Rscript" "${brayPatientAwareScriptPath}" \\
     --data-wide "${asv_counts}" \\
     --data-long "${metadata_table}" \\
     --sample-col "${diversityPatientAwareSampleCol}" \\
@@ -918,5 +931,55 @@ if [[ "${diversityPatientAwareEnabledFlag}" == "1" ]]; then
 fi
 
 touch diversity.done
+"""
+}
+
+process ANALYSIS_COHORT {
+    cpus 1
+    conda "${batchCorrectionCondaEnvPath}"
+    publishDir "${outputDir}/analysis_cohort", mode: 'copy'
+    input:
+    path(metadata)
+    path(counts)
+    path(asv_metadata)
+    path(clr_input)
+    output:
+    path("cohort/metadata.tsv"), emit: metadata
+    path("cohort/counts.tsv"), emit: counts
+    path("cohort/asv_metadata.tsv"), emit: asv_metadata
+    path("cohort/clr.tsv"), optional: true, emit: clr
+    path("cohort/sample_selection.tsv"), emit: audit
+    path("cohort/summary.json"), emit: summary
+    script:
+    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    def clrArg = batchCorrectionEnabled ? "--clr '${clr_input}'" : ''
+    """
+set -euo pipefail
+# selector: ${analysisCohortScriptHash}
+cat > cohort-settings.json <<'JSON'
+${analysisCohortSettingsJson}
+JSON
+"\${CONDA_PREFIX}/bin/python" "${analysisCohortScript}" --metadata "${metadata}" --counts "${counts}" --settings cohort-settings.json --outdir cohort --long "${asv_metadata}" ${clrArg}
+"""
+}
+
+process ANALYSIS_COHORT_DIAGNOSTICS {
+    cpus 1
+    conda "${batchCorrectionCondaEnvPath}"
+    input:
+    path(metadata)
+    path(counts)
+    output:
+    path("cohort/metadata.tsv"), emit: metadata
+    path("cohort/counts.tsv"), emit: counts
+    script:
+    def aspireCacheGeneration = task.ext.aspire_cache_generation ?: 0
+    """
+set -euo pipefail
+# selector: ${analysisCohortScriptHash}
+cat > cohort-settings.json <<'JSON'
+${analysisCohortSettingsJson}
+JSON
+"\${CONDA_PREFIX}/bin/python" "${analysisCohortScript}" --metadata "${metadata}" --counts "${counts}" --settings cohort-settings.json --outdir cohort
 """
 }

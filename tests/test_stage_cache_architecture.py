@@ -136,6 +136,7 @@ def test_corrected_asv_metadata_runs_for_every_enabled_consumer():
         module.index("process ASV_META_FROM_CORRECTED"):
         module.index("process OUTLIER_CHECKER")
     ]
+    orchestration = (ROOT / "asv_pipeline.nf").read_text()
     for consumer_flag in (
         "bubbleplotterEnabled",
         "umapClusteringEnabled",
@@ -147,4 +148,5 @@ def test_corrected_asv_metadata_runs_for_every_enabled_consumer():
         "taxonomyPatientAwareEnabled",
         "lungStatusAnalysisEnabled",
     ):
-        assert consumer_flag in block
+        assert consumer_flag in orchestration
+    assert "batchCorrectionEnabled" in block

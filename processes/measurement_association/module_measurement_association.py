@@ -966,12 +966,12 @@ def plot_biplot(background: pd.DataFrame, centroids: pd.DataFrame, modules: pd.D
     module_handles = [Line2D([], [], marker="o", linestyle="", markerfacecolor=module_colors[m],
                              markeredgecolor="white", label=m) for m in module_levels]
     first = legend_ax.legend(handles=module_handles, title="Ecological module", loc="upper left",
-                             frameon=False, ncol=2, fontsize=7, title_fontsize=8.5)
+                             frameon=False, ncol=2, fontsize=7, title_fontsize=8.5, bbox_to_anchor=(1.02, 1.0))
     legend_ax.add_artist(first)
     centroid_handles = [Line2D([], [], marker="", linestyle="", label=f"{r.centroid_number}. {r.display_label}")
                         for r in centroid_table.itertuples(index=False)]
-    legend_ax.legend(handles=centroid_handles, title=r"Hybrid O$_2$-GMM centroid", loc="lower left",
-                     frameon=False, fontsize=6.5, title_fontsize=8.5, handlelength=0)
+    legend_ax.legend(handles=centroid_handles, title=r"Hybrid O$_2$-GMM centroid", loc="upper left",
+                     frameon=False, fontsize=6.5, title_fontsize=8.5, handlelength=0, bbox_to_anchor=(1.02, 1.0))
     for fmt in formats:
         fig.savefig(output.with_suffix(f".{fmt}"), dpi=300, bbox_inches=None)
     plt.close(fig)
@@ -1278,7 +1278,7 @@ def plot_environmental_module_network(
     hierarchy_legend = legend_ax.legend(
         handles=anchor_handles,
         title=hierarchy_title,
-        loc="lower left",
+        loc="upper left",
         bbox_to_anchor=(0.0, -0.01),
         frameon=False,
         fontsize=4.35,
@@ -1475,7 +1475,7 @@ def plot_spieceasi_metric_network(
     first = legend_ax.legend(
         handles=network_handles, title="Network element", loc="upper left",
         frameon=False, fontsize=8.2, title_fontsize=9.5,
-    )
+    bbox_to_anchor=(1.02, 1.0))
     legend_ax.add_artist(first)
     module_handles = [
         Line2D([], [], marker="o", linestyle="", markersize=5.2,
@@ -1500,7 +1500,7 @@ def plot_spieceasi_metric_network(
     legend_ax.legend(
         handles=taxonomy_handles,
         title=f"Top {metric_label} ASVs and taxonomy",
-        loc="lower left", bbox_to_anchor=(0.0, -0.01), frameon=False,
+        loc="upper left", bbox_to_anchor=(0.0, -0.01), frameon=False,
         fontsize=6.4, title_fontsize=8.8, labelspacing=0.43,
         handletextpad=0.5, borderaxespad=0.0,
     )

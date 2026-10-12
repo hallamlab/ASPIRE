@@ -1,0 +1,31 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
+flowchart TD
+    I[FASTQs and sample manifest] --> P[Optional Cutadapt primer removal and family check]
+    P --> C[fastp QC and ASV construction]
+    R[Sequence and taxonomy references] --> T[Alignment and taxonomy]
+    C --> T
+    T --> D{Control decontamination enabled?}
+    D -->|Yes| QC[Biological-only depth QC; retain controls]
+    S[Sample class and pairing metadata] --> QC
+    C -->|Raw counts| QC
+    QC --> DC[Independent TECH and BIO prevalence; union removal]
+    DC --> REF[Reference-based non-target screening]
+    REF --> F[FILTER_ASVS: biological abundance and taxonomy filters]
+    D -->|No| REF
+    F --> M[Metadata-linked microbial tables]
+    S --> M
+    M --> A[Analysis table preparation]
+    A --> V[Diversity: all final biological samples]
+    A --> H[Optional study analysis cohort selection]
+    H --> E[Indicators and associations]
+    H --> N[Networks, modules and topology]
+    V --> O
+    F -->|Final filtered ASV sequences| L[Optional ASV-to-genome linkage]
+    G[Genome and barrnap references] --> L
+    L --> N
+    E --> O[Tables, plots and run report]
+    N --> O
+    classDef input fill:#DAE8FC,stroke:#6C8EBF,color:#111111
+    classDef output fill:#D5E8D4,stroke:#82B366,color:#111111
+    class I,R,S,G input
+    class O output

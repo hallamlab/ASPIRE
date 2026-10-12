@@ -119,6 +119,11 @@ if (length(missing_metadata) > 0) stop(sprintf("Missing metadata columns: %s", p
 
 patient_col <- intersect(c("Participant_ID", "patient_code"), colnames(metadata))[1]
 if (is.na(patient_col)) stop("No patient ID column found")
+# IDs are labels, even when every value happens to contain only digits.  readr
+# otherwise infers a numeric column, which conflicts with the explicitly typed
+# character `patient` column in the paired-distance output.
+metadata[[patient_col]] <- as.character(metadata[[patient_col]])
+metadata$sample <- as.character(metadata$sample)
 shared_samples <- intersect(metadata$sample, rownames(asv_table))
 if (length(shared_samples) == 0) stop("No overlapping samples between metadata and ASV table")
 metadata <- metadata %>% filter(sample %in% shared_samples) %>% distinct(sample, .keep_all = TRUE)

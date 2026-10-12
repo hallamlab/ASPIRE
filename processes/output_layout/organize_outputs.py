@@ -17,6 +17,8 @@ PLOT_SUFFIXES = {".svg", ".pdf", ".png", ".jpg", ".jpeg", ".html"}
 STRUCTURAL_PARTS = {"tables", "plots", "figures", "results", "data"}
 
 MODULE_DIRS = {
+    "analysis_cohort": "analysis_cohort",
+    "primer_trimming": "primer_trimming",
     "batch_correction": "batch_correction",
     "outliers_corrected": "outlier_detection",
     "diversity": "diversity",
@@ -40,6 +42,7 @@ MODULE_DIRS = {
     "clustermaps": "clustermaps",
     "spieceasi": "network_analysis",
     "genome_cooccurrence": "genome_network_analysis",
+    "three_tier_decontam": "contamination_filtering",
     "asv_mag_link": "asv_mag_link",
     "asv_mag_network": "asv_mag_network",
     "asv_mag_curtains": "asv_mag_curtains",
@@ -50,6 +53,7 @@ MODULE_DIRS = {
 }
 
 INTERMEDIATE_DIRS = {
+    "primer_trimmed",
     "fastp", "merged", "filtered", "concat", "derep", "sina", "denoise",
     "nochimeras", "ASVs",
 }
@@ -299,11 +303,18 @@ def data_accounting_summary(modules_dir: Path) -> str:
             if len(group_columns) == 2:
                 break
 
-    group_html = []
+    cohort_audit_path = find_preferred(modules_dir / "analysis_cohort" / "tables", ("sample_selection.tsv",))
+    cohort_audit = read_tsv(cohort_audit_path) if cohort_audit_path else []
+    cohort_note = ""
+    if cohort_audit:
+        included = sum(str(row.get("included", "")).lower() == "true" for row in cohort_audit)
+        cohort_note = (f'<p>Analysis cohort: {included:,} samples; '
+                       f'{len(cohort_audit)-included:,} excluded study-group samples remain in metadata plots and diversity.</p>')
+    group_html = [cohort_note] if cohort_note else []
     for column in group_columns:
         counts = Counter(row.get(column, "") for row in metadata if row.get(column, ""))
         rows = "".join(
-            f'<tr><td>{html.escape(str(value))}</td><td>{count:,}</td></tr>'
+            f'<tr><td>{html.escape(str(value))}</td><td>{count:,}{" (small group)" if count < 5 else ""}</td></tr>'
             for value, count in sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))
         )
         group_html.append(
@@ -312,7 +323,7 @@ def data_accounting_summary(modules_dir: Path) -> str:
         )
 
     visual_specs = (
-        ("Data-loss Sankey", modules_dir / "sankey" / "plots", ("data_loss_sankey.label.html", "data_loss_sankey.html"), "*sankey*.html", "Interactive sample and sequence retention across processing stages."),
+        ("Data-loss Sankey", modules_dir / "sankey" / "plots", ("data_loss_sankey_raw.label.html", "data_loss_sankey_raw.label.svg", "data_loss_sankey.label.html", "data_loss_sankey.label.svg"), "*sankey*.html", "All input libraries, explicit control/depth dropouts, and final biological counts after every filter."),
         ("Read-depth swarmplot", modules_dir / "metadata_plots" / "plots", ("type_group_swarmplot_micro.svg", "type_group_swarmplot_micro_raw.svg"), "*swarmplot*.svg", "Final read-depth distributions across analyzed groups."),
         ("Collector's curve", modules_dir / "collectors_curve" / "plots", ("collectors_curve_overlay.svg", "collectors_curve_faceted.svg"), "*collector*overlay*.svg", "Accumulation of observed ASVs as samples are added, providing a compact view of sampling coverage."),
         ("ASV overlap UpSet", modules_dir / "upset" / "plots", ("final_micro_upset.svg", "final_upset.svg"), "final*upset.svg", "Presence and overlap of retained ASVs across the analyzed groups."),

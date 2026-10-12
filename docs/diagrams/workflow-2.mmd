@@ -1,0 +1,17 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Times New Roman, Times, serif","primaryColor":"#F5F5F5","primaryBorderColor":"#666666","lineColor":"#808080","defaultLinkColor":"#808080","primaryTextColor":"#111111","textColor":"#111111","edgeLabelBackground":"#FFFFFF"}}}%%
+flowchart TD
+    U[User: YAML configuration and manifest] --> W[run_asv_pipeline.sh]
+    W --> C[Mamba controller environment: Nextflow and Java]
+    C --> N[Nextflow dependency graph]
+    N --> E[Per-process Mamba environments]
+    E --> P[Tools and ASPIRE Python / R scripts]
+    P --> S[Runtime staging and task work]
+    S -->|After workflow success| O[Output organizer]
+    O --> R[Module tables and plots]
+    O --> H[HTML run report and master summaries]
+    O --> L[Logs, inventories and checksums]
+    S -. Retained cache for resume .-> N
+    classDef input fill:#DAE8FC,stroke:#6C8EBF,color:#111111
+    classDef output fill:#D5E8D4,stroke:#82B366,color:#111111
+    class U input
+    class R,H,L output

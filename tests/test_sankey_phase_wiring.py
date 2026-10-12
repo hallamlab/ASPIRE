@@ -8,6 +8,7 @@ def test_sankey_reads_explicit_staged_inputs() -> None:
     module = (
         ROOT / "workflow/modules/metadata_ecology.nf"
     ).read_text(encoding="utf-8")
+    module = module.split("process GENERAL_STATS", 1)[0]
     for variable in (
         "fastq_stats",
         "filtered_stats",

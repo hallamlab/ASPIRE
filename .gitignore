@@ -53,6 +53,12 @@ reports/
 mock_run*.yml
 mock_run*.manifest.tsv
 
+# Private study/provenance configurations. Keep local copies, but do not
+# publish machine-specific paths or protected-study settings.
+examples/SPARK_*.yml
+examples/set1-2*.yml
+examples/si.local.yml
+
 # -----------------------------
 # OS/editor noise
 # -----------------------------
@@ -63,6 +69,8 @@ mock_run*.manifest.tsv
 *~
 
 # Local manuscript writing, publication packages, and exploratory audits
+# Local manuscript material, study inputs and generated workflow copies
+.asv_pipeline.generated.*.nf
 /docs/ASPIRE_METHODS.md
 /docs/ASPIRE_RESULTS.md
 /docs/ASPIRE_manuscript_supplements.zip
@@ -75,3 +83,13 @@ mock_run*.manifest.tsv
 /examples/si.primer_trimmed.manifest.tsv
 /examples/si.old-output-cleanup.yml
 *.BAK
+/examples/si.primer_trimmed.manifest.tsv
+/examples/si.old-output-cleanup.yml
+*.BAK
+/docs/_build/
+
+# Locally generated quickstart data and configuration
+/aspire-quickstart/
+/aspire-cami-mock.yml
+/aspire-cami-mock.manifest.tsv
+/aspire-cami-mock.metadata.tsv

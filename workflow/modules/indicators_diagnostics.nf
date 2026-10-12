@@ -34,7 +34,7 @@ set -euo pipefail
 ISA_STAGE_ROOT="\$PWD/isa_stage_root"
 mkdir -p "\${ISA_STAGE_ROOT}"
 
-Rscript "${indicspeciesScriptPath}" \\
+"\${CONDA_PREFIX}/bin/Rscript" "${indicspeciesScriptPath}" \\
   --asv "${asv_counts}" \\
   --meta "${metadata_table}" \\
   --sample-col "${indicspeciesSampleCol}" \\
@@ -384,7 +384,7 @@ set -euo pipefail
 mkdir -p "${vocCorrelationOutputDirAbs}"
 echo "plot_voc_corr.py md5: ${plotVocCorrScriptHash}"
 
-python3 "${plotVocCorrScriptPath}" \\
+"\${CONDA_PREFIX}/bin/python" "${plotVocCorrScriptPath}" \\
   --asv-meta "${asv_meta_table}" \\
   --asv-counts "${asv_counts}" \\
   --voc "${vocCorrelationVocTablePath}" \\
@@ -400,14 +400,27 @@ ${legacySubsetArg}${vocColsArgs}  --spieceasi-min-rel-abund ${spieceasiMinRelAbu
   --spieceasi-min-prevalence ${spieceasiMinPrevalence} \\
   --spieceasi-remove-zero-var ${spieceasiRemoveZeroVar} \\
   --correlation-direction "${vocCorrelationDirection}" \\
+  --isa-correlation-direction "${vocCorrelationIsaDirection}" \\
   --case-palette "${vocCorrelationCasePalette}" \\
   --isa-palette "${vocCorrelationIsaPalette}" \\
   --isa-q-threshold ${indicspeciesQThreshold} \\
+  --isa-focus-groups "${vocCorrelationIsaFocusGroups}" \\
+  --isa-all-type-groups "${vocCorrelationIsaAllTypeGroups}" \\
+  ${vocCorrelationIsaDistinctArg} --isa-exclude-all-types-from-focus "${vocCorrelationIsaExcludeAllTypes}" \\
+  --isa-min-abs-rho ${vocCorrelationIsaMinAbsRho} \\
+  --sample-min-abs-z ${vocCorrelationSampleMinAbsZ} \\
+  --patient-inference ${vocPatientInference} \\
+  --patient-permutations ${vocPatientPermutations} \\
+  --patient-seed ${vocPatientSeed} \\
+  --patient-min-patients ${vocPatientMinPatients} \\
+  --patient-min-nonzero ${vocPatientMinNonzero} \\
+  --clr-pseudocount ${vocClrPseudocount} \\
   --indicspecies-glob "*_indicator_species*.tsv"
 
 touch voc_correlation.done
 """
 }
+
 process MEASUREMENT_ASSOCIATION {
     cpus pipelineThreads
     conda "${measurementAssociationCondaEnvPath}"
@@ -592,7 +605,7 @@ set -euo pipefail
 echo "install_titan2.R md5: ${titanInstallScriptHash}"
 echo "aspire cache generation: ${aspireCacheGeneration}"
 
-Rscript "${titanInstallScriptPath}" \\
+"\${CONDA_PREFIX}/bin/Rscript" "${titanInstallScriptPath}" \\
   --library titan_r_library \\
   --repository "${titanSourceRepository}" \\
   --revision "${titanSourceRevision}" \\
@@ -796,7 +809,7 @@ export VECLIB_MAXIMUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export RCPP_PARALLEL_NUM_THREADS=1
 
-Rscript "${microbialCompartmentInferenceScriptPath}" \\
+"\${CONDA_PREFIX}/bin/Rscript" "${microbialCompartmentInferenceScriptPath}" \\
   --prepared-dir "${prepared}" \\
   --outdir microbial_compartment_inference \\
   --sample-col "${microbialCompartmentSampleCol}" \\
@@ -1097,7 +1110,7 @@ cp "${prepared}/microbial_clustering_asv_filter_audit.tsv" community_turnover_pu
 cp "${prepared}/zero_replacement_audit.tsv" community_turnover_publish/audit/zero_replacement_audit.tsv
 cp "${prepared}/microbial_clustering_preparation_config.json" community_turnover_publish/audit/compositional_preparation_config.json
 
-Rscript "${communityTurnoverLcbdScriptPath}" \\
+"\${CONDA_PREFIX}/bin/Rscript" "${communityTurnoverLcbdScriptPath}" \\
   --prepared-dir "${prepared}" \\
   --metadata "${metadata_table}" \\
   --outdir community_turnover_lcbd \\
@@ -1319,7 +1332,7 @@ touch group_label_augmentation.done
 """
 }
 process GROUP_POWER_ANALYSIS {
-    cpus pipelineThreads
+    cpus powerAnalysisWorkers
     conda "${powerAnalysisCondaEnvPath}"
 
     input:
@@ -1340,6 +1353,7 @@ process GROUP_POWER_ANALYSIS {
     def keepContralateralFlag = powerAnalysisKeepContralateralInCancer ? '1' : '0'
     """
 set -euo pipefail
+export PATH="\${CONDA_PREFIX}/bin:\${PATH}"
 mkdir -p "${powerAnalysisOutputDirAbs}"
 
 SUMMARY_INPUT_DIR="power_analysis_inputs"
@@ -1389,6 +1403,7 @@ bash "${powerAnalysisScriptPath}" \\
   --sample-sizes-cancer "${powerAnalysisSampleSizesCancer}" \\
   --sample-sizes-stype "${powerAnalysisSampleSizesStype}" \\
   --n-simulations ${powerAnalysisNSimulations} \\
+  --workers ${task.cpus} \\
   --n-perm ${powerAnalysisNPerm} \\
   --alpha ${powerAnalysisAlpha} \\
   --seed ${powerAnalysisSeed} \\
@@ -1401,6 +1416,7 @@ bash "${powerAnalysisScriptPath}" \\
 touch power_analysis.done
 """
 }
+
 process TAXONOMY_GROUP_ASSOCIATION {
     cpus pipelineThreads
     conda "${taxonomyPatientAwareCondaEnvPath}"
@@ -1420,9 +1436,6 @@ process TAXONOMY_GROUP_ASSOCIATION {
     def excludeContralateralFlag = taxonomyPatientAwareExcludeContralateral ? '1' : '0'
     def skipOmnibusFlag = taxonomyPatientAwareSkipOmnibus ? '1' : '0'
     def runComparisonFlag = taxonomyPatientAwareRunComparison ? '1' : '0'
-    def cancerResultsArg = taxonomyPatientAwareRunComparison ?
-        "--cancer-results \"${taxonomyPatientAwareOutputDirAbs}/cancer_vs_control/taxonomic_abundance_observed.tsv\"" :
-        ''
     """
 set -euo pipefail
 mkdir -p "${taxonomyPatientAwareOutputDirAbs}"
@@ -1457,14 +1470,12 @@ if [[ "${skipOmnibusFlag}" == "1" ]]; then
   TAXONOMY_OMNIBUS_ARGS+=(--skip-omnibus)
 fi
 
+CANCER_OUTDIR="${taxonomyPatientAwareOutputDirAbs}/cancer_vs_control"
 SAMPLETYPE_OUTDIR="${taxonomyPatientAwareOutputDirAbs}/sample_type"
 FIGURES_OUTDIR="${taxonomyPatientAwareOutputDirAbs}/figures"
-rm -rf "${taxonomyPatientAwareOutputDirAbs}/cancer_vs_control"
-mkdir -p "\${SAMPLETYPE_OUTDIR}" "\${FIGURES_OUTDIR}"
+mkdir -p "\${CANCER_OUTDIR}" "\${SAMPLETYPE_OUTDIR}" "\${FIGURES_OUTDIR}"
 
 if [[ "${runComparisonFlag}" == "1" ]]; then
-  CANCER_OUTDIR="${taxonomyPatientAwareOutputDirAbs}/cancer_vs_control"
-  mkdir -p "\${CANCER_OUTDIR}"
   "\${CONDA_PREFIX}/bin/python" "${taxonomicAbundanceObservedScriptPath}" \\
     --data-long "\${SUMMARY_INPUT_DIR}/ASV_master_long.tsv" \\
     --tax-levels "${taxonomyPatientAwareTaxLevels}" \\
@@ -1484,6 +1495,9 @@ if [[ "${runComparisonFlag}" == "1" ]]; then
     --transform "${taxonomyPatientAwareTransform}" \\
     --outdir "\${CANCER_OUTDIR}" \\
     "\${TAXONOMY_CONTRALATERAL_ARGS[@]}"
+else
+  printf 'tax_level\\tsample_type\\ttaxon\\tgroup_a\\tgroup_b\\tn_patients_total\\tn_group_a\\tn_group_b\\tn_cancer\\tn_control\\tmedian_group_a\\tmedian_group_b\\tmedian_cancer\\tmedian_control\\tdelta_median\\tcohens_d\\tmw_u\\tp_value\\tq_value\\tsignificant_fdr_0.05\\n' > "\${CANCER_OUTDIR}/taxonomic_abundance_observed.tsv"
+  cp "\${CANCER_OUTDIR}/taxonomic_abundance_observed.tsv" "\${CANCER_OUTDIR}/taxonomic_abundance_observed_significant.tsv"
 fi
 
 "\${CONDA_PREFIX}/bin/python" "${taxonomicSampleTypeObservedScriptPath}" \\
@@ -1508,7 +1522,7 @@ fi
 
 "\${CONDA_PREFIX}/bin/python" "${plotTaxonomicObservedScriptPath}" \\
   --data-long "\${SUMMARY_INPUT_DIR}/ASV_master_long.tsv" \\
-  ${cancerResultsArg} \\
+  --cancer-results "\${CANCER_OUTDIR}/taxonomic_abundance_observed.tsv" \\
   --sampletype-results "\${SAMPLETYPE_OUTDIR}/taxonomic_sample_type_observed_pairwise.tsv" \\
   --outdir "\${FIGURES_OUTDIR}" \\
   --alpha ${taxonomyPatientAwareAlpha} \\
@@ -1524,6 +1538,7 @@ fi
 touch taxonomy_patient_aware.done
 """
 }
+
 process PAIRED_GROUP_CONTRAST {
     cpus pipelineThreads
     conda "${lungStatusAnalysisCondaEnvPath}"
@@ -1598,7 +1613,7 @@ for sample_type in "\${LUNG_SAMPLE_TYPES[@]}"; do
     exit 1
   fi
 
-  Rscript "${lungStatusAnalysisScriptPath}" "\${meta_file}" "\${asv_file}" "\${results_dir}" \
+  "\${CONDA_PREFIX}/bin/Rscript" "${lungStatusAnalysisScriptPath}" "\${meta_file}" "\${asv_file}" "\${results_dir}" \
     ${lungStatusAnalysisPermutations} ${lungStatusAnalysisSeed}
 
   "\${CONDA_PREFIX}/bin/python" "${plotLungStatusScriptPath}" \\

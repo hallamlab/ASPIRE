@@ -4,7 +4,9 @@ channels:
   - bioconda
 dependencies:
   - jq
-  - nextflow
+  # Pin the launcher package; run_asv_pipeline.sh pins the engine to 25.10.0.
+  # Nextflow 26 switches to a stricter parser and is not yet supported.
+  - nextflow=25.10.4
   - mamba
   - openjdk>=17,<27
   - pandas

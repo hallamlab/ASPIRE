@@ -1652,7 +1652,7 @@ def ambiguity_outputs(
             ax_abund.set_ylabel("Standardized abundance profile (z-score)")
             ax_abund.set_title("Distinct abundance profiles", pad=14)
             ax_abund.tick_params(axis="x", labelbottom=False)
-            ax_abund.legend(frameon=False, fontsize=22, loc="upper left")
+            ax_abund.legend(frameon=False, fontsize=22, loc="upper left", bbox_to_anchor=(1.02, 1.0))
             ax_abund.spines[["top", "right"]].set_visible(False)
 
             matrix = np.zeros((len(page_mags), len(target_modules)))
