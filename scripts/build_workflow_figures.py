@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Build ASPIRE's MP-style nodal SVG/PDF workflows.
 
-The visual contract is docs/WORKFLOW_STYLE.md. Keep scientific content in ROWS;
+The visual contract is docs/WORKFLOW_STYLE.md. Keep scientific content in FULL / BRIEF;
 keep the numbered module spine, node grammar and palette in the renderer.
 Requires CairoSVG from docs/diagram-requirements.txt.
 """
 from pathlib import Path
+import json
 from xml.etree import ElementTree as ET
 import cairosvg
 
@@ -32,9 +33,9 @@ FULL = [('Primer removal\n& read QC',
   'Full ASV\ntaxonomy'),
  ('Control\ndecontamination',
   'Raw counts and\nsample classes',
-  [('Biological\ndepth QC', 'ASPIRE / pandas'),
+  [('Biological\ndepth QC', ''),
    ('TECH / BIO\nprevalence tests', 'decontam'),
-   ('Union of\nflagged ASVs', 'ASPIRE / pandas')],
+   ('Union of\nflagged ASVs', '')],
   'Decontaminated\nbiological counts'),
  ('Non-target\nscreening',
   'ASVs and\nreference sequences',
@@ -42,74 +43,75 @@ FULL = [('Primer removal\n& read QC',
   'Non-target\nevidence'),
  ('Biological\nfeature filtering',
   'Biological counts\nand taxonomy',
-  [('Abundance and\nprevalence', 'ASPIRE / pandas'),
-   ('Host / unassigned\ntaxon exclusions', 'ASPIRE / pandas')],
+  [('Abundance and\nprevalence', ''),
+   ('Host / unassigned\ntaxon exclusions', '')],
   'Final microbial\ncounts and FASTA'),
  ('Metadata\n& preparation',
   'Final counts\nand metadata',
-  [('Metadata-linked\nlong / wide tables', 'pandas'),
+  [('Metadata-linked\nlong / wide tables', ''),
    ('Group diagnostics\nselected cohort', 'scikit-learn'),
-   ('Batch correction\n(optional)', 'ConQuR')],
+   ('Batch correction\n(optional)', 'ConQuR / UMAP / HDBSCAN')],
   'Synchronized\nanalysis tables'),
  ('Diversity\n& cohort selection',
   'Prepared\nbiological tables',
   [('Full cohort\ndiversity', 'scikit-bio / vegan'),
-   ('Select study groups\nfor other analyses', 'ASPIRE / pandas')],
+   ('Select study groups\nfor other analyses', '')],
   'Diversity and\nselected tables'),
  ('Associations\n& study design',
   'Selected tables\nand optional VOCs',
   [('Indicators and\npatient contrasts', 'indicspecies / vegan'),
-   ('ASV–VOC\nassociations', 'SciPy / statsmodels'),
-   ('Patient-count\npower simulations', 'NumPy / SciPy')],
+   ('ASV–VOC\nassociations', ''),
+   ('Patient-count\npower simulations', '')],
   'Association tables\nand figures'),
  ('Networks\n& genome links',
   'Selected tables\nand optional genomes',
   [('Network\ninference', 'SPIEC-EASI'),
    ('Modules and\nnull topology', 'igraph / NetworkX'),
-   ('ASV–MAG links\nand overlays', 'BLAST+ / Biopython')],
+   ('ASV–MAG links\nand overlays', 'BLAST+')],
   'Networks and\nlinkage tables'),
  ('Reports\n& provenance',
   'Module outputs\nand QC audits',
-  [('Master summaries', 'ASPIRE / pandas'),
-   ('All-library Sankey\nand HTML report', 'ASPIRE'),
-   ('Logs and\nchecksum inventory', 'Nextflow / ASPIRE')],
+  [('Read statistics /\nmaster summaries', 'SeqKit'),
+   ('All-library Sankey\nand HTML report', ''),
+   ('Logs and\nchecksum inventory', 'Nextflow')],
   'Published results\nand run record')]
-BRIEF = [('Reads\n& ASVs',
-  'Reads, metadata\nand references',
-  [('Primer trimming\nand read QC', 'Cutadapt / fastp'),
-   ('ASV construction', 'VSEARCH'),
-   ('Full taxonomy', 'SINA / QIIME 2')],
-  'Raw ASVs\nand taxonomy'),
- ('Control\ndecontamination',
-  'Raw counts and\nsample classes',
-  [('Biological-only\ndepth QC', 'ASPIRE / pandas'),
-   ('TECH / BIO\nprevalence', 'decontam'),
-   ('Union ASV\nremoval', 'ASPIRE / pandas')],
-  'Biological\ncounts'),
- ('Microbial\nfeature selection',
-  'Counts, taxonomy\nand references',
-  [('Non-target\nscreening', 'MITOMASTER / BLAST+'),
-   ('Abundance /\nprevalence filters', 'ASPIRE / pandas'),
-   ('Taxonomy\nexclusions', 'ASPIRE / pandas')],
-  'Final microbial\ncounts and FASTA'),
- ('Metadata\n& cohorts',
-  'Final counts\nand metadata',
-  [('Linked metadata\nand preparation', 'pandas / ConQuR'),
-   ('Full-cohort\ndiversity', 'scikit-bio / vegan'),
-   ('Study groups for\nother analyses', 'ASPIRE / pandas')],
-  'Diversity and\nselected tables'),
- ('Analyses\n& integration',
-  'Selected tables;\nVOCs / genomes',
-  [('Indicators /\npatient tests', 'indicspecies / vegan'),
-   ('Associations\nand power', 'SciPy / statsmodels'),
-   ('Networks /\ngenome links', 'SPIEC-EASI / BLAST+')],
-  'Analysis tables\nand figures'),
- ('Results\n& provenance',
-  'Module outputs\nand QC audits',
-  [('All-library\nSankey', 'ASPIRE'),
-   ('Integrated\nHTML report', 'ASPIRE'),
-   ('Logs and\nchecksums', 'Nextflow / ASPIRE')],
-  'Auditable\nrun outputs')]
+BRIEF = [('FASTQ → ASVs',
+  'Paired FASTQs',
+  [('Primer removal /\nread QC', 'Cutadapt / fastp'),
+   ('Merge / filter', 'VSEARCH'),
+   ('Denoise / remove\nchimeras / count', 'VSEARCH')],
+  'Initial ASVs\n+ counts'),
+ ('ASV filtering',
+  'Initial ASVs\n+ counts',
+  [('Taxonomy', 'SINA / QIIME 2'),
+   ('Depth QC /\ncontrol decontamination', 'decontam (TECH / BIO)'),
+   ('Non-target removal /\nabundance / prevalence', 'MITOMASTER / BLAST+')],
+  'Filtered ASVs\n+ counts'),
+ ('Metadata &\ntransformations',
+  'ASVs + metadata',
+  [('Link sample\nmetadata', ''),
+   ('Transform counts /\nbatch correction', 'ConQuR\nUMAP / HDBSCAN'),
+   ('Group diagnostics /\ncohort selection', 'scikit-learn')],
+  'Counts / CLR\n+ metadata'),
+ ('Community\nanalysis',
+  'Prepared tables',
+  [('Diversity / ordination', 'scikit-bio / vegan'),
+   ('Indicators / ASV clustermaps\ncontrasts / power', 'indicspecies / vegan'),
+   ('Networks / genome links', 'SPIEC-EASI / BLAST+\nigraph / NetworkX')],
+  'Community\nresults'),
+ ('ASV–VOC\nintegration',
+  'ASVs / VOCs / ISA\n+ sample metadata',
+  [('Match samples\nand measurements', ''),
+   ('Exploratory sample-level\nSpearman correlations', ''),
+   ('Patient-level inference\npermutations / FDR', ''),
+   ('ISA overlays /\nVOC–ASV clustermaps', '')],
+  'Association tables\nand heatmaps'),
+ ('Summaries &\nreports',
+  'Results + audits',
+  [('Read statistics /\nresult summaries', 'SeqKit'),
+   ('Sankey / report', ''),
+   ('Logs / checksums', 'Nextflow')],
+  'Tables / figures\n+ provenance')]
 
 def element(parent, tag, text=None, **attrs):
     child = ET.SubElement(parent, f'{{{NS}}}{tag}', {k.replace('_', '-'): str(v) for k, v in attrs.items()})
@@ -119,7 +121,7 @@ def element(parent, tag, text=None, **attrs):
 
 def build(name, rows):
     width, gap = 1500, 175
-    height = 335 + gap * len(rows) + (110 if rows is FULL else 0)
+    height = 335 + gap * len(rows) + (110 if rows is FULL else 400)
     svg = ET.Element(f'{{{NS}}}svg', dict(width=str(width), height=str(height), viewBox=f'0 0 {width} {height}', role='img', **{'aria-labelledby': 'title desc', 'data-workflow-style': 'mp-nodal-v1'}))
     element(svg, 'title', 'ASPIRE: amplicon analysis workflow', id='title')
     element(svg, 'desc', 'Numbered conceptual modules use the MetaPathways nodal style. Shared read processing and full taxonomy precede control decontamination and final feature filtering. Diversity keeps the full biological cohort; selected groups feed other analyses. Module numbers are not a serial execution schedule.', id='desc')
@@ -152,10 +154,10 @@ def build(name, rows):
 
     panel(20, 20, 1460, 80, '#CCCCCC', '#666666')
     text(750, 54, 'ASPIRE • Amplicon analysis with Nextflow', 29)
-    text(750, 83, 'Mamba environments • Resource controls • Resumable execution • Audited outputs', 21)
+    text(750, 83, 'Mamba environments • Resource controls • Resumable execution • Audited outputs' if rows is FULL else 'Reads → filtered ASVs → prepared tables → analyses → reports', 21)
     panel(20, 120, 770, 130, *COLORS['input'])
     text(42, 152, 'Inputs', 25, 'start')
-    text(42, 181, 'Paired amplicon reads, sample manifest, metadata and references\nConfigured biological / TECH / BIO sample classes\nOptional: VOC measurements and genome references', 21, 'start')
+    text(42, 181, 'Paired amplicon reads, sample manifest, metadata and references\nConfigured biological / TECH / BIO sample classes\nOptional: VOC measurements and genome references' if rows is FULL else 'FASTQs • Manifest • Metadata • References\nOptional: controls • VOCs • Genomes', 21, 'start')
     panel(820, 120, 660, 100, '#CCCCCC', '#666666')
     for x, kind in zip([880, 1010, 1140, 1270, 1400], ['module', 'compute', 'data', 'input', 'output']):
         text(x, 150, kind.title(), 21)
@@ -163,6 +165,8 @@ def build(name, rows):
 
     for i, (title, source, steps, output) in enumerate(rows):
         y = 345 + i * gap + (110 if rows is FULL and i > 7 else 0)
+        if rows is BRIEF:
+            y += {3: 120, 4: 320, 5: 400}.get(i, 0)
         text(140, y-8, title, 27)
         node(290, y, 'module')
         text(290, y+7, str(i+1), 20)
@@ -173,11 +177,37 @@ def build(name, rows):
         wire(304.5, y, 416.5, y)
         xs = [650, 920, 1160] if len(steps) == 3 else [730, 1070]
         # Diversity and selected-cohort analysis are parallel consumers.
-        if title == 'Diversity\n& cohort selection':
+        if rows is BRIEF and i == 3:
+            # Independent analyses consume the appropriate prepared cohort.
+            for offset, (label, tool), cohort in zip(
+                    [-120, 0, 120], steps, ['Full biological cohort', 'Selected cohort', 'Selected cohort']):
+                yy = y + offset
+                node(920, yy, 'compute')
+                text(920, yy-(58 if '\n' in label else 35), label, 21)
+                if tool:
+                    text(920, yy+37, tool, 19)
+                text(665, yy-12, cohort, 19)
+                element(svg, 'path', d=f'M443.5 {y} H535 V{yy} H905', **{'class': 'wire'})
+                element(svg, 'path', d=f'M935 {yy} H1260 V{y} H1356.5', **{'class': 'wire'})
+        elif rows is BRIEF and i == 4:
+            # Sample-level exploration and patient-level inference are separate
+            # analyses of matched inputs, not successive statistical filters.
+            for x, yy, (label, tool) in zip([650, 920, 920, 1160], [y, y-80, y+80, y], steps):
+                node(x, yy, 'compute')
+                text(x, yy-62, label, 21)
+                if tool:
+                    text(x, yy+37, tool, 19)
+            wire(443.5, y, 635, y)
+            for yy in [y-80, y+80]:
+                element(svg, 'path', d=f'M665 {y} H780 V{yy} H905', **{'class': 'wire'})
+                element(svg, 'path', d=f'M935 {yy} H1040 V{y} H1145', **{'class': 'wire'})
+            wire(1175, y, 1356.5, y)
+        elif title == 'Diversity\n& cohort selection':
             for yy, (label, tool) in zip([y-25, y+110], steps):
                 node(900, yy, 'compute')
                 text(900, yy-62, label, 21)
-                text(900, yy+37, tool, 19)
+                if tool:
+                    text(900, yy+37, tool, 19)
                 element(svg, 'path', d=f'M443.5 {y} H550 V{yy} H885', **{'class': 'wire'})
                 element(svg, 'path', d=f'M915 {yy} H1260 V{y} H1356.5', **{'class': 'wire'})
         else:
@@ -185,17 +215,32 @@ def build(name, rows):
             for x, (label, tool) in zip(xs, steps):
                 node(x, y, 'compute')
                 text(x, y-66, label, 21)
-                text(x, y+37, tool, 19)
+                if tool:
+                    text(x, y+37, tool, 19)
                 wire(last, y, x-15, y)
                 last = x+15
             wire(last, y, 1356.5, y)
         if i < len(rows)-1:
-            wire(290, y+14.5, 290, y+gap+(110 if rows is FULL and i == 7 else 0)-14.5)
-    text(750, height-20, 'Numbered modules group related operations; arrows summarize flow and enabled branches follow their dependencies.', 19)
+            extra = (110 if i == 7 else 0) if rows is FULL else {2: 120, 3: 200, 4: 80}.get(i, 0)
+            wire(290, y+14.5, 290, y+gap+extra-14.5)
+    text(750, height-20, 'Numbered modules group related operations; arrows summarize flow and enabled branches follow their dependencies.' if rows is FULL else 'Optional steps follow configuration. CLR: centered log-ratio • ISA: indicator species analysis.', 19)
     target = ROOT / 'docs/assets' / f'{name}.svg'
     ET.ElementTree(svg).write(target, encoding='unicode')
     cairosvg.svg2pdf(url=str(target), write_to=str(target.with_suffix('.pdf')))
-    print(f'Built {target.relative_to(ROOT)} and PDF')
+    # Keep the documentation preview at the shared scale without rebuilding
+    # the independent Mermaid diagrams.
+    canvas_width = json.loads((ROOT / 'docs/diagrams/figures.json').read_text())['canvas_width']
+    preview = ET.Element(f'{{{NS}}}svg', {
+        'viewBox': f'0 0 {canvas_width} {height + 40}', 'width': str(canvas_width),
+        'height': str(height + 40), 'role': 'img',
+    })
+    element(preview, 'title', name.replace('-', ' ').title())
+    element(preview, 'rect', width=canvas_width, height=height + 40, fill='#ffffff')
+    svg.set('x', f'{(canvas_width - width) / 2:g}')
+    svg.set('y', '20')
+    preview.append(svg)
+    (ROOT / 'docs/assets/diagrams' / target.name).write_text(ET.tostring(preview, encoding='unicode') + '\n')
+    print(f'Built {target.relative_to(ROOT)}, PDF and preview')
 
 
 if __name__ == '__main__':
