@@ -6,7 +6,16 @@
 
 [Download SVG](assets/workflow.svg) · [Download PDF](assets/workflow.pdf) · [Brief overview](index.md)
 
-Figures follow the shared [MP nodal style](WORKFLOW_STYLE.md): numbered module squares, compute diamonds and data circles. Process names sit above diamonds; specialist software sits below them. Generic data-handling, plotting and numerical libraries are omitted.
+The detailed figure expands the approved brief artwork: a shared processing
+chain splits into ASV and optional ASV–VOC branches, then converges on reporting.
+Compute diamonds, data circles and blue / gray / green colors follow the
+[workflow style](WORKFLOW_STYLE.md), with the approved Trebuchet MS typography.
+Software, filtering, statistical tests and outputs are placed beside their
+corresponding stages. Genome linkage consumes filtered sequences independently
+of network inference; linkage tables also support network overlays and module
+anchors. Summary reporting includes read statistics, master summaries, Sankey,
+HTML reports, module audits, logs and checksum inventories. The analysis spines summarize related operations rather than prescribe
+a serial execution schedule.
 
 The core path is optional primer removal → read QC and ASV construction → full taxonomy → optional
 `CONTROL_DECONTAM` → reference screening → `FILTER_ASVS` → `PLOT_METADATA`.
@@ -55,28 +64,34 @@ network. Exact file paths and checksums are recorded in the output inventories.
 
 [Brief SVG](assets/workflow-brief.svg) · [Brief PDF](assets/workflow-brief.pdf)
 
-The brief panel groups the detailed workflow into six stages:
 
-| Brief stage | Detailed modules |
-|---|---|
-| FASTQ → ASVs | 1–2: primer removal, read QC and ASV construction |
-| ASV filtering | 3–6: taxonomy, TECH/BIO decontamination, reference screening and feature filters |
-| Metadata & transformations | 7–8: metadata linkage, preparation, correction and cohort selection |
-| Community analysis | 8–10: diversity, clustermaps, indicators, contrasts, power, networks and genome links |
-| ASV–VOC integration | 9: ASV–VOC matching, Spearman exploration, patient-level inference, ISA overlays and clustermaps |
-| Summaries & reports | 11: integrated tables, figures, Sankey, HTML and provenance |
+(brief-workflow-caption)=
+**Figure caption.** ASPIRE connects read processing, filtered ASVs and metadata
+to community analyses and ASV-VOC associations. Diversity retains the full
+biological cohort; the other sample-based analyses use the selected cohort.
+The analysis diamonds group related tasks rather than impose serial execution.
 
-Counts and CLR tables serve different analyses; they are not interchangeable.
-Diversity retains the full biological cohort; other community analyses and VOC
-integration use the selected cohort. The community and VOC stages consume
-prepared data, with indicator results available to annotate VOC associations.
+Within VOC analysis, data integration matches ASVs, VOC measurements and metadata.
+Sample-type correlation uses the configured sample-type selection and reports
+Spearman correlations with p-values and BH-adjusted q-values. Patient concordance
+compares association results from relative-abundance (RA) and centered log-ratio
+(CLR) normalization after aggregation within patients; patient-level permutation
+tests and Benjamini-Hochberg false-discovery-rate correction (BH-FDR) support the
+comparison. Case comparisons test patient-level VOC values between cancer and
+control groups using Mann-Whitney permutation tests with BH-FDR; displayed
+z-score summaries show mean ± SD. ISA membership supplies indicator overlays
+and focused ASV-VOC clustermaps, with VOC rows, ASV columns and clustering on
+both axes. Separate VOC-profile clustermaps and case-summary plots accompany
+these association outputs. See [VOC statistics](VOC_STATISTICS.md) for test
+families, repeated-sample handling and interpretation.
 
-The VOC stage separates exploratory sample-level Spearman correlations from
-patient-level permutation tests with false-discovery-rate correction. Indicator
-species (ISA) annotate the association displays. VOC–ASV clustermaps cluster
-both axes, with VOCs on rows and ASVs on columns. Community clustermaps are
-separate outputs summarizing microbial profiles. See [VOC statistics](VOC_STATISTICS.md)
-for normalization, repeated-sample handling and interpretation.
+The brief workflow reproduces the approved Illustrator artwork exactly. Its
+editable source export is `docs/diagrams/workflow-brief.source.svg`; rebuild it
+with `python scripts/build_workflow_figures.py`. The exported lettering is
+outlined Myriad Pro, so the brief figure does not depend on browser fonts.
+The detailed workflow and supporting diagrams use Trebuchet MS, the approved
+locally available substitute for Myriad Pro. PDF rendering requires that font
+to be installed locally.
 
 Biological depth QC precedes contamination removal; final microbial abundance
 filtering precedes metadata construction. The mock's 0.1% relative-abundance

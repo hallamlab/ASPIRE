@@ -12,34 +12,25 @@ def check(path):
     root = ET.parse(path).getroot()
     source = path.read_text()
     errors = []
-    if 'Times New Roman' not in source or 'serif' not in source:
-        errors.append('use the shared Times serif typography')
-    if any(font in source for font in ('Arial', 'Helvetica', 'sans-serif')):
-        errors.append('workflow labels must retain serif typography')
-    if not any(n.get('fill', '').upper() == '#CCCCCC' for n in root.iter(NS+'rect')):
-        errors.append('keep the restrained gray header / legend')
+    if path.name == 'workflow-brief.svg':
+        approved = ROOT / 'docs/diagrams/workflow-brief.source.svg'
+        if path.read_bytes() != approved.read_bytes():
+            errors.append('brief workflow must exactly reproduce the approved Illustrator SVG')
+        return errors
+    if 'Trebuchet MS' not in source:
+        errors.append('ASPIRE workflow text must use the approved Trebuchet MS substitute typography')
+    if any(font in source for font in ('Times New Roman', 'Arial', 'Helvetica')):
+        errors.append('remove legacy workflow font declarations')
     circles = list(root.iter(NS + 'circle'))
-    for color, role in [('#DAE8FC', 'input'), ('#D5E8D4', 'output')]:
+    for color, role in [('#DAE8F6', 'input'), ('#D5E7D4', 'output')]:
         count = sum(n.get('fill', '').upper() == color for n in circles)
         if count < 2:
             errors.append(f'keep circular {role} nodes beyond the legend')
-    squares = []
-    for n in root.iter(NS + 'rect'):
-        try:
-            w, h = float(n.get('width', 0)), float(n.get('height', 0))
-            if 18 <= w <= 40 and abs(w-h) < 0.1 and float(n.get('rx', 0)) == 0:
-                squares.append(n)
-        except ValueError:
-            pass
-    if len(squares) < 3:
-        errors.append('keep the numbered square module spine')
-    numbered = [n for n in root.iter() if n.tag in (NS+'text', NS+'tspan')
-                and re.fullmatch(r'\d+', (n.text or '').strip())]
-    if len(numbered) < 2:
-        errors.append('keep module numbers')
+    if root.get('data-workflow-style') != 'aspire-approved-branched':
+        errors.append('keep the detailed shared-chain / ASV / ASV–VOC branch structure')
     diamonds = [n for n in root.iter(NS+'path')
                 if len(re.findall('[Ll]', n.get('d', ''))) >= 3
-                and n.get('fill', '').upper() == '#F5F5F5']
+                and n.get('fill', '').upper() == '#FFFFFF']
     if len(diamonds) < 3:
         errors.append('keep diamond compute nodes beyond the legend')
     if not list(root.iter(NS+'marker')):

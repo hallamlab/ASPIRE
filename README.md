@@ -56,7 +56,7 @@ Enable [Cutadapt primer trimming](docs/primer-trimming.md) to detect and remove 
 
 ## Workflow
 
-[![ASPIRE workflow: FASTQs to ASVs, filtering, metadata and transformations, community analyses, ASV–VOC integration, and reports.](docs/assets/workflow-brief.svg?v=mp-six-stages-voc-20261013)](docs/assets/workflow-brief.svg)
+[![ASPIRE workflow: FASTQs to ASVs, filtering, metadata and transformations, community analyses, ASV–VOC integration, and reports.](docs/assets/workflow-brief.svg?v=approved-artwork-20261014)](docs/assets/workflow-brief.svg)
 
 [Vector SVG](docs/assets/workflow-brief.svg) · [PDF](docs/assets/workflow-brief.pdf) · [Workflow and data-flow diagrams](https://hallamlab-aspire.readthedocs.io/en/latest/workflow.html)
 

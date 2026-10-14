@@ -4,6 +4,27 @@ orphan: true
 
 # Shared workflow figure style: MP nodal v1
 
+## ASPIRE artwork and typography override
+
+The user's explicit ASPIRE instruction supersedes the shared typography and
+brief-layout defaults below: ASPIRE workflow text uses **Trebuchet MS**, the user-approved locally available
+humanist sans-serif substitute for Myriad Pro. The brief artwork retains its
+original outlined Myriad Pro lettering.
+The brief figure is the approved Illustrator SVG at
+`docs/diagrams/workflow-brief.source.svg`. The build copies it byte-for-byte,
+including its outlined lettering, geometry, colors, connectors and canvas.
+Do not recreate it from the legacy BRIEF row definitions or add preview margins.
+The detailed workflow expands the brief shared processing chain and its ASV /
+ASV–VOC branches. Genome linkage takes filtered sequences independently of
+network inference; the analysis spines show conceptual grouping, not job order.
+Font files are not distributed by this repository; Trebuchet MS must be
+installed locally when rendering the detailed PDF and supplementary diagrams.
+This ASPIRE layout override also replaces the numbered-square / horizontal-row
+layout below. Detailed figures also match the brief’s unboxed vertical legend,
+centered label blocks, white process diamonds and input / output colors. Do not
+add a title banner or explanatory footer; place those details in captions.
+
+
 The MetaPathways publication workflow is the visual reference for workflow
 figures across MetaPathways, ASPIRE, SCARAB, BASINS, DECOI and related repositories.
 This is the user's standing preference. Content updates must preserve this

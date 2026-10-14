@@ -8,6 +8,7 @@ pinned Mermaid bundle; documentation builds use the committed SVGs offline.
 from pathlib import Path
 import json
 import argparse
+import shutil
 import xml.etree.ElementTree as ET
 from playwright.sync_api import sync_playwright
 
@@ -42,10 +43,11 @@ def main():
             }''', {'code': code, 'id': ROOT.name.lower() + '-' + item['name']})
             rendered.append((item['name'], ET.fromstring(svg), config['mermaid_scale']))
         browser.close()
-    for name in ['workflow', 'workflow-brief']:
-        source = ROOT / 'docs/assets' / (name + '.svg')
-        if source.exists():
-            rendered.append((name, ET.parse(source).getroot(), 1))
+    # The approved brief artwork has its own exact canvas and outlined type.
+    shutil.copyfile(ROOT / 'docs/diagrams/workflow-brief.source.svg',
+                    ROOT / 'docs/assets/diagrams/workflow-brief.svg')
+    shutil.copyfile(ROOT / 'docs/assets/workflow.svg',
+                    ROOT / 'docs/assets/diagrams/workflow.svg')
     width = config['canvas_width']
     destination = ROOT / 'docs/assets/diagrams'
     destination.mkdir(exist_ok=True)
