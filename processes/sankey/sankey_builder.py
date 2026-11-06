@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-data_loss_sankey.py
+sankey_builder.py
 Build Sankey diagrams for read/ASV flow with flexible I/O, grouping, and colors.
 
 Two modes:
@@ -10,7 +10,7 @@ B) MANUAL via --steps/--lmp-in/--lmp-out
 Examples
 --------
 # A) Compute from files (defaults mirror your script paths/columns)
-python data_loss_sankey.py \
+python sankey_builder.py \
   --data-dir /path/to/project \
   --sub-dir spark_combined_output \
   --metadata /path/to/project/ref_db/spark_metadata.tsv \
@@ -27,7 +27,7 @@ python data_loss_sankey.py \
   --output-prefix metadata/data_loss_sankey --make-labeled --make-unlabeled
 
 # B) Manual counts
-python data_loss_sankey.py \
+python sankey_builder.py \
   --steps "Quality Control:123456,Error Correction:110000,Decontamination:98000,Off-Target Filtering:82000,Finished Data:76000" \
   --lmp-in "Oral Rinse:40000,Lung Brush:35000,BAL:28000,Skin Brush:12000,Scope Flush:8400" \
   --lmp-out "Oral Rinse:18000,Lung Brush:22000,BAL:24000,Skin Brush:9000,Scope Flush:5100" \
