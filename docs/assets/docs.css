@@ -10,14 +10,44 @@
 .wy-nav-content:has(.aspire-primary-workflow) { max-width: none; padding-inline: clamp(20px, 3vw, 56px); }
 .aspire-primary-workflow img { display: block; width: 100%; max-width: 100%; height: auto; margin: 1.5rem auto; }
 
+.highlight-bash, .highlight-shell { position: relative; }
+.rst-content :is(.highlight-bash, .highlight-shell) pre { padding-right: 36px; }
+
 .copy-commands {
-    display: block;
-    margin: 0 0 0.25rem auto;
-    padding: 0.25rem 0.65rem;
-    color: #252525;
-    background: #fff;
-    border: 1px solid #777;
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    color: #555;
+    background: #f8f8f8;
+    border: 0;
     border-radius: 3px;
     cursor: pointer;
+    z-index: 1;
 }
+.copy-commands::before, .copy-commands::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    box-sizing: border-box;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+    background: inherit;
+}
+.copy-commands::before { top: 6px; left: 6px; }
+.copy-commands::after { top: 10px; left: 10px; }
+.copy-commands:hover { background: #e8e8e8; }
 .copy-commands:focus-visible { outline: 2px solid #24577a; }
+.copy-commands.copied::before { display: none; }
+.copy-commands.copied::after {
+    top: 5px;
+    left: 10px;
+    width: 6px;
+    height: 13px;
+    border-width: 0 2px 2px 0;
+    border-radius: 0;
+    transform: rotate(45deg);
+}

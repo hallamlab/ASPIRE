@@ -6,22 +6,30 @@ document.addEventListener("DOMContentLoaded", () => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "copy-commands";
-        button.textContent = "Copy";
+        button.title = "Copy commands";
         button.setAttribute("aria-label", "Copy commands");
+        let resetTimer;
         button.addEventListener("click", async () => {
+            clearTimeout(resetTimer);
             try {
                 await navigator.clipboard.writeText(code.textContent.trimEnd());
-                button.textContent = "Copied";
+                button.classList.add("copied");
+                button.title = "Copied";
             } catch {
                 const selection = window.getSelection();
                 const range = document.createRange();
                 range.selectNodeContents(code);
                 selection.removeAllRanges();
                 selection.addRange(range);
-                button.textContent = "Selected — copy manually";
+                button.title = "Commands selected. Copy manually.";
             }
+            button.setAttribute("aria-label", button.title);
+            resetTimer = setTimeout(() => {
+                button.classList.remove("copied");
+                button.title = "Copy commands";
+                button.setAttribute("aria-label", button.title);
+            }, 1800);
         });
-        button.addEventListener("blur", () => { button.textContent = "Copy"; });
         block.prepend(button);
     }
 });

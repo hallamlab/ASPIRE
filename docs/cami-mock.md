@@ -9,7 +9,7 @@ Can a respiratory microbiome workflow recover signals planted in a community wit
 
 ## Set up ASPIRE main
 
-Use a 64-bit Linux machine with Git, Python 3 and Mamba on PATH. Budget at least 8 cores, 32 GB RAM and 50 GB of free storage. The first launch requires internet access for environments and taxonomy references. See [installation](installation.md) for prerequisites. Use **Copy** above a command block, paste into your terminal, and press Enter. For a first run, create a workspace and download ASPIRE.
+Use a 64-bit Linux machine with Git, Python 3 and Mamba on PATH. Budget at least 8 cores, 32 GB RAM and 50 GB of free storage. The first launch requires internet access for environments and taxonomy references. See [installation](installation.md) for prerequisites. Click the two-square icon in the top-right corner of a command block, paste into your terminal, and press Enter. For a first run, create a workspace and download ASPIRE.
 
 ```bash
 mkdir -p ~/aspire-vignette
