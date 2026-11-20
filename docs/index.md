@@ -18,9 +18,15 @@ Six stages follow the data from FASTQs to filtered ASVs, prepared tables, commun
 
 installation
 test
-cami-mock
 getting-started
 inputs
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Vignettes
+
+cami-mock
 ```
 
 ```{toctree}

@@ -30,11 +30,12 @@ benchmarked workflow and executes its validator:
 ./examples/run_quickstart.sh --output "$PWD/aspire-quickstart" --threads 4
 ```
 
-The separate [**aspire-cami-mock** larger demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html)
-contains 50 synthetic patients and 179 libraries. Both use the same full validator.
-
 Success ends with `All mock-run checks passed.` Open
 `aspire-quickstart/results/summary/report/ASPIRE_run_report.html` to review accounting, module outputs and execution logs. See [remote report viewing](https://hallamlab-aspire.readthedocs.io/en/latest/outputs.html#view-reports-on-a-remote-server) if running over SSH.
+
+### Explore a synthetic respiratory study
+
+Follow the [CAMI2 respiratory microbiome vignette](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html) from paired reads through patient-aware diversity, indicator taxa, chemical associations and microbial networks in 50 synthetic patients.
 
 ### Run your own study
 

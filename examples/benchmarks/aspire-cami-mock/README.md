@@ -1,6 +1,6 @@
 # aspire-cami-mock: demonstration run record
 
-This record documents the completed 50-patient, 179-library demonstration.
+The historical files below document the fixed-clipping run of the 50-patient, 179-library demonstration.
 The dedicated demonstration section is `docs/cami-mock.md`.
 
 - `validation.txt`: all 29 checks passed on 7 October 2026. Only the local output
@@ -16,4 +16,4 @@ The provenance hashes identify those exact inputs and outputs independently of
 how a local directory is named. For the compact installation fixture, use
 `examples/run_quickstart.sh`.
 
-The committed validation records describe the pre-Cutadapt demonstration. Current generated configurations enable primer trimming and require the additional primer audit checks; retain the new run’s validator output as current evidence.
+The [Cutadapt validation log](cutadapt-validation.txt) records the later run on the same dataset. It passed 31 checks and retained 185 ASVs. The vignette uses this run for its figures and worked results.

@@ -6,7 +6,7 @@ and occupies approximately **2.5 MB** when generated. Sequence seeds and the
 reproducible generator are included in the repository.
 
 The larger **aspire-cami-mock** is the separate
-[larger demonstration](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html),
+[respiratory microbiome vignette](https://hallamlab-aspire.readthedocs.io/en/latest/cami-mock.html),
 with 50 synthetic patients and 179 libraries.
 
 ## Run the quickstart
@@ -170,6 +170,6 @@ fastp clipping settings are zero. The validator additionally checks primer-famil
 membership, read-pair accounting and the handoff to fastp.
 
 The quickstart validation record covers the current Cutadapt workflow: all 31
-checks passed. The larger demonstration retains its historical benchmark record.
+checks passed. The larger vignette documents a separate validated Cutadapt run.
 Re-running the configuration command updates an existing YAML, and Nextflow
 reruns affected tasks.
