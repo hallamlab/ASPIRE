@@ -128,13 +128,18 @@ head -n 3 ASV_target.feature_qc.tsv
 
 Read a row in `ASV_target.feature_qc.tsv` before opening a community plot. ASV10 occurred in 56 of 125 eligible libraries (44.8%), reached 18.32% relative abundance in its most abundant library, and passed both filters. Its maximum abundance describes one library; its prevalence describes the cohort.
 
-[![Read-flow Sankey from the mock HTML export](assets/vignette/mock-read-flow.png)](assets/vignette/mock-read-flow.png)
+[![Read-flow Sankey from the mock HTML export](assets/vignette/mock-read-flow.svg)](assets/vignette/mock-read-flow.svg)
 
 Follow one ribbon from left to right through the processing stages. Width encodes the number of reads on that path. Open `data_loss_sankey.label.html` in the study-figures directory and hover over a flow to read its value. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
 
-| Exclusive intersections | Presence by site |
-| --- | --- |
-| [![Final ASV UpSet](assets/vignette/final_micro_upset.svg)](assets/vignette/final_micro_upset.svg) | [![Airway and oral ASV overlap](assets/vignette/site-overlap.svg)](assets/vignette/site-overlap.svg) |
+**Exclusive intersections**
+
+[![Final ASV UpSet](assets/vignette/final_micro_upset.svg)](assets/vignette/final_micro_upset.svg)
+
+**Presence by site**
+
+[![Airway and oral ASV overlap](assets/vignette/site-overlap.svg)](assets/vignette/site-overlap.svg)
+
 
 In the UpSet plot, read the filled site dots under a bar to identify its intersection, then read the bar height for the count. The overlap diagram shows the same counts as regions: 49 occurred only in airway libraries, 86 occurred at both sites, and 50 occurred only in oral libraries. Their sum gives the 185 final ASVs. Circle areas are schematic. Follow an individual ASV in `modules/upset/tables/final_micro_final_venn_presence_table.tsv`.
 
@@ -157,7 +162,7 @@ Start with Shannon diversity within libraries. Read the case and control distrib
 
 ![Shannon boxplots across case and site groups alongside a Bray–Curtis UMAP of individual libraries](assets/vignette/community.svg)
 
-Green represents airways and purple represents oral libraries in both panels. On the left, hatched boxes identify cases. The center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. [Original Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.png)
+Green represents airways and purple represents oral libraries in both panels. On the left, hatched boxes identify cases. The center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. [Original Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.svg)
 
 ```bash
 cd ~/aspire-vignette/results/modules/diversity/tables/patient_aware
@@ -194,9 +199,14 @@ A focused rerun on the archived count table used 25 cases and 25 controls per si
 
 Even at the actual cohort size, the overall disease contrasts fall short of 80% under these assumptions. Compare that result with the paired airway-side test above, then follow the site indicators into the final patient-level chemistry analysis. Each asks a different biological question.
 
-| Lung-side contrasts | Power by sample size |
-| --- | --- |
-| [![Airway distance contrasts](assets/vignette/Distance_contrasts_ABC.svg)](assets/vignette/Distance_contrasts_ABC.svg) | [![Mock case-control power curves](assets/vignette/power_curves_cancer_vs_control_simple.svg)](assets/vignette/power_curves_cancer_vs_control_simple.svg) |
+**Lung-side contrasts**
+
+[![Airway distance contrasts](assets/vignette/Distance_contrasts_ABC.svg)](assets/vignette/Distance_contrasts_ABC.svg)
+
+**Power by sample size**
+
+[![Mock case-control power curves](assets/vignette/power_curves_cancer_vs_control_simple.svg)](assets/vignette/power_curves_cancer_vs_control_simple.svg)
+
 
 Use the contrast table above to recover the patient denominator for each distance comparison. On the power plot, follow one scenario as sample size changes; the saved mock covers a shorter grid than new runs.
 
@@ -234,17 +244,27 @@ For an indicator example, find ASV14 in `Case_indicator_species_summary.tsv` in 
 
 ### Read the indicator species analysis (ISA) plots
 
-| A · Sample-type indicators | B · Case vs control, single-group fit |
-| --- | --- |
-| [![A · Sample-type indicators](assets/vignette/type_group_ISA_plot.svg)](assets/vignette/type_group_ISA_plot.svg) | [![B · Case vs control, single-group fit](assets/vignette/case-isa-single-group.svg)](assets/vignette/case-isa-single-group.svg) |
+**A · Sample-type indicators**
+
+[![A · Sample-type indicators](assets/vignette/type_group_ISA_plot.svg)](assets/vignette/type_group_ISA_plot.svg)
+
+**B · Case vs control, single-group fit**
+
+[![B · Case vs control, single-group fit](assets/vignette/case-isa-single-group.svg)](assets/vignette/case-isa-single-group.svg)
+
 
 Read rightward for a stronger indicator statistic and upward for a smaller adjusted p-value. A height of 2 corresponds to q = 0.01. In A, the combination-allowed sample-type fit called 119 indicators. In B, the **single-group** case-versus-control fit accounts for all 185 retained ASVs. It plots all 167 with a finite statistic and q-value: 159 nonsignificant circles and eight significant case or control indicators (q < 0.05). The other 18 lack coordinates and are counted above the axes. The dotted line marks q = 0.05. Points at identical coordinates can overlap. Use `case-isa-single-group.tsv` in the study-figures directory to inspect every row.
 
 **Why did the original case plot look nearly empty?** The [original combination-allowed case view](assets/vignette/case_ISA_plot.svg) answers a different question. ASPIRE omits the full Cancer + Control union from its summary: 161 of 185 ASVs fell out at this step. Of the remaining 24, 18 lacked a statistic and q-value, leaving six plottable points, three significant. The single-group fit compares Cancer and Control directly and has its own adjusted p-values. Panels C and D below retain the combination-allowed fit so you can inspect that result too.
 
-| C · Case statistic by sample type | D · Case statistic by phylum |
-| --- | --- |
-| [![C · Case statistic by sample type](assets/vignette/Combined_ISA_plot.svg)](assets/vignette/Combined_ISA_plot.svg) | [![D · Case statistic by phylum](assets/vignette/Combined_ISA_plot_Phylum.svg)](assets/vignette/Combined_ISA_plot_Phylum.svg) |
+**C · Case statistic by sample type**
+
+[![C · Case statistic by sample type](assets/vignette/Combined_ISA_plot.svg)](assets/vignette/Combined_ISA_plot.svg)
+
+**D · Case statistic by phylum**
+
+[![D · Case statistic by phylum](assets/vignette/Combined_ISA_plot_Phylum.svg)](assets/vignette/Combined_ISA_plot_Phylum.svg)
+
 
 C and D use the **case-status** statistic and adjusted p-value for both axes. Marker shape identifies the case-status assignment. Green and purple in C identify airway and oral assignments. The hues in D identify phyla; gray marks unassigned indicator status in the legend. Use the legend for each panel. For a phylum view on the **sample-type** axes, open the [sample-type ISA plot by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg).
 
@@ -252,9 +272,14 @@ Trace ASV10 through `modules/indicator_analysis/tables/Type_Group__Case/Combined
 
 ### Compare the same indicators by site and phylum
 
-| Sample-type assignment | Phylum assignment |
-| --- | --- |
-| [![Sample-type indicator colors](assets/vignette/type_group_ISA_plot.svg)](assets/vignette/type_group_ISA_plot.svg) | [![The same sample-type statistic colored by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg)](assets/vignette/type_group_ISA_plot_Phylum.svg) |
+**Sample-type assignment**
+
+[![Sample-type indicator colors](assets/vignette/type_group_ISA_plot.svg)](assets/vignette/type_group_ISA_plot.svg)
+
+**Phylum assignment**
+
+[![The same sample-type statistic colored by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg)](assets/vignette/type_group_ISA_plot_Phylum.svg)
+
 
 This pair keeps the sample-type axes fixed. ASV10 is the oral-associated Firmicutes example in both views. Use `type_group_ISA_with_taxonomy.tsv` for its exact position and taxonomic assignment.
 
@@ -277,27 +302,47 @@ Each node is an ASV. Larger nodes have more neighbors, and thicker edges have la
 
 ### Interpret the network color panels
 
-| A · Sample-type ISA | B · Case-status ISA |
-| --- | --- |
-| [![A · Sample-type ISA](assets/vignette/network_Type_Group_ISA.svg)](assets/vignette/network_Type_Group_ISA.svg) | [![B · Case-status ISA](assets/vignette/network_Case_ISA.svg)](assets/vignette/network_Case_ISA.svg) |
+**A · Sample-type ISA**
+
+[![A · Sample-type ISA](assets/vignette/network_Type_Group_ISA.svg)](assets/vignette/network_Type_Group_ISA.svg)
+
+**B · Case-status ISA**
+
+[![B · Case-status ISA](assets/vignette/network_Case_ISA.svg)](assets/vignette/network_Case_ISA.svg)
+
 
 **Which groups do connected ASVs indicate?** A uses green for airway indicators and purple for oral indicators. B uses the grayscale case-status legend. Node size encodes indicator strength. Follow ASV10 from the oral indicator table into A; use the labeled SVG in the run’s plots directory to locate it. For gray nodes in B, consult the case summary to distinguish an assigned control indicator from a background node.
 
-| C · Phylum and indicator strength | D · Phylum and mean abundance |
-| --- | --- |
-| [![C · Phylum and indicator strength](assets/vignette/network_phylum_ISA.svg)](assets/vignette/network_phylum_ISA.svg) | [![D · Phylum and mean abundance](assets/vignette/network_phylum_ABUND_MEAN.svg)](assets/vignette/network_phylum_ABUND_MEAN.svg) |
+**C · Phylum and indicator strength**
+
+[![C · Phylum and indicator strength](assets/vignette/network_phylum_ISA.svg)](assets/vignette/network_phylum_ISA.svg)
+
+**D · Phylum and mean abundance**
+
+[![D · Phylum and mean abundance](assets/vignette/network_phylum_ABUND_MEAN.svg)](assets/vignette/network_phylum_ABUND_MEAN.svg)
+
 
 **Is a strong indicator also abundant?** C and D use the same phylum colors. For example, green identifies Firmicutes and blue identifies Actinobacteriota. Size changes from indicator strength to log-scaled mean abundance. Compare relative prominence within each panel using its size legend. The default `network_phylum_ABUND.svg` also shows the mean-abundance view.
 
-| E · Phylum and median abundance | F · Betweenness class and degree |
-| --- | --- |
-| [![E · Phylum and median abundance](assets/vignette/network_phylum_ABUND_MEDIAN.svg)](assets/vignette/network_phylum_ABUND_MEDIAN.svg) | [![F · Betweenness class and degree](assets/vignette/network_betweenness_POS_ALL.svg)](assets/vignette/network_betweenness_POS_ALL.svg) |
+**E · Phylum and median abundance**
+
+[![E · Phylum and median abundance](assets/vignette/network_phylum_ABUND_MEDIAN.svg)](assets/vignette/network_phylum_ABUND_MEDIAN.svg)
+
+**F · Betweenness class and degree**
+
+[![F · Betweenness class and degree](assets/vignette/network_betweenness_POS_ALL.svg)](assets/vignette/network_betweenness_POS_ALL.svg)
+
 
 **How typical or structurally central is the ASV?** Compare E with D: a node prominent by mean but small by median warrants inspecting the distribution of its counts across libraries. In F, shading marks normalized betweenness at or above versus below 0.05; size gives degree. In `spieceasi_node_features.csv`, ASV10 has degree 13 and normalized betweenness 0.0435, placing it below that threshold.
 
-| G · ISA-associated modules, POS_ALL | H · ISA-associated modules, POS_SUB |
-| --- | --- |
-| [![G · ISA-associated modules, POS_ALL](assets/vignette/network_modules_POS_ALL.svg)](assets/vignette/network_modules_POS_ALL.svg) | [![H · ISA-associated modules, POS_SUB](assets/vignette/network_modules_POS_SUB.svg)](assets/vignette/network_modules_POS_SUB.svg) |
+**G · ISA-associated modules, POS_ALL**
+
+[![G · ISA-associated modules, POS_ALL](assets/vignette/network_modules_POS_ALL.svg)](assets/vignette/network_modules_POS_ALL.svg)
+
+**H · ISA-associated modules, POS_SUB**
+
+[![H · ISA-associated modules, POS_SUB](assets/vignette/network_modules_POS_SUB.svg)](assets/vignette/network_modules_POS_SUB.svg)
+
 
 **Which modules carry an indicator association?** Gray shades identify the highlighted modules in G and H, and degree determines node size. Use the module IDs in the assignment tables for exact membership. In this mock, both graph summaries report 167 nodes, 1,192 edges and 21 modules. The legends list ten highlighted modules. Use `spieceasi_modules_all.tsv` and `spieceasi_modules_sub.tsv` for assignments across the full set. The report also supplies grayscale degree and abundance views and labeled variants for locating individual ASVs.
 

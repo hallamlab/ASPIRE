@@ -21,218 +21,218 @@
  </defs>
  <g id="figure_1">
   <g id="patch_1">
-   <path d="M 0 432.454443 
-L 615.394375 432.454443 
-L 615.394375 -0 
-L 0 -0 
+   <path d="M 0 432.454443
+L 615.394375 432.454443
+L 615.394375 -0
+L 0 -0
 z
 " style="fill: #ffffff"/>
   </g>
   <g id="axes_1">
    <g id="patch_2">
-    <path d="M 50.194375 354.958125 
-L 608.194375 354.958125 
-L 608.194375 22.318125 
-L 50.194375 22.318125 
+    <path d="M 50.194375 354.958125
+L 608.194375 354.958125
+L 608.194375 22.318125
+L 50.194375 22.318125
 z
 " style="fill: #ffffff"/>
    </g>
    <g id="matplotlib.axis_1">
     <g id="xtick_1">
      <g id="text_1">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(63.72771 406.668674) rotate(-12)">A: TumorSide vs Contralateral</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; fill: #262626" transform="translate(63.72771 406.668674) rotate(-12)">A: TumorSide vs Contralateral</text>
      </g>
     </g>
     <g id="xtick_2">
      <g id="text_2">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(257.029963 403.56439) rotate(-12)">B: Contralateral vs Healthy</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; fill: #262626" transform="translate(257.029963 403.56439) rotate(-12)">B: Contralateral vs Healthy</text>
      </g>
     </g>
     <g id="xtick_3">
      <g id="text_3">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(449.995979 400.603045) rotate(-12)">C: TumorSide vs Healthy</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; fill: #262626" transform="translate(449.995979 400.603045) rotate(-12)">C: TumorSide vs Healthy</text>
      </g>
     </g>
     <g id="text_4">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: middle; fill: #262626" x="329.194375" y="422.371631" transform="rotate(-0 329.194375 422.371631)">Planned Contrast</text>
+     <text style="font-size: 12px; font-family: 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #262626" x="329.194375" y="422.371631" transform="rotate(-0 329.194375 422.371631)">Planned Contrast</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
     <g id="ytick_1">
      <g id="text_5">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="352.16661" transform="rotate(-0 40.694375 352.16661)">0.0</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="352.16661" transform="rotate(-0 40.694375 352.16661)">0.0</text>
      </g>
     </g>
     <g id="ytick_2">
      <g id="text_6">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="314.586913" transform="rotate(-0 40.694375 314.586913)">0.1</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="314.586913" transform="rotate(-0 40.694375 314.586913)">0.1</text>
      </g>
     </g>
     <g id="ytick_3">
      <g id="text_7">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="277.007215" transform="rotate(-0 40.694375 277.007215)">0.2</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="277.007215" transform="rotate(-0 40.694375 277.007215)">0.2</text>
      </g>
     </g>
     <g id="ytick_4">
      <g id="text_8">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="239.427518" transform="rotate(-0 40.694375 239.427518)">0.3</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="239.427518" transform="rotate(-0 40.694375 239.427518)">0.3</text>
      </g>
     </g>
     <g id="ytick_5">
      <g id="text_9">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="201.84782" transform="rotate(-0 40.694375 201.84782)">0.4</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="201.84782" transform="rotate(-0 40.694375 201.84782)">0.4</text>
      </g>
     </g>
     <g id="ytick_6">
      <g id="text_10">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="164.268123" transform="rotate(-0 40.694375 164.268123)">0.5</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="164.268123" transform="rotate(-0 40.694375 164.268123)">0.5</text>
      </g>
     </g>
     <g id="ytick_7">
      <g id="text_11">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="126.688425" transform="rotate(-0 40.694375 126.688425)">0.6</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="126.688425" transform="rotate(-0 40.694375 126.688425)">0.6</text>
      </g>
     </g>
     <g id="ytick_8">
      <g id="text_12">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="89.108728" transform="rotate(-0 40.694375 89.108728)">0.7</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="89.108728" transform="rotate(-0 40.694375 89.108728)">0.7</text>
      </g>
     </g>
     <g id="ytick_9">
      <g id="text_13">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="51.52903" transform="rotate(-0 40.694375 51.52903)">0.8</text>
+      <text style="font-size: 11px; font-family: 'DejaVu Sans', sans-serif; text-anchor: end; fill: #262626" x="40.694375" y="51.52903" transform="rotate(-0 40.694375 51.52903)">0.8</text>
      </g>
     </g>
     <g id="text_14">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: middle; fill: #262626" x="16.318125" y="188.638125" transform="rotate(-90 16.318125 188.638125)">Bray-Curtis Distance</text>
+     <text style="font-size: 12px; font-family: 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #262626" x="16.318125" y="188.638125" transform="rotate(-90 16.318125 188.638125)">Bray-Curtis Distance</text>
     </g>
    </g>
    <g id="patch_3">
-    <path d="M 68.794375 317.191358 
-L 217.594375 317.191358 
-L 217.594375 280.179822 
-L 68.794375 280.179822 
-L 68.794375 317.191358 
+    <path d="M 68.794375 317.191358
+L 217.594375 317.191358
+L 217.594375 280.179822
+L 68.794375 280.179822
+L 68.794375 317.191358
 z
 " clip-path="url(#pff2276e4b8)" style="fill: #535353; stroke: #404040; stroke-linejoin: miter"/>
    </g>
    <g id="line2d_1">
-    <path d="M 143.194375 317.191358 
-L 143.194375 339.838125 
+    <path d="M 143.194375 317.191358
+L 143.194375 339.838125
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_2">
-    <path d="M 143.194375 280.179822 
-L 143.194375 245.017373 
+    <path d="M 143.194375 280.179822
+L 143.194375 245.017373
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_3">
-    <path d="M 105.994375 339.838125 
-L 180.394375 339.838125 
+    <path d="M 105.994375 339.838125
+L 180.394375 339.838125
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040; stroke-linecap: round"/>
    </g>
    <g id="line2d_4">
-    <path d="M 105.994375 245.017373 
-L 180.394375 245.017373 
+    <path d="M 105.994375 245.017373
+L 180.394375 245.017373
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040; stroke-linecap: round"/>
    </g>
    <g id="line2d_5"/>
    <g id="patch_4">
-    <path d="M 254.794375 192.378333 
-L 403.594375 192.378333 
-L 403.594375 104.482491 
-L 254.794375 104.482491 
-L 254.794375 192.378333 
+    <path d="M 254.794375 192.378333
+L 403.594375 192.378333
+L 403.594375 104.482491
+L 254.794375 104.482491
+L 254.794375 192.378333
 z
 " clip-path="url(#pff2276e4b8)" style="fill: #8d8d8d; stroke: #404040; stroke-linejoin: miter"/>
    </g>
    <g id="line2d_6">
-    <path d="M 329.194375 192.378333 
-L 329.194375 320.000059 
+    <path d="M 329.194375 192.378333
+L 329.194375 320.000059
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_7">
-    <path d="M 329.194375 104.482491 
-L 329.194375 38.145549 
+    <path d="M 329.194375 104.482491
+L 329.194375 38.145549
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_8">
-    <path d="M 291.994375 320.000059 
-L 366.394375 320.000059 
+    <path d="M 291.994375 320.000059
+L 366.394375 320.000059
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040; stroke-linecap: round"/>
    </g>
    <g id="line2d_9">
-    <path d="M 291.994375 38.145549 
-L 366.394375 38.145549 
+    <path d="M 291.994375 38.145549
+L 366.394375 38.145549
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040; stroke-linecap: round"/>
    </g>
    <g id="line2d_10"/>
    <g id="patch_5">
-    <path d="M 440.794375 204.952674 
-L 589.594375 204.952674 
-L 589.594375 106.741508 
-L 440.794375 106.741508 
-L 440.794375 204.952674 
+    <path d="M 440.794375 204.952674
+L 589.594375 204.952674
+L 589.594375 106.741508
+L 440.794375 106.741508
+L 440.794375 204.952674
 z
 " clip-path="url(#pff2276e4b8)" style="fill: #555555; stroke: #404040; stroke-linejoin: miter"/>
    </g>
    <g id="line2d_11">
-    <path d="M 515.194375 204.952674 
-L 515.194375 318.694832 
+    <path d="M 515.194375 204.952674
+L 515.194375 318.694832
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_12">
-    <path d="M 515.194375 106.741508 
-L 515.194375 37.438125 
+    <path d="M 515.194375 106.741508
+L 515.194375 37.438125
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_13">
-    <path d="M 477.994375 318.694832 
-L 552.394375 318.694832 
+    <path d="M 477.994375 318.694832
+L 552.394375 318.694832
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040; stroke-linecap: round"/>
    </g>
    <g id="line2d_14">
-    <path d="M 477.994375 37.438125 
-L 552.394375 37.438125 
+    <path d="M 477.994375 37.438125
+L 552.394375 37.438125
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040; stroke-linecap: round"/>
    </g>
    <g id="line2d_15"/>
    <g id="line2d_16">
-    <path d="M 68.794375 293.51717 
-L 217.594375 293.51717 
+    <path d="M 68.794375 293.51717
+L 217.594375 293.51717
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_17">
-    <path d="M 254.794375 145.329753 
-L 403.594375 145.329753 
+    <path d="M 254.794375 145.329753
+L 403.594375 145.329753
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="line2d_18">
-    <path d="M 440.794375 151.127774 
-L 589.594375 151.127774 
+    <path d="M 440.794375 151.127774
+L 589.594375 151.127774
 " clip-path="url(#pff2276e4b8)" style="fill: none; stroke: #404040"/>
    </g>
    <g id="patch_6">
-    <path d="M 50.194375 354.958125 
-L 50.194375 22.318125 
+    <path d="M 50.194375 354.958125
+L 50.194375 22.318125
 " style="fill: none; stroke: #262626; stroke-width: 1.25; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="patch_7">
-    <path d="M 50.194375 354.958125 
-L 608.194375 354.958125 
+    <path d="M 50.194375 354.958125
+L 608.194375 354.958125
 " style="fill: none; stroke: #262626; stroke-width: 1.25; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="PathCollection_1">
     <defs>
-     <path id="md4addec4a4" d="M 0 2 
-C 0.530406 2 1.03916 1.789267 1.414214 1.414214 
-C 1.789267 1.03916 2 0.530406 2 0 
-C 2 -0.530406 1.789267 -1.03916 1.414214 -1.414214 
-C 1.03916 -1.789267 0.530406 -2 0 -2 
-C -0.530406 -2 -1.03916 -1.789267 -1.414214 -1.414214 
-C -1.789267 -1.03916 -2 -0.530406 -2 0 
-C -2 0.530406 -1.789267 1.03916 -1.414214 1.414214 
-C -1.03916 1.789267 -0.530406 2 0 2 
+     <path id="md4addec4a4" d="M 0 2
+C 0.530406 2 1.03916 1.789267 1.414214 1.414214
+C 1.789267 1.03916 2 0.530406 2 0
+C 2 -0.530406 1.789267 -1.03916 1.414214 -1.414214
+C 1.03916 -1.789267 0.530406 -2 0 -2
+C -0.530406 -2 -1.03916 -1.789267 -1.414214 -1.414214
+C -1.789267 -1.03916 -2 -0.530406 -2 0
+C -2 0.530406 -1.789267 1.03916 -1.414214 1.414214
+C -1.03916 1.789267 -0.530406 2 0 2
 z
 "/>
     </defs>
@@ -1523,7 +1523,7 @@ z
     </g>
    </g>
    <g id="text_15">
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: middle; fill: #262626" x="329.194375" y="16.318125" transform="rotate(-0 329.194375 16.318125)">Bray-Curtis Distances Across Planned Contrasts (A/B/C)</text>
+    <text style="font-size: 12px; font-family: 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #262626" x="329.194375" y="16.318125" transform="rotate(-0 329.194375 16.318125)">Bray-Curtis Distances Across Planned Contrasts (A/B/C)</text>
    </g>
   </g>
  </g>

@@ -8,11 +8,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from vignette_style import apply_style, heatmap
+
 modules = Path(sys.argv[1]) / "modules"
 destination = Path(sys.argv[2])
 destination.mkdir(parents=True, exist_ok=True)
-plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False,
-                     "axes.edgecolor": "#777777", "text.color": "#252525", "svg.fonttype": "none"})
+apply_style()
 
 
 def table(module, filename):
@@ -20,7 +21,7 @@ def table(module, filename):
 
 
 def save(fig, name):
-    fig.savefig(destination / (name + ".svg"), bbox_inches="tight", pad_inches=0.15)
+    fig.savefig(destination / (name + ".svg"), metadata={"Date": None}, bbox_inches="tight", pad_inches=0.15)
     plt.close(fig)
 
 
@@ -48,10 +49,10 @@ for i, (group, case) in enumerate([(g, c) for g in groups for c in ["Control", "
     axes[0].boxplot(vals, positions=[i], widths=0.58, patch_artist=True,
                     boxprops={"facecolor": site_colors[group], "hatch": "//" if case == "Cancer" else ""},
                     medianprops={"color": "#222222"})
-axes[0].set_xticks(range(4), ["Airways\ncontrol", "Airways\ncase", "Oral\ncontrol", "Oral\ncase"], fontsize=9)
+axes[0].set_xticks(range(4), ["Airways\ncontrol", "Airways\ncase", "Oral\ncontrol", "Oral\ncase"], fontsize=10)
 axes[0].set(ylabel="Shannon diversity", title="Within-library diversity")
 axes[1].set(xlabel="UMAP 1", ylabel="UMAP 2", title="Bray–Curtis ordination")
-axes[1].legend(frameon=False, fontsize=9)
+axes[1].legend(frameon=False, fontsize=10)
 save(fig, "community")
 
 voc = table("voc_correlation", "patient_asv_voc_permutation_long.tsv")
@@ -89,19 +90,19 @@ examples = list(dict.fromkeys(examples))
 matrix = voc.pivot(index="asv", columns="voc", values="rho").loc[examples]
 fig, ax = plt.subplots(figsize=(7.8, 2.7), layout="constrained")
 palette = "Greys"
-im = ax.imshow(matrix, cmap=palette, vmin=-1, vmax=1, aspect="auto")
+im = heatmap(ax, matrix, cmap=palette, vmin=-1, vmax=1)
 ax.set_yticks(range(len(matrix)), matrix.index)
 ax.set_xticks(range(len(matrix.columns)), [v.replace("_", "\n", 1) if v == "dimethyl_sulfide"
-                  else v.replace("2_3_butanedione", "2,3-butanedione") for v in matrix.columns], fontsize=9)
+                  else v.replace("2_3_butanedione", "2,3-butanedione") for v in matrix.columns], fontsize=10)
 for (i, j), value in np.ndenumerate(matrix.to_numpy()):
     ax.text(j, i, f"{value:+.2f}", ha="center", va="center", color="white" if value > 0.1 else "#202020")
-fig.colorbar(im, ax=ax, ticks=[-1, 0, 1], label="Spearman ρ")
+fig.colorbar(im, ax=ax, ticks=[-1, 0, 1], label="Spearman ρ").solids.set_rasterized(False)
 save(fig, "patient-voc")
 
 members = table("network_analysis", "spieceasi_modules_all.tsv")
 sizes = members.groupby(["module_id", "module_label"]).size().sort_index()
 fig, ax = plt.subplots(figsize=(8, 2.9))
 ax.bar(range(len(sizes)), sizes, color="#646464")
-ax.set_xticks(range(len(sizes)), sizes.index.get_level_values("module_label"), rotation=55, fontsize=9)
+ax.set_xticks(range(len(sizes)), sizes.index.get_level_values("module_label"), rotation=55, fontsize=10)
 ax.set(xlabel="Leiden consensus module", ylabel="ASVs")
 save(fig, "network-modules")

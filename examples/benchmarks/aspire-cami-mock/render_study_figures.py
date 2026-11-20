@@ -13,6 +13,8 @@ from matplotlib.patches import Circle, Patch
 import networkx as nx
 import numpy as np
 import pandas as pd
+
+from vignette_style import apply_style, heatmap
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.stats import false_discovery_control
 
@@ -23,8 +25,7 @@ args = parser.parse_args()
 modules = args.results / "modules"
 out = args.output
 out.mkdir(parents=True, exist_ok=True)
-plt.rcParams.update({"font.size": 9, "svg.fonttype": "none", "axes.spines.top": False,
-                     "axes.spines.right": False, "text.color": "#292929"})
+apply_style()
 
 
 def read(module, name):
@@ -32,7 +33,7 @@ def read(module, name):
 
 
 def save(fig, name):
-    fig.savefig(out / (name + ".svg"), bbox_inches="tight")
+    fig.savefig(out / (name + ".svg"), metadata={"Date": None}, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -51,10 +52,10 @@ for rank in ("Family", "Phylum"):
     rel = m.div(m.sum(axis=0)) * 100
     name = rank.lower() + "-patient-heatmap"
     mat = np.log10(1 + m)
-    fig = plt.figure(figsize=(13, max(4.5, len(m)*0.19 + 2)))
+    fig = plt.figure(figsize=(14, max(4.5, len(m)*0.23 + 2)))
     grid = fig.add_gridspec(3, 3, height_ratios=[1, 0.16, max(2, len(m)*0.19)],
                             width_ratios=[1.2, 8, 0.16], wspace=0.02, hspace=0.05,
-                            left=0.02, right=0.76, bottom=0.1)
+                            left=0.02, right=0.70, bottom=0.1)
     top_tree = fig.add_subplot(grid[0, 1])
     side_tree = fig.add_subplot(grid[2, 0])
     order = []
@@ -73,20 +74,20 @@ for rank in ("Family", "Phylum"):
     ordered = meta.loc[mat.columns, ["Participant_ID", "Type_Group", "Case", "lung_status"]]
     export(ordered, rank.lower() + "-heatmap-column-order")
     strip = fig.add_subplot(grid[1, 1])
-    strip.imshow([pd.Categorical(ordered.Type_Group, categories=sites).codes], aspect="auto",
-                 cmap=ListedColormap(colors), vmin=0, vmax=1, interpolation="nearest")
+    heatmap(strip, [pd.Categorical(ordered.Type_Group, categories=sites).codes],
+                 cmap=ListedColormap(colors), vmin=0, vmax=1)
     strip.axis("off")
     fig.legend(handles=[Patch(color=c, label=s) for s,c in zip(sites, colors)],
                loc="upper center", ncol=2, frameon=False)
     ax = fig.add_subplot(grid[2, 1])
-    img = ax.imshow(mat, cmap="BuPu", aspect="auto", interpolation="nearest")
+    img = heatmap(ax, mat, cmap="BuPu")
     ax.yaxis.tick_right()
-    ax.set_yticks(range(len(mat)), mat.index, fontsize=7)
+    ax.set_yticks(range(len(mat)), mat.index, fontsize=10)
     ticks = np.arange(0, len(ordered), 20)
     ax.set_xticks(ticks, ticks + 1)
     ax.set_xlabel("Library position in the clustered matrix")
     bar = fig.add_axes([0.935, 0.31, 0.012, 0.30])
-    fig.colorbar(img, cax=bar, label="log₁₀(count + 1)")
+    fig.colorbar(img, cax=bar, label="log₁₀(count + 1)").solids.set_rasterized(False)
     save(fig, name)
     if rank == "Family":
         top = rel.mean(axis=1).nlargest(10).index
@@ -233,7 +234,7 @@ for ax, (first, second, paired, slug) in zip(axes.flat, contrasts):
                  color=palette["Oral" if slug == "oral-case" else "Airways"])
     ax.legend(handles=[Patch(color=c, label=g) for g,c in [(first,"#181818"),(second,"#858585"),
                                                           ("Background","#c9c9c9")]],
-              loc="lower center", bbox_to_anchor=(0.5,-0.06), ncol=3, frameon=False, fontsize=8)
+              loc="lower center", bbox_to_anchor=(0.5,-0.06), ncol=3, frameon=False, fontsize=10)
     ax.set_aspect("equal")
     ax.axis("off")
 export(pd.concat(cohorts), "indicator-contrast-cohorts")
@@ -261,12 +262,10 @@ export(case_fit, "case-isa-single-group")
 
 def vignette_svg(source, target, keep_site=False):
     """Desaturate exported vector paint while keeping site labels and legend keys consistent."""
-    if "phylum" in source.stem.lower():
-        copyfile(source, target)
-        return
+    preserve_hues = "phylum" in source.stem.lower()
     def neutral(match):
         paint, code = match.groups()
-        if keep_site and code.lower() in {"009e73", "6a3d9a"}:
+        if preserve_hues or (keep_site and code.lower() in {"009e73", "6a3d9a"}):
             return match.group()
         rgb = [int(code[i:i+2], 16) for i in (0, 2, 4)]
         gray = round(np.dot(rgb, [0.2126, 0.7152, 0.0722]))
@@ -276,6 +275,9 @@ def vignette_svg(source, target, keep_site=False):
         for site in sites:
             svg = re.sub(r'(<text style="[^"]*?fill: )#[a-fA-F0-9]{6}("[^>]*>' + site + r'</text>)',
                          lambda m: m[1] + palette[site] + m[2], svg)
+    svg = re.sub(r"font-size: ([0-9.]+)px",
+                 lambda m: f"font-size: {min(12, max(10, round(float(m[1]))))}px", svg)
+    svg = re.sub(r'font-family: [^;"]+', "font-family: 'DejaVu Sans', sans-serif", svg)
     target.write_text(svg)
 
 # Collect the matching native exports without modifying the published run.
@@ -314,7 +316,7 @@ fig, ax = plt.subplots(figsize=(5.6, 2.8))
 for center, color in zip([-0.55, 0.55], colors):
     ax.add_patch(Circle((center, 0), 0.95, facecolor=color, alpha=0.27, edgecolor=color))
 for x, count in zip([-0.85, 0, 0.85], overlap):
-    ax.text(x, 0, str(count), ha="center", va="center", fontsize=14)
+    ax.text(x, 0, str(count), ha="center", va="center", fontsize=12)
 for x, group in zip([-0.95, 0.95], sites):
     ax.text(x, 1, group, ha="center")
 ax.set(xlim=(-1.6, 1.6), ylim=(-1, 1.25), aspect="equal")
