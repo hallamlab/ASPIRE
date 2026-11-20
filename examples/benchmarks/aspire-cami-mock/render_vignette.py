@@ -62,6 +62,9 @@ airway = indicators.loc[indicators.significant & indicators["s.Airways"].eq(1)
 acetone = comparison[comparison.voc.eq("acetone") & comparison.support.eq("both_normalizations")
                      & comparison.same_direction].sort_values(["rho", "asv"], ascending=[False, True])
 candidates = acetone[acetone.asv.isin(airway) & acetone.rho.gt(0)]
+pair_columns = ["asv_label", "voc", "n_patients", "n_nonzero_patients", "rho", "q_value",
+                "rho_clr", "q_value_clr"]
+candidates.head(1)[pair_columns].to_csv(destination / "patient-isa-acetone.tsv", sep="\t", index=False)
 fig, ax = plt.subplots(figsize=(6.1, 3.6), layout="constrained")
 examples = [*acetone.head(2).asv, *acetone.tail(1).asv]
 if candidates.empty:

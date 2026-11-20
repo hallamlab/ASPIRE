@@ -30,3 +30,4 @@ mermaid_light_theme = 'neutral'
 mermaid_dark_theme = 'neutral'
 mermaid_fullscreen = True
 mermaid_height = 'auto'
+html_js_files = ['copy-commands.js']
