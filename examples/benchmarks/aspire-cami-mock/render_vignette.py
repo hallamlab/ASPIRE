@@ -25,8 +25,9 @@ def save(fig, name):
 
 
 groups = ["Airways", "Oral"]
+site_colors = table("metadata_plots", "Type_Group_palette.tsv").set_index("value").color
 fig, ax = plt.subplots(figsize=(6.5, 3.4))
-for group, color, style in zip(groups, ["#303030", "#717171"], ["-", "--"]):
+for group, color, style in zip(groups, site_colors[groups], ["-", "--"]):
     t = table("collectors_curve", group + "_collector_stats.tsv")
     ax.fill_between(t.n_samples, t.lo_2p5, t.hi_97p5, color=color, alpha=0.09)
     ax.plot(t.n_samples, t.mean_asvs, style, color=color, label=group)
@@ -38,14 +39,14 @@ save(fig, "collector")
 
 coords = table("diversity", "umap_coordinates_bray.tsv")
 fig, axes = plt.subplots(1, 2, figsize=(8.1, 3.6), layout="constrained")
-for group, marker, color in zip(groups, ["o", "^"], ["#333333", "#898989"]):
+for group, marker, color in zip(groups, ["o", "^"], site_colors[groups]):
     t = coords[coords.Type_Group == group]
     axes[1].scatter(t.UMAP1_bray, t.UMAP2_bray, label=group, marker=marker, color=color,
                     edgecolors="white", linewidth=0.4, s=23)
 for i, (group, case) in enumerate([(g, c) for g in groups for c in ["Control", "Cancer"]]):
     vals = coords.loc[(coords.Type_Group == group) & (coords.Case == case), "Shannon"]
     axes[0].boxplot(vals, positions=[i], widths=0.58, patch_artist=True,
-                    boxprops={"facecolor": "#dedede" if case == "Control" else "#a0a0a0"},
+                    boxprops={"facecolor": site_colors[group], "hatch": "//" if case == "Cancer" else ""},
                     medianprops={"color": "#222222"})
 axes[0].set_xticks(range(4), ["Airways\ncontrol", "Airways\ncase", "Oral\ncontrol", "Oral\ncase"], fontsize=9)
 axes[0].set(ylabel="Shannon diversity", title="Within-library diversity")
@@ -104,20 +105,3 @@ ax.bar(range(len(sizes)), sizes, color="#646464")
 ax.set_xticks(range(len(sizes)), sizes.index.get_level_values("module_label"), rotation=55, fontsize=9)
 ax.set(xlabel="Leiden consensus module", ylabel="ASVs")
 save(fig, "network-modules")
-
-taxa = table("taxonomy", "cancer_vs_control/taxonomic_abundance_observed.tsv")
-taxa = taxa[(taxa.tax_level == "Phylum") & (taxa.sample_type == "Airways")].copy()
-taxa["peak"] = taxa[["median_control", "median_cancer"]].max(axis=1)
-taxa = taxa.nlargest(5, "peak").sort_values("peak")
-fig, ax = plt.subplots(figsize=(6.7, 3.2), layout="constrained")
-positions = np.arange(len(taxa))
-for column, offset, marker, color, label in [
-    ("median_control", 0.11, "o", "#777777", "Control"),
-    ("median_cancer", -0.11, "^", "#242424", "Case"),
-]:
-    ax.scatter(taxa[column] * 100, positions + offset, marker=marker, color=color, label=label)
-ax.set_yticks(positions, taxa.taxon)
-ax.set(xlabel="Median relative abundance (%)")
-ax.set_xlim(left=-1.5)
-ax.legend(frameon=False, loc="lower right")
-save(fig, "airway-phyla")

@@ -95,7 +95,7 @@ Start with **Data Accounting Summary**. The 125 samples tile counts analyzed lib
 
 ![First module cards in the HTML output inventory](assets/vignette/report-inventory.png)
 
-Scroll to **Output Inventory**. In the Diversity card, **Plots** opens the published figures and **Tables** opens the numerical results. File counts include multiple export formats. Use the same pair of links in Taxonomy, Network Analysis and VOC Correlation to explore those results. The screenshots show the saved report; the grayscale study panels below are drawn from its module tables.
+Scroll to **Output Inventory**. In the Diversity card, **Plots** opens the published figures and **Tables** opens the numerical results. File counts include multiple export formats. Use the same pair of links in Taxonomy, Network Analysis and VOC Correlation to explore those results. The screenshots show the saved report; the study panels below are drawn from its module tables.
 
 ## Make the study figures from your run
 
@@ -105,7 +105,7 @@ After validation, create the plotting environment once. When Mamba asks whether 
 mamba create -n aspire-vignette-figures -c conda-forge python=3.11 matplotlib pandas numpy 'scipy>=1.11' networkx
 ```
 
-Generate the figures from your results. The first command after `cd` creates the read-flow, indicator and network panels. The second creates the diversity, taxonomy and patient–VOC figures. Open the SVGs and their companion tables in `~/aspire-vignette/study-figures`.
+Generate the figures from your results. The first command after `cd` creates the read-flow, taxonomy, indicator and network panels. The second creates the collector, diversity, module-size and patient–VOC figures. Open the SVGs and their companion tables in `~/aspire-vignette/study-figures`.
 
 ```bash
 cd ~/aspire-vignette/ASPIRE/examples/benchmarks/aspire-cami-mock
@@ -130,13 +130,13 @@ Read a row in `ASV_target.feature_qc.tsv` before opening a community plot. ASV10
 
 [![Read-flow Sankey from the mock HTML export](assets/vignette/mock-read-flow.png)](assets/vignette/mock-read-flow.png)
 
-Open `data_loss_sankey.label.html` in the study-figures directory and hover over a flow to read its value. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
+Follow one ribbon from left to right through the processing stages. Width encodes the number of reads on that path. Open `data_loss_sankey.label.html` in the study-figures directory and hover over a flow to read its value. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
 
 | Exclusive intersections | Presence by site |
 | --- | --- |
 | [![Final ASV UpSet](assets/vignette/final_micro_upset.svg)](assets/vignette/final_micro_upset.svg) | [![Airway and oral ASV overlap](assets/vignette/site-overlap.svg)](assets/vignette/site-overlap.svg) |
 
-The regions count ASVs: 49 occurred only in airway libraries, 86 occurred at both sites, and 50 occurred only in oral libraries. Their sum gives the 185 final ASVs. Circle areas are schematic. Follow an individual ASV in `modules/upset/tables/final_micro_final_venn_presence_table.tsv`.
+In the UpSet plot, read the filled site dots under a bar to identify its intersection, then read the bar height for the count. The overlap diagram shows the same counts as regions: 49 occurred only in airway libraries, 86 occurred at both sites, and 50 occurred only in oral libraries. Their sum gives the 185 final ASVs. Circle areas are schematic. Follow an individual ASV in `modules/upset/tables/final_micro_final_venn_presence_table.tsv`.
 
 ### How quickly do the two sites accumulate features?
 
@@ -157,7 +157,7 @@ Start with Shannon diversity within libraries. Read the case and control distrib
 
 ![Shannon boxplots across case and site groups alongside a Bray–Curtis UMAP of individual libraries](assets/vignette/community.svg)
 
-On the left, the center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. [Original Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.png)
+Green represents airways and purple represents oral libraries in both panels. On the left, hatched boxes identify cases. The center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. [Original Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.png)
 
 ```bash
 cd ~/aspire-vignette/results/modules/diversity/tables/patient_aware
@@ -167,7 +167,7 @@ head bray_permdisp_diagnostics.tsv
 
 The pooled Bray–Curtis PERMANOVA used 25 cases and 25 controls. Case status explained 3.3% of variation (permutation p = 0.128), giving limited evidence for an overall case effect. Examine dispersion diagnostics and the sample-type-specific tables before attributing separation in an ordination to disease group.
 
-Open the [within-patient Bray–Curtis distance plot](assets/vignette/Bray_Boxplot_sample_type_within_patient.svg) alongside the ordination. The plot describes distances between paired samples; UMAP places individual libraries in two dimensions.
+Open the [within-patient Bray–Curtis distance plot](assets/vignette/Bray_Boxplot_sample_type_within_patient.svg) alongside the ordination. Read a higher Bray–Curtis distance as greater compositional dissimilarity between two samples from the same patient. The ordination displays each library separately.
 
 ### Examine lung side and statistical power
 
@@ -202,23 +202,31 @@ Use the contrast table above to recover the patient denominator for each distanc
 
 ## Trace taxonomic abundance across patients
 
-[![Family count heatmap ordered by synthetic patient](assets/vignette/family-patient-heatmap.svg)](assets/vignette/family-patient-heatmap.svg)
+### What clusters together at phylum and family level?
 
-Each column is a library. Columns are grouped by case status and patient; the strip identifies airway and oral samples. Each row is a family. Darker cells indicate larger log₁₀(count + 1) values. Ward clustering orders the rows. To identify a dark cell, use `family-patient-heatmap.tsv` and look up its column in `heatmap-column-order.tsv`. The [phylum heatmap](assets/vignette/phylum-patient-heatmap.svg) preserves the same library order at a broader taxonomic rank.
+[![Phylum counts with dendrograms for phyla and libraries](assets/vignette/phylum-patient-heatmap.svg)](assets/vignette/phylum-patient-heatmap.svg)
 
-| Phylum composition by site | Family abundance across patients |
-| --- | --- |
-| [![Phylum composition](assets/vignette/phylum-composition.svg)](assets/vignette/phylum-composition.svg) | [![Abundance of ten families at each site](assets/vignette/family-abundance.svg)](assets/vignette/family-abundance.svg) |
+Start with the eight phyla. Each column is one library. Deeper purple means a higher log₁₀(count + 1) for that taxon and library. The top dendrogram groups libraries with similar taxon profiles. The left dendrogram groups taxa with similar profiles across libraries. Both use Ward hierarchical clustering with Euclidean distance on the displayed log counts. Library depth can influence this view.
 
-The composition plot gives each library equal weight. Actinobacteriota accounts for 58.9% of mean airway composition and 2.1% of mean oral composition in the saved clustermap matrix. The family plot uses a different unit: it averages a patient's library proportions within each site before drawing boxplots for the ten families with the highest overall mean library proportion. The exported TSV includes all patient values, including observations outside the displayed whiskers.
+Read the site strip **after** inspecting the top tree. In the saved run, the 75 green airway libraries and 50 purple oral libraries form contiguous blocks even though the clustering uses no site labels. The first two phylum columns are a healthy airway and a contralateral airway from different patients. Their proximity describes similar abundance profiles across phyla.
+
+[![Family counts with dendrograms for families and libraries](assets/vignette/family-patient-heatmap.svg)](assets/vignette/family-patient-heatmap.svg)
+
+Repeat at family level to resolve patterns hidden inside a phylum. The 38 rows include the pooled *Other* category. For example, the first two columns at this rank are tumor-side libraries from two different patients, both with high Corynebacteriaceae counts. Each rank has its own column order. To identify a cell, open `family-patient-heatmap.tsv` or `phylum-patient-heatmap.tsv` and match its column name to the sample ID in the corresponding `family-heatmap-column-order.tsv` or `phylum-heatmap-column-order.tsv`.
+
+### How much do the taxa contribute at each site?
+
+[![Mean phylum composition in airway and oral libraries](assets/vignette/phylum-composition.svg)](assets/vignette/phylum-composition.svg)
+
+Read each stacked bar from left to right. Segment width gives the mean percentage assigned to each phylum, with equal weight per library. Match the segment hue to the phylum legend. Actinobacteriota accounts for 58.9% of mean airway composition and 2.1% of mean oral composition. Each complete bar sums to 100%.
+
+[![Log-scaled patient abundance distributions for the top ten family-level categories by site](assets/vignette/family-abundance.svg)](assets/vignette/family-abundance.svg)
+
+Read the green airway and purple oral boxes side by side. Each observation is one patient's mean library proportion at that site. The center line is the median and the box spans the middle half of patients. Above 0.01%, each tick is a tenfold increase. The short linear interval from 0 to 0.01% preserves true zeros. For Corynebacteriaceae the medians are 62.2% in airways and 0.33% orally. Streptococcaceae shows the opposite pattern (1.80% and 42.7%). The ten categories were selected by overall mean library proportion. Open `family-abundance.tsv` for every patient value, including values beyond the whiskers.
 
 ## Identify indicator taxa
 
 Look up an ASV in `modules/taxonomy/tables/ASV_SILVA_tax.full-length.vsearch.tsv` to read its assigned lineage and consensus. The saved run assigned taxonomy to 497 of 498 inferred ASVs. To trace the abundances supplied downstream, inspect the before-correction, after-correction and selected CLR tables in `modules/batch_correction/tables/`.
-
-![Median airway abundance of the most abundant phyla in cases and controls](assets/vignette/airway-phyla.svg)
-
-The dots compare the five phyla with the largest airway median in either group. Open `modules/taxonomy/tables/cancer_vs_control/taxonomic_abundance_observed.tsv` and select the Airways, Phylum, Actinobacteriota row. Multiply the median fractions by 100 to recover the plotted positions: 56.94% for cases and 62.81% for controls. The difference is −5.87 percentage points, with adjusted p = 0.793. The spacing of those two symbols describes the observed effect; the table supplies its statistical test.
 
 Open `modules/indicator_analysis/tables/Case_indicator_species_results.tsv` and inspect the group columns, indicator statistic and permutation p-value. The validator maps inferred features to simulated sequences and found 22 of the 48 planted indicator ASVs across the evaluated indicator analyses. ASV numbers are assigned within each run.
 
@@ -238,7 +246,7 @@ Read rightward for a stronger indicator statistic and upward for a smaller adjus
 | --- | --- |
 | [![C · Case statistic by sample type](assets/vignette/Combined_ISA_plot.svg)](assets/vignette/Combined_ISA_plot.svg) | [![D · Case statistic by phylum](assets/vignette/Combined_ISA_plot_Phylum.svg)](assets/vignette/Combined_ISA_plot_Phylum.svg) |
 
-C and D use the **case-status** statistic and adjusted p-value for both axes. Marker shape identifies the case-status assignment. Green and purple in C identify airway and oral assignments. Gray shades in D denote phylum. Use the legend for each panel. For a phylum view on the **sample-type** axes, open the [sample-type ISA plot by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg).
+C and D use the **case-status** statistic and adjusted p-value for both axes. Marker shape identifies the case-status assignment. Green and purple in C identify airway and oral assignments. The hues in D identify phyla; gray marks unassigned indicator status in the legend. Use the legend for each panel. For a phylum view on the **sample-type** axes, open the [sample-type ISA plot by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg).
 
 Trace ASV10 through `modules/indicator_analysis/tables/Type_Group__Case/Combined_ISA_with_taxonomy.tsv`. Its sample-type statistic is 0.999, q = 0.00127, and its label is Oral (purple in A). Its phylum is Firmicutes. Its case-statistic fields are empty, so its strong oral association does not yield a point on the case-statistic axes.
 
@@ -252,7 +260,7 @@ This pair keeps the sample-type axes fixed. ASV10 is the oral-associated Firmicu
 
 [![Counts of significant sample-type assignments in two indicator model specifications](assets/vignette/indicator-partitions.svg)](assets/vignette/indicator-partitions.svg)
 
-Allowing group combinations yielded 43 airway and 76 oral indicators. Restricting the model to single groups yielded 49 and 87. Neither fit reported a significant Airways + Oral assignment. Each bar counts significant entries in the corresponding Type_Group summary; overlapping model results should not be added together.
+Allowing group combinations yielded 43 airway and 76 oral indicators. Restricting the model to single groups yielded 49 and 87. Neither fit reported a significant Airways + Oral assignment. Green bars count airway assignments, purple bars count oral assignments, and the joint category is gray. Each bar counts significant entries in the corresponding Type_Group summary; overlapping model results should not be added together.
 
 ## Explore network structure and assess recovery
 
@@ -265,7 +273,7 @@ cat network_topology_summary.tsv
 
 ![Published degree plot of the thresholded microbial network](assets/vignette/network-degree.svg)
 
-Start with the published degree plot to locate highly connected nodes. Use `spieceasi_node_features.csv` for an exact value: ASV10 has 13 neighbors in the thresholded graph. In the edge list, ASV10 connects to ASV125 with weight 0.0341. Looking both up in `spieceasi_modules_all.tsv` places ASV10 in M1 and ASV125 in M9. An edge can cross a module boundary.
+Each node is an ASV. Larger nodes have more neighbors, and thicker edges have larger absolute weights. Use the degree plot to locate highly connected ASVs. Use `spieceasi_node_features.csv` for an exact value: ASV10 has 13 neighbors in the thresholded graph. In the edge list, ASV10 connects to ASV125 with weight 0.0341. Looking both up in `spieceasi_modules_all.tsv` places ASV10 in M1 and ASV125 in M9. An edge can cross a module boundary.
 
 ### Interpret the network color panels
 
@@ -279,7 +287,7 @@ Start with the published degree plot to locate highly connected nodes. Use `spie
 | --- | --- |
 | [![C · Phylum and indicator strength](assets/vignette/network_phylum_ISA.svg)](assets/vignette/network_phylum_ISA.svg) | [![D · Phylum and mean abundance](assets/vignette/network_phylum_ABUND_MEAN.svg)](assets/vignette/network_phylum_ABUND_MEAN.svg) |
 
-**Is a strong indicator also abundant?** The grayscale legends identify phylum in C and D. Size changes from indicator strength to log-scaled mean abundance. Compare relative prominence within each panel using its size legend. The default `network_phylum_ABUND.svg` also shows the mean-abundance view.
+**Is a strong indicator also abundant?** C and D use the same phylum colors. For example, green identifies Firmicutes and blue identifies Actinobacteriota. Size changes from indicator strength to log-scaled mean abundance. Compare relative prominence within each panel using its size legend. The default `network_phylum_ABUND.svg` also shows the mean-abundance view.
 
 | E · Phylum and median abundance | F · Betweenness class and degree |
 | --- | --- |
@@ -303,7 +311,7 @@ Select an edge, locate both ASVs in the module table, and inspect their position
 
 [![Three anatomical airway contrasts and the oral case–control comparison drawn on the same network layout](assets/vignette/site-case-networks.svg)](assets/vignette/site-case-networks.svg)
 
-Start at the top left for the primary airway comparison. Each panel uses the same network edges and layout. Dark triangles identify indicators of the first group, medium-gray circles identify indicators of the second, and small pale-gray circles mark background nodes. Highlighted node area scales with squared indicator strength.
+Green titles identify the three airway contrasts and the purple title identifies the oral contrast. Start at the top left for the primary airway comparison. Each panel uses the same network edges and layout. Dark triangles identify indicators of the first group, medium-gray circles identify indicators of the second, and small pale-gray circles mark background nodes. Highlighted node area scales with squared indicator strength.
 
 | Panel | Comparison | Patients | Highlighted network ASVs |
 | --- | --- | --- | --- |

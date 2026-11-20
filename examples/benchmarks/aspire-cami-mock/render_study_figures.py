@@ -13,7 +13,7 @@ from matplotlib.patches import Circle, Patch
 import networkx as nx
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.stats import false_discovery_control
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -51,23 +51,42 @@ for rank in ("Family", "Phylum"):
     rel = m.div(m.sum(axis=0)) * 100
     name = rank.lower() + "-patient-heatmap"
     mat = np.log10(1 + m)
-    if len(mat) > 1:
-        mat = mat.iloc[leaves_list(linkage(mat, method="ward"))]
+    fig = plt.figure(figsize=(13, max(4.5, len(m)*0.19 + 2)))
+    grid = fig.add_gridspec(3, 3, height_ratios=[1, 0.16, max(2, len(m)*0.19)],
+                            width_ratios=[1.2, 8, 0.16], wspace=0.02, hspace=0.05,
+                            left=0.02, right=0.76, bottom=0.1)
+    top_tree = fig.add_subplot(grid[0, 1])
+    side_tree = fig.add_subplot(grid[2, 0])
+    order = []
+    for profiles, axis, orientation in [(mat, side_tree, "left"), (mat.T, top_tree, "top")]:
+        leaves = list(range(len(profiles)))
+        if len(profiles) > 1:
+            tree = dendrogram(linkage(profiles, method="ward", optimal_ordering=True),
+                              ax=axis, orientation=orientation, no_labels=True,
+                              link_color_func=lambda _: "#555555")
+            leaves = tree["leaves"]
+        order.append(leaves)
+        axis.axis("off")
+    side_tree.invert_yaxis()
+    mat = mat.iloc[order[0], order[1]]
     export(mat, name)
-    fig, (strip, ax) = plt.subplots(2, 1, sharex=True, figsize=(10, max(3, len(m)*0.16)),
-                                    gridspec_kw={"height_ratios": [0.25, max(3, len(m)*0.16)]},
-                                    layout="constrained")
-    strip.imshow([pd.Categorical(meta.Type_Group, categories=sites).codes], aspect="auto",
+    ordered = meta.loc[mat.columns, ["Participant_ID", "Type_Group", "Case", "lung_status"]]
+    export(ordered, rank.lower() + "-heatmap-column-order")
+    strip = fig.add_subplot(grid[1, 1])
+    strip.imshow([pd.Categorical(ordered.Type_Group, categories=sites).codes], aspect="auto",
                  cmap=ListedColormap(colors), vmin=0, vmax=1, interpolation="nearest")
     strip.axis("off")
-    strip.legend(handles=[Patch(color=c, label=s) for s,c in zip(sites, colors)],
-                 loc="lower left", bbox_to_anchor=(0,1), ncol=2, frameon=False)
-    img = ax.imshow(mat, cmap="Greys", aspect="auto", interpolation="nearest")
-    fig.colorbar(img, ax=ax, shrink=0.6, label="log₁₀(count + 1)")
+    fig.legend(handles=[Patch(color=c, label=s) for s,c in zip(sites, colors)],
+               loc="upper center", ncol=2, frameon=False)
+    ax = fig.add_subplot(grid[2, 1])
+    img = ax.imshow(mat, cmap="BuPu", aspect="auto", interpolation="nearest")
+    ax.yaxis.tick_right()
     ax.set_yticks(range(len(mat)), mat.index, fontsize=7)
-    starts = np.flatnonzero(meta.Participant_ID.ne(meta.Participant_ID.shift()))
-    ax.set_xticks(starts[::5], meta.Participant_ID.iloc[starts[::5]], rotation=40, ha="right")
-    ax.set_xlabel("Libraries grouped by patient (every fifth patient labeled)")
+    ticks = np.arange(0, len(ordered), 20)
+    ax.set_xticks(ticks, ticks + 1)
+    ax.set_xlabel("Library position in the clustered matrix")
+    bar = fig.add_axes([0.935, 0.31, 0.012, 0.30])
+    fig.colorbar(img, cax=bar, label="log₁₀(count + 1)")
     save(fig, name)
     if rank == "Family":
         top = rel.mean(axis=1).nlargest(10).index
@@ -81,21 +100,32 @@ for rank in ("Family", "Phylum"):
                        patch_artist=True, boxprops={"facecolor":colors[i]}, showfliers=False,
                        medianprops={"color":"black"})
         ax.set_xticks(range(len(top)),top,rotation=45,ha="right")
+        ax.set_yscale("symlog", linthresh=0.01, linscale=0.6)
+        ticks = [0, 0.01, 0.1, 1, 10, 100]
+        ax.set_yticks(ticks, [str(t) for t in ticks])
+        ax.set_ylim(0, 110)
         ax.set_ylabel("Patient mean relative abundance (%)")
+        ax.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax.set_axisbelow(True)
         ax.legend(handles=[Patch(color=c,label=s) for s,c in zip(sites,colors)],frameon=False)
         save(fig, "family-abundance")
     else:
         comp = rel.T.join(meta.Type_Group).groupby("Type_Group").mean().loc[sites].T
+        comp = comp.sort_index()
         export(comp, "phylum-composition")
         fig, ax = plt.subplots(figsize=(8,2.7),layout="constrained")
         base=np.zeros(len(sites))
-        for taxon, color in zip(comp.index, plt.get_cmap("Greys")(np.linspace(0.25, 0.9, len(comp)))):
+        hues = plt.get_cmap("tab20").colors
+        for index, taxon in enumerate(comp.index):
+            color = hues[index % len(hues)]
             ax.barh(sites,comp.loc[taxon],left=base,color=color,label=taxon)
             base+=comp.loc[taxon].to_numpy()
         ax.set(xlim=(0,100),xlabel="Mean library composition (%)")
+        for label in ax.get_yticklabels():
+            label.set_color(palette[label.get_text()])
         ax.legend(loc="center left",bbox_to_anchor=(1,0.5),frameon=False)
         save(fig,"phylum-composition")
-export(meta[["Participant_ID","Type_Group","Case","lung_status"]], "heatmap-column-order")
+
 
 partitions = {}
 for mode, suffix in [("Combinations allowed",""),("Single group only","_DULEG")]:
@@ -106,7 +136,7 @@ for mode, suffix in [("Combinations allowed",""),("Single group only","_DULEG")]
     partitions[mode]=labels.value_counts()
 partition=pd.DataFrame(partitions).reindex(sites+["+".join(sites)]).fillna(0).astype(int)
 export(partition,"indicator-partitions")
-ax=partition.plot.bar(color=["#333333","#bababa"],rot=0,figsize=(6,3.2))
+ax=partition.T.plot.bar(color=[*colors, "#aaaaaa"], rot=0, figsize=(6,3.2))
 ax.set_ylabel("Significant ASVs")
 ax.legend(frameon=False)
 save(ax.figure,"indicator-partitions")
@@ -199,7 +229,8 @@ for ax, (first, second, paired, slug) in zip(axes.flat, contrasts):
             ax.scatter(*xy.T,marker="^" if group==first else "o",s=8 if group=="Background" else 90*result.loc[ids,"stat"]**2,
                        color=color,edgecolors="white",linewidths=0.25)
     title = "Oral case vs control" if slug == "oral-case" else f"{first} vs {second.lower()}"
-    ax.set_title(f"{title} · {len(hits)} network indicators")
+    ax.set_title(f"{title} · {len(hits)} network indicators",
+                 color=palette["Oral" if slug == "oral-case" else "Airways"])
     ax.legend(handles=[Patch(color=c, label=g) for g,c in [(first,"#181818"),(second,"#858585"),
                                                           ("Background","#c9c9c9")]],
               loc="lower center", bbox_to_anchor=(0.5,-0.06), ncol=3, frameon=False, fontsize=8)
@@ -230,6 +261,9 @@ export(case_fit, "case-isa-single-group")
 
 def vignette_svg(source, target, keep_site=False):
     """Desaturate exported vector paint while keeping site labels and legend keys consistent."""
+    if "phylum" in source.stem.lower():
+        copyfile(source, target)
+        return
     def neutral(match):
         paint, code = match.groups()
         if keep_site and code.lower() in {"009e73", "6a3d9a"}:
@@ -238,6 +272,10 @@ def vignette_svg(source, target, keep_site=False):
         gray = round(np.dot(rgb, [0.2126, 0.7152, 0.0722]))
         return paint + "#" + f"{gray:02x}" * 3
     svg = re.sub(r"((?:fill|stroke):\s*)#([0-9a-fA-F]{6})\b", neutral, source.read_text())
+    if source.stem == "power_curves_cancer_vs_control_simple":
+        for site in sites:
+            svg = re.sub(r'(<text style="[^"]*?fill: )#[a-fA-F0-9]{6}("[^>]*>' + site + r'</text>)',
+                         lambda m: m[1] + palette[site] + m[2], svg)
     target.write_text(svg)
 
 # Collect the matching native exports without modifying the published run.
