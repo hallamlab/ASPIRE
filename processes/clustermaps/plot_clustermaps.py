@@ -19,6 +19,7 @@ Backward-compatible aliases are provided for project-specific flags:
 from __future__ import annotations
 
 import argparse
+import gc
 import warnings
 from pathlib import Path
 
@@ -34,7 +35,6 @@ from matplotlib.patches import Patch
 # ----------------------- Matplotlib/Seaborn defaults ------------------------
 mpl.rcParams["pdf.fonttype"] = 42      # Keep text as text in PDF
 mpl.rcParams["svg.fonttype"] = "none"  # Keep text as text in SVG
-mpl.rcParams["savefig.dpi"] = 600
 plt.rcParams.update({"font.size": 12})
 plt.rcParams["font.family"] = "Source Sans Pro"
 sns.set_theme()
@@ -416,71 +416,53 @@ def draw_clustermap(
             grid.fig.add_artist(legend)
             y_anchor -= min(0.08 + 0.045 * len(handles), 0.42)
 
-    # 1) fixed sample-code order
-    g = sns.clustermap(
-        pivot_log,
-        method=method,
-        metric=metric,
-        col_colors=col_colors_df if not col_colors_df.empty else None,
-        cmap=cmap,
-        vmin=0,
-        vmax=vmax_log,
-        linewidths=0.5,
-        xticklabels=True,
-        yticklabels=True,
-        dendrogram_ratio=dendrogram_ratio,
-        colors_ratio=colors_ratio,
-        figsize=(width, height),
-        cbar_pos=cbar_pos,
-        alpha=alpha,
-        row_cluster=row_cluster,
-        col_cluster=False,
-    )
-    cbar = g.ax_heatmap.collections[0].colorbar
-    cbar.set_ticks(tick_vals_log)
-    cbar.set_ticklabels([f"{v:,}" for v in tick_vals_orig])
-    cbar.set_label("ASV Count", rotation=270, labelpad=15)
-    g.ax_heatmap.set_xticks(g.ax_heatmap.get_xticks())
-    g.ax_heatmap.set_xticklabels(pivot_log.columns, rotation=90, ha="center")
-    g.ax_heatmap.tick_params(axis="x", bottom=True, labelbottom=True, length=5)
-    add_annotation_legends(g)
+    # Raster memory grows with both canvas area and the square of the DPI.
+    # Limit the layout canvas too: seaborn draws it while positioning labels.
+    dpi = min(600, np.sqrt(12_000_000 / (width * height)), 8192 / max(width, height))
 
-    formats = formats or ["pdf", "png"]
-    for fmt in formats:
-        plt.savefig(outfile_prefix.with_suffix(f".{fmt}"), bbox_inches="tight")
-    plt.close()
+    def render(prefix, cluster_samples):
+        g = sns.clustermap(
+            pivot_log,
+            method=method,
+            metric=metric,
+            col_colors=col_colors_df if not col_colors_df.empty else None,
+            cmap=cmap,
+            vmin=0,
+            vmax=vmax_log,
+            linewidths=0.5,
+            xticklabels=True,
+            yticklabels=True,
+            dendrogram_ratio=dendrogram_ratio,
+            colors_ratio=colors_ratio,
+            figsize=(width, height),
+            cbar_pos=cbar_pos,
+            alpha=alpha,
+            row_cluster=row_cluster,
+            col_cluster=cluster_samples and col_cluster,
+        )
+        cbar = g.ax_heatmap.collections[0].colorbar
+        cbar.set_ticks(tick_vals_log)
+        cbar.set_ticklabels([f"{v:,}" for v in tick_vals_orig])
+        cbar.set_label("ASV Count", rotation=270, labelpad=15)
+        if not cluster_samples:
+            g.ax_heatmap.set_xticks(g.ax_heatmap.get_xticks())
+            g.ax_heatmap.set_xticklabels(pivot_log.columns, rotation=90, ha="center")
+        g.ax_heatmap.tick_params(axis="x", bottom=True, labelbottom=True, length=5)
+        add_annotation_legends(g)
 
-    # 2) clustered columns
-    g = sns.clustermap(
-        pivot_log,
-        method=method,
-        metric=metric,
-        col_colors=col_colors_df if not col_colors_df.empty else None,
-        cmap=cmap,
-        vmin=0,
-        vmax=vmax_log,
-        linewidths=0.5,
-        xticklabels=True,
-        yticklabels=True,
-        dendrogram_ratio=dendrogram_ratio,
-        colors_ratio=colors_ratio,
-        figsize=(width, height),
-        cbar_pos=cbar_pos,
-        alpha=alpha,
-        row_cluster=row_cluster,
-        col_cluster=col_cluster,
-    )
-    cbar = g.ax_heatmap.collections[0].colorbar
-    cbar.set_ticks(tick_vals_log)
-    cbar.set_ticklabels([f"{v:,}" for v in tick_vals_orig])
-    cbar.set_label("ASV Count", rotation=270, labelpad=15)
-    g.ax_heatmap.tick_params(axis="x", bottom=True, labelbottom=True, length=5)
-    add_annotation_legends(g)
+        # Keep the color key vector along with the heatmap in PDF and SVG.
+        cbar.solids.set_rasterized(False)
+        try:
+            for fmt in formats or ["pdf", "png"]:
+                g.fig.savefig(prefix.with_suffix(f".{fmt}"), bbox_inches="tight", dpi=dpi)
+        finally:
+            plt.close(g.fig)
 
     clustered_prefix = outfile_prefix.with_name(outfile_prefix.stem.replace("_code", "_clustered"))
-    for fmt in formats:
-        plt.savefig(clustered_prefix.with_suffix(f".{fmt}"), bbox_inches="tight")
-    plt.close()
+    with mpl.rc_context({"figure.dpi": min(mpl.rcParams["figure.dpi"], dpi)}):
+        for prefix, clustered in [(outfile_prefix, False), (clustered_prefix, True)]:
+            render(prefix, clustered)
+            gc.collect()
 
 
 # ------------------------------- Main ---------------------------------------

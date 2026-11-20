@@ -27,6 +27,20 @@ serialized mamba slot indicate active environment creation, not a deadlock.
 - BLAST database errors: set `standard.mito.mito_db` and `standard.mito.biof_db` to valid database prefixes or compatible FASTA paths.
 - Conda solve errors: confirm `mamba` is available and review the relevant `environments.*` config entry.
 
+## Full mock stops at CLUSTERMAPS with exit 137
+
+Exit 137 with `Killed` means the process received SIGKILL. Memory pressure is one possible cause. Earlier versions exported even the largest clustermaps at 600 DPI. Current versions scale the raster resolution to the figure dimensions and preserve vector cells and text in PDF and SVG.
+
+For the vignette, update the checkout and rerun the same configuration. Keep the existing results and hidden runtime directory so Nextflow can reuse completed tasks.
+
+```bash
+cd ~/aspire-vignette/ASPIRE
+git pull --ff-only origin main
+./run_asv_pipeline.sh ../cami.yml
+```
+
+If the updated process is killed again, check the kernel or scheduler memory report for the time of the failure. It can distinguish an out-of-memory kill from another external termination.
+
 ## MITOMASTER API availability
 
 Requests have bounded retries and timeouts. `standard.mito.mitomaster_failure_policy: fail` stops after an API failure; `continue` preserves successful responses and allows local BLAST screening to finish even if all requests fail. Inspect the published status JSON and failure TSV before interpreting mitochondrial evidence. See the [configuration reference](CONFIGURATION.md).
