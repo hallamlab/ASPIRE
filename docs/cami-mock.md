@@ -12,33 +12,63 @@ Can a respiratory microbiome workflow recover signals planted in a community wit
 Use a 64-bit Linux machine with Git, Python 3 and Mamba on PATH. Budget at least 8 cores, 32 GB RAM and 50 GB of free storage. The first launch requires internet access for environments and taxonomy references. See [installation](installation.md) for prerequisites.
 
 ```bash
-mkdir -p ~/aspire-vignette
-cd ~/aspire-vignette
-WORK="$PWD"
-git clone --branch main https://github.com/hallamlab/ASPIRE.git
-cd ASPIRE
+(
+set -euo pipefail
+WORK="$HOME/aspire-vignette"
+mkdir -p "$WORK"
+cd "$WORK"
+if [[ ! -e ASPIRE ]]; then
+    git clone --branch main https://github.com/hallamlab/ASPIRE.git ASPIRE
+fi
+cd "$WORK/ASPIRE"
+if [[ "$(git branch --show-current)" != main ]]; then
+    echo "Expected the ASPIRE main checkout in $PWD. Check the branch before continuing." >&2
+    exit 1
+fi
+git pull --ff-only origin main
 git rev-parse HEAD > "$WORK/aspire-revision.txt"
+)
 ```
 
-Keep this shell open for the commands below. For an existing checkout, set `WORK` to an absolute analysis directory and run the ASPIRE commands from the repository root.
+Paste each Bash block as a unit, in order. Each starts from an explicit directory under `~/aspire-vignette` and returns to your starting directory when it finishes. You can open a fresh Bash shell between steps.
 
 ## Obtain the study
 
-Zenodo deposition is pending. The prepared archive is approximately 2.4 GiB (SHA-256 `a3c87a6ec68113605742cf44de9bc70ea328edd07c05d1dbf321bab56eeef3dc`). If you have the vignette distribution, place `aspire-cami-mock-v1.tar.gz` and its `.sha256` companion in the analysis directory and run:
+Zenodo deposition is pending. The prepared archive is approximately 2.4 GiB (SHA-256 `a3c87a6ec68113605742cf44de9bc70ea328edd07c05d1dbf321bab56eeef3dc`). Download or copy both `aspire-cami-mock-v1.tar.gz` and `aspire-cami-mock-v1.tar.gz.sha256` to `~/Downloads` or `~/aspire-vignette`. This block verifies the archive before extracting it into `~/aspire-vignette/mock_dataset`.
 
 ```bash
-(cd "$WORK" && sha256sum -c aspire-cami-mock-v1.tar.gz.sha256 && tar -xzf aspire-cami-mock-v1.tar.gz)
-DATASET="$WORK/mock_dataset"
+(
+set -euo pipefail
+WORK="$HOME/aspire-vignette"
+mkdir -p "$WORK"
+cd "$WORK"
+archive=aspire-cami-mock-v1.tar.gz
+if [[ ! -f "$archive" || ! -f "$archive.sha256" ]]; then
+    if [[ ! -f "$HOME/Downloads/$archive" || ! -f "$HOME/Downloads/$archive.sha256" ]]; then
+        echo "Place $archive and $archive.sha256 together in $WORK or $HOME/Downloads, then repeat this block." >&2
+        exit 1
+    fi
+    cd "$HOME/Downloads"
+fi
+sha256sum -c "$archive.sha256"
+tar -xzf "$archive" -C "$WORK"
+cd "$WORK/mock_dataset"
+ls fastq_manifest.tsv sample_metadata.tsv chemistry.tsv
+)
 ```
 
-You can also generate the study now using the [DECOI CAMI2 body-site instructions](https://hallamlab-decoi.readthedocs.io/en/latest/cami-body-sites.html). Set `DATASET` to the resulting absolute `dataset/mock_dataset` directory. Both routes supply the same input layout.
+You can also generate the study now using the [DECOI CAMI2 body-site instructions](https://hallamlab-decoi.readthedocs.io/en/latest/cami-body-sites.html). For that route, skip the archive block and copy the resulting `mock_dataset` directory into `~/aspire-vignette/` before continuing. Both routes use `~/aspire-vignette/mock_dataset/fastq_manifest.tsv`.
 
 DECOI simulated 50 patients using CAMI2-derived communities, synthetic chemistry and seed 42. Each of 25 controls contributes one airway, one oral and one skin library. Each of 25 cases contributes two airway libraries (tumor-side and contralateral), one oral and one skin library. Four extraction blanks bring the total to 179. The 50 skin libraries serve as biological controls. Oral and airway libraries form the 125-sample analysis cohort.
 
 ```bash
-head -n 3 "$DATASET/fastq_manifest.tsv"
-head -n 2 "$DATASET/sample_metadata.tsv"
-head -n 2 "$DATASET/chemistry.tsv"
+(
+set -euo pipefail
+cd "$HOME/aspire-vignette/mock_dataset"
+head -n 3 fastq_manifest.tsv
+head -n 2 sample_metadata.tsv
+head -n 2 chemistry.tsv
+)
 ```
 
 Follow one sample ID from its R1/R2 paths to its participant, body site and chemistry. Retain the `ground_truth_*.tsv` tables for evaluation after inference. They describe the planted features, group effects, chemical associations and network modules.
@@ -46,17 +76,22 @@ Follow one sample ID from its R1/R2 paths to its participant, body site and chem
 ## Configure, run and validate
 
 ```bash
+(
+set -euo pipefail
+WORK="$HOME/aspire-vignette"
+cd "$WORK/ASPIRE"
+DATASET="$WORK/mock_dataset"
 RESULTS="$WORK/results"
 CONFIG="$WORK/cami.yml"
 ./examples/configure_mock_run.sh --dataset "$DATASET" --output "$RESULTS" --config-out "$CONFIG" --threads 8
 ./run_asv_pipeline.sh "$CONFIG"
-./examples/validate_mock_run.sh --dataset "$DATASET" --results "$RESULTS" > "$WORK/validation.txt"
-cat "$WORK/validation.txt"
+./examples/validate_mock_run.sh --dataset "$DATASET" --results "$RESULTS" 2>&1 | tee "$WORK/validation.txt"
+)
 ```
 
 The configurator writes machine-local paths and selects the CAMI clinical profile. Review the generated YAML for primer trimming, biological and technical control definitions, patient column and VOC table. Its current large-study power settings use 1,000 simulations and 999 permutations. To resume, repeat the launcher with the same YAML and retain the results directory and its hidden runtime cache.
 
-Open `summary/report/ASPIRE_run_report.html` inside the results directory. Use the module links to move between figures, source tables and execution logs. For a remote run, see [report viewing](outputs.md#view-reports-on-a-remote-server). The examples below use the saved Cutadapt run, which completed or reused 931 tasks. Numerical values describe that run and can vary with revisions and analysis settings.
+Open `~/aspire-vignette/results/summary/report/ASPIRE_run_report.html`. Use the module links to move between figures, source tables and execution logs. For a remote run, see [report viewing](outputs.md#view-reports-on-a-remote-server). The examples below use the saved Cutadapt run, which completed or reused 931 tasks. Numerical values describe that run and can vary with revisions and analysis settings.
 
 ### Read the HTML report
 
@@ -70,17 +105,29 @@ Scroll to **Output Inventory**. In the Diversity card, **Plots** opens the publi
 
 ## Make the study figures from your run
 
-ASPIRE publishes individual plots under `$RESULTS/modules/<module>/plots/`. For a SPARK-style review of the CAMI mock, run the two commands below from the ASPIRE checkout after validation. The first creates a plotting environment; the second collects native plots and draws additional panels directly from your published tables. You can open the SVGs in a browser or edit them individually in a vector editor.
+ASPIRE publishes individual plots under `$RESULTS/modules/<module>/plots/`. For a SPARK-style review of the CAMI mock, paste the block below after validation. It creates a plotting environment, collects native plots and draws additional panels directly from your published tables. You can open the SVGs in a browser or edit them individually in a vector editor.
 
 ```bash
+(
+set -euo pipefail
+WORK="$HOME/aspire-vignette"
+cd "$WORK/ASPIRE"
+RESULTS="$WORK/results"
 mamba create -y -n aspire-vignette-figures -c conda-forge python=3.11 matplotlib pandas numpy 'scipy>=1.11' networkx
 mamba run -n aspire-vignette-figures python examples/benchmarks/aspire-cami-mock/render_study_figures.py "$RESULTS" "$WORK/study-figures"
+)
 ```
 
 The study-figures directory includes the interactive read-flow HTML, SVGs, the tables behind the newly drawn panels, and the heatmap column order. The companion command below also reproduces the collector, Shannon and ordination, VOC, module-size and airway-phylum panels in this walkthrough.
 
 ```bash
+(
+set -euo pipefail
+WORK="$HOME/aspire-vignette"
+cd "$WORK/ASPIRE"
+RESULTS="$WORK/results"
 mamba run -n aspire-vignette-figures python examples/benchmarks/aspire-cami-mock/render_vignette.py "$RESULTS" "$WORK/study-figures"
+)
 ```
 
 SPARK used oral rinse, BAL and bronchial brush samples, and documented separate pre- and post-host-exclusion stages. This walkthrough follows the mock’s airway/oral design. In particular, the read-flow panel spans processing stages, the overlap and site-specific case tests use final features, and the network shows only its modeled subset.
@@ -92,8 +139,12 @@ The primer audit accounted for all 8,802,765 input pairs. Cutadapt trimmed 8,789
 The 5,000-read biological depth threshold retained all 125 airway and oral libraries. Technical controls flagged 104 ASVs and skin controls flagged 81. Twelve appeared in both lists, so their union removed 173. ASPIRE then screened non-targets and required at least 0.1% relative abundance in one biological sample and nonzero counts in at least 5% of the cohort (seven samples). The final table contained **185 ASVs across 125 libraries**. All four planted non-target features were identified. Inspect the per-feature decisions alongside the count matrix:
 
 ```bash
-head -n 3 "$RESULTS/modules/non_target_filtering/tables/ASV_target.feature_qc.tsv"
-head -n 1 "$RESULTS/modules/non_target_filtering/tables/ASV_target.tsv" | cut -f1-5
+(
+set -euo pipefail
+cd "$HOME/aspire-vignette/results/modules/non_target_filtering/tables"
+head -n 3 ASV_target.feature_qc.tsv
+head -n 1 ASV_target.tsv | cut -f1-5
+)
 ```
 
 Read a row in `ASV_target.feature_qc.tsv` before opening a community plot. ASV10 occurred in 56 of 125 eligible libraries (44.8%), reached 18.32% relative abundance in its most abundant library, and passed both filters. Its maximum abundance describes one library; its prevalence describes the cohort.
@@ -130,9 +181,12 @@ Start with Shannon diversity within libraries. Read the case and control distrib
 On the left, the center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. [Original Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.png)
 
 ```bash
-DIV="$RESULTS/modules/diversity/tables/patient_aware"
-cat "$DIV/bray_permanova_case_patient_pooled.tsv"
-head "$DIV/bray_permdisp_diagnostics.tsv"
+(
+set -euo pipefail
+cd "$HOME/aspire-vignette/results/modules/diversity/tables/patient_aware"
+cat bray_permanova_case_patient_pooled.tsv
+head bray_permdisp_diagnostics.tsv
+)
 ```
 
 The pooled Bray–Curtis PERMANOVA used 25 cases and 25 controls. Case status explained 3.3% of variation (permutation p = 0.128), giving limited evidence for an overall case effect. Examine dispersion diagnostics and the sample-type-specific tables before attributing separation in an ordination to disease group.
@@ -222,7 +276,10 @@ Read down the acetone column. ASV295 and ASV173 have positive coefficients, whil
 Use the heatmap to select a candidate, then check the patient-level estimate, sample support, normalization and multiple-testing adjustment. This command lists the five tested relative-abundance associations with the lowest adjusted p-values:
 
 ```bash
-python3 - "$RESULTS/modules/voc_correlation/tables/patient_asv_voc_permutation_long.tsv" <<'PY'
+(
+set -euo pipefail
+cd "$HOME/aspire-vignette/results/modules/voc_correlation/tables"
+python3 - "patient_asv_voc_permutation_long.tsv" <<'PY'
 import csv
 import sys
 with open(sys.argv[1]) as source:
@@ -231,6 +288,7 @@ with open(sys.argv[1]) as source:
 for row in sorted(rows, key=lambda r: float(r["q_value"]))[:5]:
     print(*(row[k] for k in ("asv_label", "voc", "n_patients", "rho", "q_value")), sep="\t")
 PY
+)
 ```
 
 For example, ASV295 (assigned to *Massilia*) and acetone had a positive patient-level association (50 patients, Spearman rho = 0.669, adjusted p = 0.0104). This measures covariation in synthetic patients. Across the separate sample-level truth check, six of 17 planted positive ASV–VOC pairs reached the validator’s Spearman rho threshold of 0.30. See [VOC statistics](VOC_STATISTICS.md) for normalization and permutation details.
@@ -238,10 +296,13 @@ For example, ASV295 (assigned to *Massilia*) and acetone had a positive patient-
 ## Explore network structure and assess recovery
 
 ```bash
-NET="$RESULTS/modules/network_analysis/tables"
-head "$NET/spieceasi_edge_list.csv"
-head "$NET/spieceasi_modules_all.tsv"
-cat "$NET/network_topology_summary.tsv"
+(
+set -euo pipefail
+cd "$HOME/aspire-vignette/results/modules/network_analysis/tables"
+head spieceasi_edge_list.csv
+head spieceasi_modules_all.tsv
+cat network_topology_summary.tsv
+)
 ```
 
 ![Published degree plot of the thresholded microbial network](assets/vignette/network-degree.svg)
