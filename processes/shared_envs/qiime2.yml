@@ -7,6 +7,8 @@ channels:
 dependencies:
   - python=3.10
   - qiime2=2024.10
+  # Compatible with Python 3.10 in the QIIME 2 2024.10 environment.
+  - flufl.lock=9.2.0
   - q2-feature-classifier=2024.10
   - pandas
   - numpy

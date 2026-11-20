@@ -34,3 +34,14 @@ Requests have bounded retries and timeouts. `standard.mito.mitomaster_failure_po
 ## Unavailable outlier classifications
 
 A detector that fails or cannot form valid clusters is unavailable. If too few detectors remain for the vote threshold, consensus is unknown. Review detector availability and group diagnostics rather than treating unknown calls as inliers.
+
+## Taxonomy stops while importing `Self` from `typing`
+
+A traceback ending in `flufl/lock/_lockfile.py` during `core:TAXONOMY` indicates an incompatible locking-library build in the QIIME 2 Python 3.10 environment. ASPIRE main pins the compatible `flufl.lock=9.2.0` release. From the checkout used for the failed quickstart, update main and repeat the original quickstart command with the same output directory and thread count:
+
+```bash
+git pull --ff-only origin main
+./examples/run_quickstart.sh --output "$PWD/aspire-quickstart" --threads 4
+```
+
+Keep the existing results and hidden runtime directory so Nextflow can reuse completed tasks and build the updated taxonomy environment.
