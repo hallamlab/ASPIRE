@@ -4315,7 +4315,7 @@ C 338.362811 292.045297 337.748601 293.528131 337.748601 295.074075
 C 337.748601 296.620019 338.362811 298.102853 339.455958 299.196001 
 C 340.549106 300.289148 342.03194 300.903358 343.577884 300.903358 
 z
-" clip-path="url(#pf126f58727)" style="fill: #d55e00; fill-opacity: 0.9; stroke: #000000; stroke-opacity: 0.9; stroke-width: 0.25"/>
+" clip-path="url(#pf126f58727)" style="fill: #717171; fill-opacity: 0.9; stroke: #000000; stroke-opacity: 0.9; stroke-width: 0.25"/>
     <path d="M 594.193584 534.462429 
 C 594.326185 534.462429 594.453374 534.409746 594.547137 534.315982 
 C 594.6409 534.222219 594.693584 534.095031 594.693584 533.962429 
@@ -5475,7 +5475,7 @@ L 797.9628 124.535156
 L 797.9628 116.835156 
 L 775.9628 116.835156 
 z
-" style="fill: #d55e00; stroke: #d55e00; stroke-linejoin: miter"/>
+" style="fill: #717171; stroke: #717171; stroke-linejoin: miter"/>
     </g>
     <g id="text_4">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="124.535156" transform="rotate(-0 806.7628 124.535156)">Cancer</text>

@@ -1,5 +1,6 @@
 """Generate stand-alone SVGs and their display tables from a completed CAMI vignette."""
 import argparse
+import re
 from pathlib import Path
 from shutil import copyfile
 
@@ -88,7 +89,7 @@ for rank in ("Family", "Phylum"):
         export(comp, "phylum-composition")
         fig, ax = plt.subplots(figsize=(8,2.7),layout="constrained")
         base=np.zeros(len(sites))
-        for taxon, color in zip(comp.index,plt.get_cmap("tab20").colors):
+        for taxon, color in zip(comp.index, plt.get_cmap("Greys")(np.linspace(0.25, 0.9, len(comp)))):
             ax.barh(sites,comp.loc[taxon],left=base,color=color,label=taxon)
             base+=comp.loc[taxon].to_numpy()
         ax.set(xlim=(0,100),xlabel="Mean library composition (%)")
@@ -190,22 +191,54 @@ for ax, (first, second, paired, slug) in zip(axes.flat, contrasts):
     export(result, slug + "-indicators")
     ax.add_collection(LineCollection([(pos[a],pos[b]) for a,b in graph.edges],
                                     colors="#dddddd",linewidths=0.35,zorder=0))
-    for group,color in [("Background","#c9c9c9"),(second,"#555555"),(first,"#bd5436")]:
+    for group,color in [("Background","#c9c9c9"),(second,"#858585"),(first,"#181818")]:
         hits=result[result.highlighted & result.in_network]
         ids=[n for n in graph if n not in hits.index] if group=="Background" else hits.index[hits.group==group]
         if len(ids):
             xy=np.array([pos[n] for n in ids])
-            ax.scatter(*xy.T,s=8 if group=="Background" else 90*result.loc[ids,"stat"]**2,
+            ax.scatter(*xy.T,marker="^" if group==first else "o",s=8 if group=="Background" else 90*result.loc[ids,"stat"]**2,
                        color=color,edgecolors="white",linewidths=0.25)
     title = "Oral case vs control" if slug == "oral-case" else f"{first} vs {second.lower()}"
     ax.set_title(f"{title} · {len(hits)} network indicators")
-    ax.legend(handles=[Patch(color=c, label=g) for g,c in [(first,"#bd5436"),(second,"#555555"),
+    ax.legend(handles=[Patch(color=c, label=g) for g,c in [(first,"#181818"),(second,"#858585"),
                                                           ("Background","#c9c9c9")]],
               loc="lower center", bbox_to_anchor=(0.5,-0.06), ncol=3, frameon=False, fontsize=8)
     ax.set_aspect("equal")
     ax.axis("off")
 export(pd.concat(cohorts), "indicator-contrast-cohorts")
 save(fig,"site-case-networks")
+
+# Show every defined case-versus-control statistic, including nonsignificant tests.
+case_fit = read("indicator_analysis", "Case_indicator_species_DULEG_summary.tsv").set_index("ASV")
+tested = case_fit.dropna(subset=["stat", "q.value"])
+fig, ax = plt.subplots(figsize=(6.2, 4.1), layout="constrained")
+criteria = tested["q.value"] < 0.05
+for label, keep, marker, shade in [
+    ("Nonsignificant", ~criteria, "o", "#bcbcbc"),
+    ("Case", criteria & tested["s.Cancer"].eq(1), "^", "#161616"),
+    ("Control", criteria & tested["s.Control"].eq(1), "s", "#525252"),
+]:
+    sub = tested.loc[keep]
+    ax.scatter(sub.stat, -np.log10(sub["q.value"]), marker=marker, c=shade,
+               s=27, alpha=0.8, label=f"{label} ({len(sub)})")
+ax.axhline(-np.log10(0.05), color="#777777", linestyle=":", linewidth=1)
+ax.set(xlabel="Indicator statistic", ylabel="−log₁₀(adjusted p-value)",
+       title=f"Case vs control · {len(tested)} scored, {len(case_fit)-len(tested)} unscored")
+ax.legend(frameon=False)
+save(fig, "case-isa-single-group")
+export(case_fit, "case-isa-single-group")
+
+def vignette_svg(source, target, keep_site=False):
+    """Desaturate exported vector paint while keeping site labels and legend keys consistent."""
+    def neutral(match):
+        paint, code = match.groups()
+        if keep_site and code.lower() in {"009e73", "6a3d9a"}:
+            return match.group()
+        rgb = [int(code[i:i+2], 16) for i in (0, 2, 4)]
+        gray = round(np.dot(rgb, [0.2126, 0.7152, 0.0722]))
+        return paint + "#" + f"{gray:02x}" * 3
+    svg = re.sub(r"((?:fill|stroke):\s*)#([0-9a-fA-F]{6})\b", neutral, source.read_text())
+    target.write_text(svg)
 
 # Collect the matching native exports without modifying the published run.
 for module, plot in [
@@ -221,8 +254,19 @@ for module, plot in [
     ("indicator_analysis", "Type_Group__Case/type_group_ISA_plot_Phylum"),
 ]:
     source = modules / module / "plots" / (plot + ".svg")
-    copyfile(source, out / source.name)
+    vignette_svg(source, out / source.name, keep_site=plot.split("/")[-1] in {
+        "type_group_ISA_plot", "bubble_plot_asv_summary_type_group", "final_micro_upset", "read_depth_by_class"})
 
+for filename in (
+    "network_Type_Group_ISA", "network_Case_ISA", "network_betweenness_POS_ALL",
+    "network_modules_POS_ALL", "network_modules_POS_SUB", "network_phylum_ISA",
+    "network_phylum_ABUND_MEAN", "network_phylum_ABUND_MEDIAN",
+):
+    source = modules / "network_analysis/plots" / (filename + ".svg")
+    vignette_svg(source, out / source.name, keep_site=filename == "network_Type_Group_ISA")
+for filename in ("case_ISA_plot", "Combined_ISA_plot", "Combined_ISA_plot_Phylum"):
+    source = modules / "indicator_analysis/plots/Type_Group__Case" / (filename + ".svg")
+    vignette_svg(source, out / source.name, keep_site=filename == "Combined_ISA_plot")
 copyfile(modules / "sankey/plots/data_loss_sankey.label.html", out / "data_loss_sankey.label.html")
 presence = read("upset", "final_micro_final_venn_presence_table.tsv")
 overlap = presence.groupby("grouping").ASV_ID.nunique().reindex(

@@ -5,7 +5,6 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 
@@ -59,13 +58,13 @@ voc = voc[(voc.normalization == "relative_abundance") & (voc.status == "tested")
 examples = ["ASV295", "ASV173", "ASV66"]
 matrix = voc.pivot(index="asv", columns="voc", values="rho").loc[examples]
 fig, ax = plt.subplots(figsize=(7.8, 2.7), layout="constrained")
-palette = LinearSegmentedColormap.from_list("signed", ["#28617c", "#fafafa", "#a74f28"])
+palette = "Greys"
 im = ax.imshow(matrix, cmap=palette, vmin=-1, vmax=1, aspect="auto")
 ax.set_yticks(range(len(matrix)), matrix.index)
 ax.set_xticks(range(len(matrix.columns)), [v.replace("_", "\n", 1) if v == "dimethyl_sulfide"
                   else v.replace("2_3_butanedione", "2,3-butanedione") for v in matrix.columns], fontsize=9)
 for (i, j), value in np.ndenumerate(matrix.to_numpy()):
-    ax.text(j, i, f"{value:.2f}", ha="center", va="center")
+    ax.text(j, i, f"{value:+.2f}", ha="center", va="center", color="white" if value > 0.1 else "#202020")
 fig.colorbar(im, ax=ax, ticks=[-1, 0, 1], label="Spearman ρ")
 save(fig, "patient-voc")
 

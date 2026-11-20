@@ -45,7 +45,7 @@ L 239.955206 103.971364
    <g id="line2d_2">
     <path d="M 49.194297 236.005455 
 L 239.955206 236.005455 
-" clip-path="url(#p7a7b1f9478)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #ff0000; stroke-opacity: 0.4"/>
+" clip-path="url(#p7a7b1f9478)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #363636; stroke-opacity: 0.4"/>
    </g>
    <g id="matplotlib.axis_1">
     <g id="xtick_1">
@@ -218,7 +218,7 @@ L 239.955206 59.96
     <text style="font-size: 9px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #808080" x="234.001153" y="98.288345" transform="rotate(-0 234.001153 98.288345)">80% power</text>
    </g>
    <g id="text_9">
-    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #ff0000" x="51.333131" y="233.203352" transform="rotate(-0 51.333131 233.203352)">α=0.05</text>
+    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #363636" x="51.333131" y="233.203352" transform="rotate(-0 51.333131 233.203352)">α=0.05</text>
    </g>
    <g id="text_10">
     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: middle; fill: #262626" x="144.574751" y="53.96" transform="rotate(-0 144.574751 53.96)">Airways</text>
@@ -241,7 +241,7 @@ L 471.176115 103.971364
    <g id="line2d_16">
     <path d="M 280.415206 236.005455 
 L 471.176115 236.005455 
-" clip-path="url(#p8b3fa4fcdb)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #ff0000; stroke-opacity: 0.4"/>
+" clip-path="url(#p8b3fa4fcdb)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #363636; stroke-opacity: 0.4"/>
    </g>
    <g id="matplotlib.axis_3">
     <g id="xtick_5">
@@ -385,7 +385,7 @@ L 471.176115 59.96
     <text style="font-size: 9px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #808080" x="465.222062" y="98.288345" transform="rotate(-0 465.222062 98.288345)">80% power</text>
    </g>
    <g id="text_18">
-    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #ff0000" x="282.55404" y="233.203352" transform="rotate(-0 282.55404 233.203352)">α=0.05</text>
+    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #363636" x="282.55404" y="233.203352" transform="rotate(-0 282.55404 233.203352)">α=0.05</text>
    </g>
    <g id="text_19">
     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: middle; fill: #262626" x="375.795661" y="53.96" transform="rotate(-0 375.795661 53.96)">Oral</text>
@@ -450,7 +450,7 @@ L 239.955206 310.581364
    <g id="line2d_32">
     <path d="M 49.194297 442.615455 
 L 239.955206 442.615455 
-" clip-path="url(#pe851091cf6)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #ff0000; stroke-opacity: 0.4"/>
+" clip-path="url(#pe851091cf6)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #363636; stroke-opacity: 0.4"/>
    </g>
    <g id="matplotlib.axis_5">
     <g id="xtick_9">
@@ -612,7 +612,7 @@ L 239.955206 266.57
     <text style="font-size: 9px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #808080" x="234.001153" y="304.898345" transform="rotate(-0 234.001153 304.898345)">80% power</text>
    </g>
    <g id="text_36">
-    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #ff0000" x="51.333131" y="439.813352" transform="rotate(-0 51.333131 439.813352)">α=0.05</text>
+    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #363636" x="51.333131" y="439.813352" transform="rotate(-0 51.333131 439.813352)">α=0.05</text>
    </g>
   </g>
   <g id="axes_4">
@@ -632,7 +632,7 @@ L 471.176115 310.581364
    <g id="line2d_46">
     <path d="M 280.415206 442.615455 
 L 471.176115 442.615455 
-" clip-path="url(#p31661b2620)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #ff0000; stroke-opacity: 0.4"/>
+" clip-path="url(#p31661b2620)" style="fill: none; stroke-dasharray: 1,1.65; stroke-dashoffset: 0; stroke: #363636; stroke-opacity: 0.4"/>
    </g>
    <g id="matplotlib.axis_7">
     <g id="xtick_13">
@@ -791,7 +791,7 @@ L 471.176115 266.57
     <text style="font-size: 9px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #808080" x="465.222062" y="304.898345" transform="rotate(-0 465.222062 304.898345)">80% power</text>
    </g>
    <g id="text_49">
-    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #ff0000" x="282.55404" y="439.813352" transform="rotate(-0 282.55404 439.813352)">α=0.05</text>
+    <text style="font-size: 8px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #363636" x="282.55404" y="439.813352" transform="rotate(-0 282.55404 439.813352)">α=0.05</text>
    </g>
   </g>
   <g id="text_50">

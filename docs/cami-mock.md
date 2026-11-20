@@ -241,17 +241,19 @@ For an indicator example, find ASV14 in `Case_indicator_species_summary.tsv` in 
 
 ### Read the indicator species analysis (ISA) plots
 
-| A · Sample-type indicators | B · Case-status indicators |
+| A · Sample-type indicators | B · Case vs control, single-group fit |
 | --- | --- |
-| [![A · Sample-type indicators](assets/vignette/type_group_ISA_plot.svg)](assets/vignette/type_group_ISA_plot.svg) | [![B · Case-status indicators](assets/vignette/case_ISA_plot.svg)](assets/vignette/case_ISA_plot.svg) |
+| [![A · Sample-type indicators](assets/vignette/type_group_ISA_plot.svg)](assets/vignette/type_group_ISA_plot.svg) | [![B · Case vs control, single-group fit](assets/vignette/case-isa-single-group.svg)](assets/vignette/case-isa-single-group.svg) |
 
-Each point represents an ASV. Read rightward for a stronger indicator statistic and upward for a smaller adjusted p-value. A height of 2 corresponds to q = 0.01. Overlapping marks are spread for visibility. Use the tables for exact coordinates. The saved run called 119 sample-type indicators and three case-status indicators across the two analyses; an ASV can contribute to both counts. Select any panel to enlarge its vector artwork.
+Read rightward for a stronger indicator statistic and upward for a smaller adjusted p-value. A height of 2 corresponds to q = 0.01. In A, the combination-allowed sample-type fit called 119 indicators. In B, the **single-group** case-versus-control fit accounts for all 185 retained ASVs. It plots all 167 with a finite statistic and q-value: 159 nonsignificant circles and eight significant case or control indicators (q < 0.05). The other 18 lack coordinates and are counted above the axes. The dotted line marks q = 0.05. Points at identical coordinates can overlap. Use `case-isa-single-group.tsv` in the study-figures directory to inspect every row.
+
+**Why did the original case plot look nearly empty?** The [original combination-allowed case view](assets/vignette/case_ISA_plot.svg) answers a different question. ASPIRE omits the full Cancer + Control union from its summary: 161 of 185 ASVs fell out at this step. Of the remaining 24, 18 lacked a statistic and q-value, leaving six plottable points, three significant. The single-group fit compares Cancer and Control directly and has its own adjusted p-values. Panels C and D below retain the combination-allowed fit so you can inspect that result too.
 
 | C · Case statistic by sample type | D · Case statistic by phylum |
 | --- | --- |
 | [![C · Case statistic by sample type](assets/vignette/Combined_ISA_plot.svg)](assets/vignette/Combined_ISA_plot.svg) | [![D · Case statistic by phylum](assets/vignette/Combined_ISA_plot_Phylum.svg)](assets/vignette/Combined_ISA_plot_Phylum.svg) |
 
-C and D use the **case-status** statistic and adjusted p-value for both axes. Marker shape identifies the case-status assignment. Hue in C gives the sample-type assignment; hue in D gives the phylum. Use the legend for each panel. For a phylum view on the **sample-type** axes, open the [sample-type ISA plot by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg).
+C and D use the **case-status** statistic and adjusted p-value for both axes. Marker shape identifies the case-status assignment. Green and purple in C identify airway and oral assignments. Gray shades in D denote phylum. Use the legend for each panel. For a phylum view on the **sample-type** axes, open the [sample-type ISA plot by phylum](assets/vignette/type_group_ISA_plot_Phylum.svg).
 
 Trace ASV10 through `modules/indicator_analysis/tables/Type_Group__Case/Combined_ISA_with_taxonomy.tsv`. Its sample-type statistic is 0.999, q = 0.00127, and its label is Oral (purple in A). Its phylum is Firmicutes. Its case-statistic fields are empty, so its strong oral association does not yield a point on the case-statistic axes.
 
@@ -271,7 +273,7 @@ Allowing group combinations yielded 43 airway and 76 oral indicators. Restrictin
 
 ![Patient-level Spearman correlations for three selected ASVs across six compounds](assets/vignette/patient-voc.svg)
 
-Read down the acetone column. ASV295 and ASV173 have positive coefficients, while ASV66 has a negative coefficient. Read across any row to compare compounds for the same ASV. Blue shows negative and rust shows positive associations on a common −1 to +1 scale. Cell labels give rho; adjusted p-values appear in the permutation table. These three rows illustrate the patient-level relative-abundance analysis. [Full sample-level clustermap from the report](assets/vignette/asv_voc_clustermap.svg)
+Read down the acetone column. ASV295 and ASV173 have positive coefficients, while ASV66 has a negative coefficient. Read across any row to compare compounds for the same ASV. The scale runs from light (negative) to dark (positive), and the signed values are printed in each cell. The values give rho; adjusted p-values appear in the permutation table. These three rows illustrate the patient-level relative-abundance analysis. [Full sample-level clustermap from the report](assets/vignette/asv_voc_clustermap.svg)
 
 Use the heatmap to select a candidate, then check the patient-level estimate, sample support, normalization and multiple-testing adjustment. This command lists the five tested relative-abundance associations with the lowest adjusted p-values:
 
@@ -315,25 +317,25 @@ Start with the published degree plot to locate highly connected nodes. Use `spie
 | --- | --- |
 | [![A · Sample-type ISA](assets/vignette/network_Type_Group_ISA.svg)](assets/vignette/network_Type_Group_ISA.svg) | [![B · Case-status ISA](assets/vignette/network_Case_ISA.svg)](assets/vignette/network_Case_ISA.svg) |
 
-**Which groups do connected ASVs indicate?** A uses green for airway indicators and purple for oral indicators. B uses gray for Non-Cancer and orange for Cancer. Node size encodes indicator strength. Follow ASV10 from the oral indicator table into A; use the labeled SVG in the run’s plots directory to locate it. For gray nodes in B, consult the case summary to distinguish an assigned control indicator from a background node.
+**Which groups do connected ASVs indicate?** A uses green for airway indicators and purple for oral indicators. B uses the grayscale case-status legend. Node size encodes indicator strength. Follow ASV10 from the oral indicator table into A; use the labeled SVG in the run’s plots directory to locate it. For gray nodes in B, consult the case summary to distinguish an assigned control indicator from a background node.
 
 | C · Phylum and indicator strength | D · Phylum and mean abundance |
 | --- | --- |
 | [![C · Phylum and indicator strength](assets/vignette/network_phylum_ISA.svg)](assets/vignette/network_phylum_ISA.svg) | [![D · Phylum and mean abundance](assets/vignette/network_phylum_ABUND_MEAN.svg)](assets/vignette/network_phylum_ABUND_MEAN.svg) |
 
-**Is a strong indicator also abundant?** Hue identifies phylum in C and D. Size changes from indicator strength to log-scaled mean abundance. Compare relative prominence within each panel using its size legend. The default `network_phylum_ABUND.svg` also shows the mean-abundance view.
+**Is a strong indicator also abundant?** The grayscale legends identify phylum in C and D. Size changes from indicator strength to log-scaled mean abundance. Compare relative prominence within each panel using its size legend. The default `network_phylum_ABUND.svg` also shows the mean-abundance view.
 
 | E · Phylum and median abundance | F · Betweenness class and degree |
 | --- | --- |
 | [![E · Phylum and median abundance](assets/vignette/network_phylum_ABUND_MEDIAN.svg)](assets/vignette/network_phylum_ABUND_MEDIAN.svg) | [![F · Betweenness class and degree](assets/vignette/network_betweenness_POS_ALL.svg)](assets/vignette/network_betweenness_POS_ALL.svg) |
 
-**How typical or structurally central is the ASV?** Compare E with D: a node prominent by mean but small by median warrants inspecting the distribution of its counts across libraries. In F, hue marks normalized betweenness at or above versus below 0.05; size gives degree. In `spieceasi_node_features.csv`, ASV10 has degree 13 and normalized betweenness 0.0435, placing it below that threshold.
+**How typical or structurally central is the ASV?** Compare E with D: a node prominent by mean but small by median warrants inspecting the distribution of its counts across libraries. In F, shading marks normalized betweenness at or above versus below 0.05; size gives degree. In `spieceasi_node_features.csv`, ASV10 has degree 13 and normalized betweenness 0.0435, placing it below that threshold.
 
 | G · ISA-associated modules, POS_ALL | H · ISA-associated modules, POS_SUB |
 | --- | --- |
 | [![G · ISA-associated modules, POS_ALL](assets/vignette/network_modules_POS_ALL.svg)](assets/vignette/network_modules_POS_ALL.svg) | [![H · ISA-associated modules, POS_SUB](assets/vignette/network_modules_POS_SUB.svg)](assets/vignette/network_modules_POS_SUB.svg) |
 
-**Which modules carry an indicator association?** Hue identifies the highlighted module in G and H, and degree determines node size. Read colors against the module IDs in each legend. In this mock, both graph summaries report 167 nodes, 1,192 edges and 21 modules. The colored legends highlight ten modules. Use `spieceasi_modules_all.tsv` and `spieceasi_modules_sub.tsv` for assignments across the full set. The report also supplies grayscale degree and abundance views and labeled variants for locating individual ASVs.
+**Which modules carry an indicator association?** Gray shades identify the highlighted modules in G and H, and degree determines node size. Use the module IDs in the assignment tables for exact membership. In this mock, both graph summaries report 167 nodes, 1,192 edges and 21 modules. The legends list ten highlighted modules. Use `spieceasi_modules_all.tsv` and `spieceasi_modules_sub.tsv` for assignments across the full set. The report also supplies grayscale degree and abundance views and labeled variants for locating individual ASVs.
 
 ![Numbers of ASVs in the 21 inferred network modules](assets/vignette/network-modules.svg)
 
@@ -345,7 +347,7 @@ Select an edge, locate both ASVs in the module table, and inspect their position
 
 [![Three anatomical airway contrasts and the oral case–control comparison drawn on the same network layout](assets/vignette/site-case-networks.svg)](assets/vignette/site-case-networks.svg)
 
-Start at the top left for the primary airway comparison. Each panel uses the same network edges and layout. Rust identifies an indicator of the first group in the panel legend, charcoal identifies an indicator of the second, and pale gray marks background nodes. Highlighted node area scales with squared indicator strength.
+Start at the top left for the primary airway comparison. Each panel uses the same network edges and layout. Dark triangles identify indicators of the first group, medium-gray circles identify indicators of the second, and small pale-gray circles mark background nodes. Highlighted node area scales with squared indicator strength.
 
 | Panel | Comparison | Patients | Highlighted network ASVs |
 | --- | --- | --- | --- |
