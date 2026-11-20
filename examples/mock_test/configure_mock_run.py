@@ -287,8 +287,21 @@ def build_config(
     config_section(config, "metadata_plots")["palette_file"] = palette
     config_section(config, "sankey")["palette_file"] = palette
     metadata_file = dataset / 'sample_metadata.tsv'
-    if metadata_file.is_file() and is_cami_metadata(pd.read_csv(metadata_file, sep='\t')):
-        config = configure_cami_profile(config, project_dir, has_synthetic_clinical_design(pd.read_csv(metadata_file, sep='\t')))
+    if metadata_file.is_file():
+        frame = pd.read_csv(metadata_file, sep="\t")
+        if is_cami_metadata(frame):
+            clinical = has_synthetic_clinical_design(frame)
+            config = configure_cami_profile(config, project_dir, clinical)
+            if clinical:
+                study = frame[frame["Type_Group"].isin(["Airways", "Oral"])]
+                cases = study.loc[study["Case"] == "Cancer", "Participant_ID"].nunique()
+                paired = study.groupby("Participant_ID")["Type_Group"].nunique().eq(2).sum()
+                power = config_section(config, "power_analysis")
+                power["contralateral_sample_types"] = "Airways"
+                for key, observed in (("sample_sizes_cancer", cases), ("sample_sizes_stype", paired)):
+                    if observed:
+                        grid = {int(n) for n in power[key].split(",") if int(n) < observed}
+                        power[key] = ",".join(map(str, sorted(grid | {observed})))
     manifest_file = dataset / "manifest.json"
     if manifest_file.is_file() and json.loads(manifest_file.read_text()).get("name") == "aspire-quickstart":
         # Exercise every power-analysis path with a short installation grid.

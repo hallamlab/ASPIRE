@@ -1,6 +1,6 @@
 # From airway reads to patient-level associations
 
-Can a respiratory microbiome workflow recover signals planted in a community with repeated sampling, skin controls and extraction blanks? In this vignette you will process paired V4 reads, follow the controls through filtering, and explore which microbial and chemical associations survive patient-level analysis.
+Can a respiratory microbiome workflow recover signals planted in a community with repeated sampling, skin controls and extraction blanks? In this vignette you will process paired V4 reads, follow the controls through filtering, and explore which microbial and chemical associations survive patient-level analysis. The final worked example follows an airway indicator ASV from its site assignment to its association with acetone across 50 synthetic patients.
 
 ```{contents} In this vignette
 :local:
@@ -207,7 +207,16 @@ Read across each row before comparing p-values. The paired contrast tests differ
 
 The paired test detects a small community-composition difference despite similar Shannon medians (2.29 and 2.27). Read `permanova_q` for the adjusted composition test and `alpha_q` for the adjusted within-library diversity test.
 
-For a planning question, inspect `modules/power_analysis/tables/power_summary_cancer_vs_control.tsv`. In the saved run, airway PERMANOVA power at the reported grid point of 10 was 0.060, and the 80% target was beyond the tested range. This is a simulation under this mock’s effect sizes and settings. A fresh configuration uses a wider grid and more permutations. Use its own power table to interpret a new run.
+How much power does this mock have at its actual size? The archived power curve below stops at 10 cases and 25 controls. The revised CAMI configuration includes 25 cases and explicitly excludes contralateral airway libraries from this case–control comparison. Its paired site grid reaches all 50 participants with both sites.
+
+A focused rerun on the archived count table used 25 cases and 25 controls per site, 1,000 patient bootstrap simulations, 999 permutations per PERMANOVA test, seed 42 and α = 0.05. “Observed” resamples patients within their original groups. The null scenario pools patients before assigning group labels. Values below are the fraction of simulations rejecting the null.
+
+| Site | Bray–Curtis, observed | Bray–Curtis, null | Shannon, observed | Shannon, null |
+| --- | ---: | ---: | ---: | ---: |
+| Airways | 37.7% | 5.5% | 26.7% | 4.7% |
+| Oral | 37.8% | 5.5% | 6.9% | 4.7% |
+
+Even at the actual cohort size, the overall disease contrasts fall short of 80% under these assumptions. Compare that result with the paired airway-side test above, then follow the site indicators into the final patient-level chemistry analysis. Each asks a different biological question.
 
 | Lung-side contrasts | Power by sample size |
 | --- | --- |
@@ -227,7 +236,7 @@ Each column is a library. Columns are grouped by case status and patient; the st
 
 The composition plot gives each library equal weight. Actinobacteriota accounts for 58.9% of mean airway composition and 2.1% of mean oral composition in the saved clustermap matrix. The family plot uses a different unit: it averages a patient's library proportions within each site before drawing boxplots for the ten families with the highest overall mean library proportion. The exported TSV includes all patient values, including observations outside the displayed whiskers.
 
-## Explore indicator taxa and VOC associations
+## Identify indicator taxa
 
 Look up an ASV in `modules/taxonomy/tables/ASV_SILVA_tax.full-length.vsearch.tsv` to read its assigned lineage and consensus. The saved run assigned taxonomy to 497 of 498 inferred ASVs. To trace the abundances supplied downstream, inspect the before-correction, after-correction and selected CLR tables in `modules/batch_correction/tables/`.
 
@@ -268,32 +277,6 @@ This pair keeps the sample-type axes fixed. ASV10 is the oral-associated Firmicu
 [![Counts of significant sample-type assignments in two indicator model specifications](assets/vignette/indicator-partitions.svg)](assets/vignette/indicator-partitions.svg)
 
 Allowing group combinations yielded 43 airway and 76 oral indicators. Restricting the model to single groups yielded 49 and 87. Neither fit reported a significant Airways + Oral assignment. Each bar counts significant entries in the corresponding Type_Group summary; overlapping model results should not be added together.
-
-### Compare indicators with chemical measurements
-
-![Patient-level Spearman correlations for three selected ASVs across six compounds](assets/vignette/patient-voc.svg)
-
-Read down the acetone column. ASV295 and ASV173 have positive coefficients, while ASV66 has a negative coefficient. Read across any row to compare compounds for the same ASV. The scale runs from light (negative) to dark (positive), and the signed values are printed in each cell. The values give rho; adjusted p-values appear in the permutation table. These three rows illustrate the patient-level relative-abundance analysis. [Full sample-level clustermap from the report](assets/vignette/asv_voc_clustermap.svg)
-
-Use the heatmap to select a candidate, then check the patient-level estimate, sample support, normalization and multiple-testing adjustment. This command lists the five tested relative-abundance associations with the lowest adjusted p-values:
-
-```bash
-(
-set -euo pipefail
-cd "$HOME/aspire-vignette/results/modules/voc_correlation/tables"
-python3 - "patient_asv_voc_permutation_long.tsv" <<'PY'
-import csv
-import sys
-with open(sys.argv[1]) as source:
-    rows = [r for r in csv.DictReader(source, delimiter="\t")
-            if r["normalization"] == "relative_abundance" and r["status"] == "tested"]
-for row in sorted(rows, key=lambda r: float(r["q_value"]))[:5]:
-    print(*(row[k] for k in ("asv_label", "voc", "n_patients", "rho", "q_value")), sep="\t")
-PY
-)
-```
-
-For example, ASV295 (assigned to *Massilia*) and acetone had a positive patient-level association (50 patients, Spearman rho = 0.669, adjusted p = 0.0104). This measures covariation in synthetic patients. Across the separate sample-level truth check, six of 17 planted positive ASV–VOC pairs reached the validator’s Spearman rho threshold of 0.30. See [VOC statistics](VOC_STATISTICS.md) for normalization and permutation details.
 
 ## Explore network structure and assess recovery
 
@@ -362,4 +345,49 @@ The figure command converts final counts to library proportions and keeps the ai
 
 In `$WORK/study-figures`, inspect `indicator-contrast-cohorts.tsv` for the sample and patient IDs, and `tumor-side-vs-healthy-indicators.tsv`, `contralateral-vs-healthy-indicators.tsv`, `tumor-side-vs-contralateral-indicators.tsv`, or `oral-case-indicators.tsv` for the ASV-level results. The supplementary figure command produces these tests independently of the pipeline validator.
 
-Finish with the validator’s `indicator_analysis`, `voc_correlation`, `network_analysis` and `manifest_integrity` lines. The saved run passed all 31 checks, including primer accounting and output hashes. The {download}`Cutadapt validation log <../examples/benchmarks/aspire-cami-mock/cutadapt-validation.txt>` records the recovery checks. The earlier fixed-clipping benchmark retained 221 ASVs and has its own {download}`provenance record <../examples/benchmarks/aspire-cami-mock/provenance.json>`. Genome linkage requires separate genome inputs and is outside this amplicon dataset.
+Cross-check the validator’s `indicator_analysis`, `voc_correlation`, `network_analysis` and `manifest_integrity` lines. The saved run passed all 31 checks, including primer accounting and output hashes. The {download}`Cutadapt validation log <../examples/benchmarks/aspire-cami-mock/cutadapt-validation.txt>` records the recovery checks. The earlier fixed-clipping benchmark retained 221 ASVs and has its own {download}`provenance record <../examples/benchmarks/aspire-cami-mock/provenance.json>`. Genome linkage requires separate genome inputs and is outside this amplicon dataset.
+
+## Pair an indicator ASV with a VOC across patients
+
+**Do patients with more of an airway-associated ASV also have higher acetone?** Start with the site ISA table, then match sequencing and chemistry by library ID. ASPIRE averages the matched observations for each patient before testing the association across patients. The two airway sides remain separate in the earlier lung-side contrast. Here each patient contributes one point, including patients with zero observed abundance.
+
+![Mean ASV295 abundance versus acetone, one point per synthetic patient](assets/vignette/patient-isa-acetone.svg)
+
+1. **Establish the indicator.** In `modules/indicator_analysis/tables/Type_Group_indicator_species_summary.tsv`, ASV295 (*Massilia*) has an airway-only assignment, indicator statistic 0.775 and adjusted p = 0.00127. That answers which site it characterizes.
+2. **Read the patient points.** ASV295 occurred in 30 of 50 patients. The relative-abundance association with acetone was positive (Spearman ρ = 0.669, q = 0.0104). The points on the left include the 20 patients with zero abundance. This is an unadjusted between-patient association and cannot establish that *Massilia* produces acetone.
+3. **Check sensitivity and selection.** The centered log-ratio (CLR) estimate was also positive (ρ = 0.690, q = 0.00973). This example was selected for having the largest positive relative-abundance ρ among airway indicators supported under both normalizations for acetone. In the saved run, 125 libraries from 50 patients supplied 167 candidate ASVs and six compounds. ASPIRE adjusts all 1,002 tested pairs together within each normalization. Selection makes this a discovery example requiring independent validation.
+
+Run this from any directory to identify the corresponding pair in your run. ASV identifiers can change between runs.
+
+```bash
+(
+set -euo pipefail
+cd "$HOME/aspire-vignette/results/modules"
+python3 - <<'PYTHON'
+import csv
+from pathlib import Path
+
+def rows(path):
+    with Path(path).open() as source:
+        return list(csv.DictReader(source, delimiter="\t"))
+
+airway = {r["ASV"] for r in rows("indicator_analysis/tables/Type_Group_indicator_species_summary.tsv")
+          if r["significant"].lower() == "true" and r["s.Airways"] == "1" and r["s.Oral"] == "0"}
+pairs = rows("voc_correlation/tables/patient_asv_voc_normalization_comparison.tsv")
+hits = [r for r in pairs if r["asv"] in airway and r["voc"] == "acetone"
+        and r["support"] == "both_normalizations" and r["same_direction"].lower() == "true"
+        and float(r["rho"]) > 0]
+if hits:
+    best = sorted(hits, key=lambda r: (-float(r["rho"]), r["asv"]))[0]
+    for field in ("asv_label", "voc", "n_patients", "n_nonzero_patients",
+                  "rho", "q_value", "rho_clr", "q_value_clr"):
+        print(field, best[field], sep="\t")
+else:
+    print("No positive airway indicator–acetone pair met both normalization criteria.")
+PYTHON
+)
+```
+
+![Patient-level Spearman correlations across six compounds](assets/vignette/patient-voc.svg)
+
+Read down the acetone column to compare positive and negative associations, then across each ASV to see whether the pattern extends to other compounds. Each cell shows relative-abundance ρ. Use the normalization comparison table for its q-value. The [sample-level clustermap](assets/vignette/asv_voc_clustermap.svg) shows individual libraries. In the separate sample-level truth check, six of 17 planted positive pairs reached the validator’s ρ threshold of 0.30. See [VOC statistics](VOC_STATISTICS.md) for the matching, permutation and multiple-testing procedures.

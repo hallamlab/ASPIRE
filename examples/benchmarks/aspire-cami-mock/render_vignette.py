@@ -55,7 +55,33 @@ save(fig, "community")
 
 voc = table("voc_correlation", "patient_asv_voc_permutation_long.tsv")
 voc = voc[(voc.normalization == "relative_abundance") & (voc.status == "tested")]
-examples = ["ASV295", "ASV173", "ASV66"]
+indicators = table("indicator_analysis", "Type_Group_indicator_species_summary.tsv")
+comparison = table("voc_correlation", "patient_asv_voc_normalization_comparison.tsv")
+airway = indicators.loc[indicators.significant & indicators["s.Airways"].eq(1)
+                        & indicators["s.Oral"].eq(0), "ASV"]
+acetone = comparison[comparison.voc.eq("acetone") & comparison.support.eq("both_normalizations")
+                     & comparison.same_direction].sort_values(["rho", "asv"], ascending=[False, True])
+candidates = acetone[acetone.asv.isin(airway) & acetone.rho.gt(0)]
+fig, ax = plt.subplots(figsize=(6.1, 3.6), layout="constrained")
+examples = [*acetone.head(2).asv, *acetone.tail(1).asv]
+if candidates.empty:
+    ax.axis("off")
+    ax.text(0.5, 0.5, "No positive airway indicator–acetone pair supported\nby both normalizations.",
+            ha="center", va="center", transform=ax.transAxes)
+else:
+    pair = candidates.iloc[0]
+    abundance = table("voc_correlation", "patient_asv_relative_abundance.tsv")
+    chemistry = table("voc_correlation", "patient_voc_matrix.tsv")
+    points = abundance[["patient_id", pair.asv]].merge(chemistry[["patient_id", "acetone"]],
+                                                       on="patient_id", validate="one_to_one").dropna()
+    ax.scatter(100 * points[pair.asv], points.acetone, s=31, color="#484848", alpha=0.7)
+    ax.set(xlabel=f"{pair.asv} mean relative abundance (%)", ylabel="Mean acetone (synthetic units)",
+           title=f"Airway indicator and acetone across {len(points)} patients")
+    examples.insert(0, pair.asv)
+save(fig, "patient-isa-acetone")
+if not examples:
+    examples = voc.groupby("asv").rho.count().nlargest(3).index.tolist()
+examples = list(dict.fromkeys(examples))
 matrix = voc.pivot(index="asv", columns="voc", values="rho").loc[examples]
 fig, ax = plt.subplots(figsize=(7.8, 2.7), layout="constrained")
 palette = "Greys"
