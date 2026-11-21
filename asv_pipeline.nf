@@ -731,9 +731,8 @@ if( !filterCountsScriptFile.exists() ) {
     exit 1, "filter_nontarget.py not found in project directory"
 }
 def filterCountsScriptPath = filterCountsScriptFile.canonicalPath
-def filterCountsScriptHash = fileMd5(filterCountsScriptFile)
 def finalizeFilterScriptPath = "${projectDir}/processes/filter_counts/finalize_filter.py"
-def combinedFilterHash = fileMd5(tableScriptFile.toFile()) + ':' + fileMd5(new File(finalizeFilterScriptPath))
+def combinedFilterHash = [tableScriptFile.toFile(), filterCountsScriptFile, new File(finalizeFilterScriptPath)].collect { fileMd5(it) }.join(':')
 def controlDecontamDir = new File("${projectDir}/processes/control_decontam").canonicalPath
 def controlDecontamHash = ['control_decontam.py', 'run_prevalence.R', 'plot_qc.R'].collect { name ->
     def scriptFile = new File(controlDecontamDir, name)
@@ -3064,7 +3063,7 @@ workflow standard {
     if( metadataPlotsEnabled && !filterCountsEnabled ) {
         exit 1, "metadata_plots.enabled requires filter_counts outputs but filter_counts stage was not executed"
     }
-    def filter_counts_stage = FILTER_ASVS(filtered_channel, taxonomy_table, nontargetForFiltering)
+    def filter_counts_stage = FILTER_ASVS(filtered_channel, taxonomy_table, nontargetForFiltering, combinedFilterHash)
     def general_stats_stage = null
     if( generalStatsEnabled ) {
         general_stats_stage = GENERAL_STATS(concat_for_counts)
@@ -4524,6 +4523,7 @@ process FILTER_ASVS {
     tuple path(count_table), path(asv_fasta)
     path(taxonomy_table)
     path(nontarget_table)
+    val(helper_hashes)
 
     output:
     path("${filterCountsOutputName}"), emit: filtered_counts
@@ -4549,7 +4549,7 @@ process FILTER_ASVS {
         filterCountsExcludeTaxa.collect { item -> """  --exclude-taxon "${item}" \\\n""" }.join('') : ''
 """
 set -euo pipefail
-echo "Combined filter helpers: ${combinedFilterHash}"
+echo "Combined filter helpers: ${helper_hashes}"
 gzip -cd "${asv_fasta}" > input_ASVs.fasta
 python "${tableScriptFile}" \\
   "${count_table}" ASV_filtered.tsv \\
@@ -4557,7 +4557,6 @@ python "${tableScriptFile}" \\
   ${tableCfg.min_relative_abundance_pct != null ? tableCfg.min_relative_abundance_pct : 0.01} \\
   input_ASVs.fasta ASVs_filtered.fasta
 if [[ "${filterCountsEnabled}" == "true" ]]; then
-echo "filter_nontarget.py md5: ${filterCountsScriptHash}"
 python "${filterCountsScriptPath}" \\
   --count-table ASV_filtered.tsv \\
   --nontarget-table "${nontarget_table}" \\
