@@ -168,14 +168,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_table(file_path: Path, index_col: int = 0) -> pd.DataFrame:
+def load_table(file_path: Path, index_col: int = 0, dtype=None) -> pd.DataFrame:
     """Load TSV table with error handling."""
     if not file_path.exists():
         print(f"[ERROR] File not found: {file_path}")
         sys.exit(1)
     
     try:
-        df = pd.read_csv(file_path, sep='\t', header=0, index_col=index_col)
+        df = pd.read_csv(file_path, sep='\t', header=0, index_col=index_col, dtype=dtype)
         print(f"[INFO] Loaded {file_path.name}: {df.shape[0]} rows × {df.shape[1]} columns")
         return df
     except Exception as e:
@@ -554,7 +554,7 @@ def main():
     # Load metadata if provided
     metadata_df = None
     if args.metadata:
-        metadata_df = load_table(args.metadata, index_col=None)
+        metadata_df = load_table(args.metadata, index_col=None, dtype={args.sample_id_col: "string"})
         print(f"[INFO] Metadata columns: {list(metadata_df.columns)}")
     
     # Filter samples by group size

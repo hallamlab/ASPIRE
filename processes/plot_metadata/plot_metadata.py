@@ -149,15 +149,16 @@ def read_metadata(
     keep_types: Optional[Sequence[str]],
     type_col: str = "type_group",
 ) -> pd.DataFrame:
-    df = pd.read_csv(meta_path, sep='\t', header=0)
+    df = pd.read_csv(meta_path, sep='\t', dtype={meta_sample_col: 'string', 'Participant_ID': 'string'})
     # Derive status if present
     if 'Case' in df.columns:
         df['status'] = np.where(df['Case'] == 'Control', 'Non-Cancer', df['Case'])
     if 'Participant_ID' in df.columns:
-        patient_set = sorted(df['Participant_ID'].astype(str).unique())
-        pid_map = {p: i for i, p in enumerate(patient_set)}
-        df['patient_int'] = df['Participant_ID'].astype(str).map(pid_map)
-        df['patient_code'] = df['patient_int'].apply(lambda i: f'P{i}')
+        participants = df['Participant_ID']
+        patient_ids = sorted(participants.dropna().unique())
+        pid_map = {patient: i for i, patient in enumerate(patient_ids)}
+        df['patient_int'] = participants.map(pid_map).astype('Int64')
+        df['patient_code'] = 'P' + df['patient_int'].astype('string')
     if 'type_group' in df.columns:
         df['type_code'] = df['type_group'].astype(str).str[:2]
     if 'Type' in df.columns:
@@ -314,7 +315,7 @@ def load_sample_manifest(path: Path) -> Dict[str, str]:
     Build a lookup from FASTQ file path (or basename) to sample ID.
     Manifest columns: sample_id, fastq_r1, fastq_r2 (no header).
     """
-    df = pd.read_csv(path, sep='\t', header=None, names=['sample_id', 'r1', 'r2'])
+    df = pd.read_csv(path, sep='\t', header=None, names=['sample_id', 'r1', 'r2'], dtype={'sample_id': str})
     mapping: Dict[str, str] = {}
     for _, row in df.iterrows():
         sample_id = str(row['sample_id']).strip()

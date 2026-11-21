@@ -30,11 +30,11 @@ class CombinedFilterTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
             ids = ['keep', 'nontarget', 'mito', 'initial_rare', 'micro_rare', 'bad_tax', 'excluded', 'rare_group', 'zero']
-            counts = pd.DataFrame({'A': [1000, 500, 500, 1, 100, 500, 500, 0, 0],
-                                   'B': [1000, 500, 500, 1, 100, 500, 500, 0, 0],
-                                   'R': [1000, 500, 500, 1, 100, 500, 500, 1000, 0]}, index=ids)
+            counts = pd.DataFrame({'0001': [1000, 500, 500, 1, 100, 500, 500, 0, 0],
+                                   '2': [1000, 500, 500, 1, 100, 500, 500, 0, 0],
+                                   '3': [1000, 500, 500, 1, 100, 500, 500, 1000, 0]}, index=ids)
             counts.to_csv(p / 'raw.tsv', sep='\t')
-            pd.DataFrame({'Sample': ['A', 'B', 'R', 'not_in_counts'], 'Group': ['main', 'main', 'rare', 'rare']}).to_csv(p / 'meta.tsv', sep='\t', index=False)
+            pd.DataFrame({'Sample': ['0001', '2', '3', '4'], 'Group': ['main', 'main', 'rare', 'rare']}).to_csv(p / 'meta.tsv', sep='\t', index=False)
             pd.DataFrame({'BioFactorial': [1, 0, 1, 1, 1, 1, 1, 1, 1],
                           'MITOMASTER': [1, 1, 0, 1, 1, 1, 1, 1, 1]}, index=ids).to_csv(p / 'non.tsv', sep='\t')
             tax = pd.DataFrame({'Taxon': ['d__Bacteria'] * len(ids), 'Consensus': [1.] * len(ids)}, index=ids)
@@ -57,7 +57,7 @@ class CombinedFilterTest(unittest.TestCase):
                 '--table-counts', p/'initial.tsv', '--counts', p/'final.tsv',
                 '--fasta', p/'initial.fa', '--output-fasta', p/'final.fa')
             final = pd.read_csv(p/'final.tsv', sep='\t', index_col=0)
-            pd.testing.assert_frame_equal(final, counts.loc[['keep'], ['A', 'B']])
+            pd.testing.assert_frame_equal(final, counts.loc[['keep'], ['0001', '2']])
             self.assertEqual([r.id for r in SeqIO.parse(p/'final.fa', 'fasta')], ['keep'])
             self.assertNotIn('initial_rare', pd.read_csv(p/'initial.tsv', sep='\t', index_col=0).index)
             self.assertIn('micro_rare', pd.read_csv(p/'final.micro.tsv', sep='\t', index_col=0).index)
