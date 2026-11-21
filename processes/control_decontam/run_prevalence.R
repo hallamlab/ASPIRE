@@ -8,7 +8,7 @@ opt <- parse_args(OptionParser(option_list=list(
   make_option("--output", type="character")
 )))
 counts <- read.delim(opt$counts, row.names=1, check.names=FALSE)
-meta <- read.delim(opt$metadata, check.names=FALSE)
+meta <- read.delim(opt$metadata, check.names=FALSE, colClasses=c(Sample="character"))
 stopifnot(identical(colnames(counts), meta$Sample), opt$threshold > 0, opt$threshold < 1)
 neg <- as.logical(meta$is_negative)
 stopifnot(!anyNA(neg), any(neg), any(!neg))
