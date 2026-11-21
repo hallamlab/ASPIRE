@@ -262,14 +262,14 @@ def _run_conqur_r(
             suppressPackageStartupMessages(library(foreach))
             suppressPackageStartupMessages(library(ConQuR))
 
-            counts_df <- read.table(
-              counts_path, sep = "\\t", header = TRUE, row.names = 1,
-              check.names = FALSE, quote = "", comment.char = "", stringsAsFactors = FALSE
-            )
-            meta_df <- read.table(
-              meta_path, sep = "\\t", header = TRUE, row.names = 1,
-              check.names = FALSE, quote = "", comment.char = "", stringsAsFactors = FALSE
-            )
+            read_indexed_tsv <- function(path) {
+              header <- read.delim(path, nrows = 0, check.names = FALSE, quote = "")
+              read.delim(path, row.names = 1, check.names = FALSE, quote = "",
+                         colClasses = c("character", rep(NA_character_, ncol(header) - 1L)),
+                         stringsAsFactors = FALSE)
+            }
+            counts_df <- read_indexed_tsv(counts_path)
+            meta_df <- read_indexed_tsv(meta_path)
 
             common <- intersect(rownames(counts_df), rownames(meta_df))
             if (length(common) == 0) stop("No overlapping samples between counts and metadata")
@@ -402,7 +402,7 @@ def _run_conqur_r(
                 f"STDOUT:\n{proc.stdout}\n\nSTDERR:\n{proc.stderr}"
             )
 
-        corrected = pd.read_csv(out_path, sep="\t", index_col=0)
+        corrected = read_indexed_matrix(out_path)
         corrected = corrected.apply(pd.to_numeric, errors="coerce").fillna(0.0).clip(lower=0.0)
         return corrected
 
@@ -478,6 +478,16 @@ def conqur_correction_wrapper(
 # Data Loading & Processing
 # ============================================================================
 
+def read_indexed_matrix(path: Path) -> pd.DataFrame:
+    """Keep the first column as literal IDs, including numeric barcodes with leading zeros."""
+    frame = pd.read_csv(path, sep="\t", dtype={0: str})
+    key = frame.columns[0]
+    matrix = frame.set_index(key)
+    if key == "Unnamed: 0":
+        matrix.index.name = None
+    return matrix
+
+
 def load_asv_table(path: Path, orientation: str = "features_rows") -> pd.DataFrame:
     """
     Load ASV table and return as samples x features (rows = samples).
@@ -495,7 +505,7 @@ def load_asv_table(path: Path, orientation: str = "features_rows") -> pd.DataFra
     df : DataFrame (samples x features)
         Each row is a sample, each column is an ASV/feature
     """
-    df = pd.read_csv(path, sep="\t", header=0, index_col=0)
+    df = read_indexed_matrix(path)
     
     print(f"  [i] Loaded ASV table: {df.shape}")
     
@@ -510,7 +520,7 @@ def load_asv_table(path: Path, orientation: str = "features_rows") -> pd.DataFra
 
 def load_metadata(path: Path, index_col: str) -> pd.DataFrame:
     """Load metadata and set index."""
-    df = pd.read_csv(path, sep="\t", header=0)
+    df = pd.read_csv(path, sep="\t", dtype={index_col: str})
     if index_col not in df.columns:
         raise ValueError(f"Index column '{index_col}' not in metadata")
     return df.drop_duplicates(subset=[index_col]).set_index(index_col)
@@ -2756,7 +2766,8 @@ def main():
     meta_index_col = args.sample_id_col
     metadata = load_metadata(meta_path, meta_index_col)
     
-    asv_meta = pd.read_csv(asv_meta_path, sep="\t", header=0)
+    id_types = {col: str for col in (meta_index_col, DEFAULT_SAMPLE_ID_COL, "longID", "sample", "ASV_ID", "Participant_ID")}
+    asv_meta = pd.read_csv(asv_meta_path, sep="\t", dtype=id_types)
 
     # Align
     print("[2/9] Aligning samples...")
@@ -2956,8 +2967,8 @@ def main():
     print(f"      - {corrected_int_samples_path}")
     print(f"      - {corrected_int_features_path}")
 
-    corrected_counts_float = pd.read_csv(corrected_samples_path, sep="\t", index_col=0)
-    corrected_counts_pseudo = pd.read_csv(corrected_int_samples_path, sep="\t", index_col=0)
+    corrected_counts_float = read_indexed_matrix(corrected_samples_path)
+    corrected_counts_pseudo = read_indexed_matrix(corrected_int_samples_path)
     primary_bio_series = bio_color_data[0][0] if bio_color_data else None
     primary_bio_name = bio_color_data[0][2] if bio_color_data else "Biological"
     print("[5/9] Generating count-space preservation diagnostics...")
