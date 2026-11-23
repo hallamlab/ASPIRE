@@ -800,6 +800,7 @@ if( !graphNetworkScriptFile.exists() ) {
     exit 1, "graph_network.py not found in project directory"
 }
 def graphNetworkScriptPath = graphNetworkScriptFile.canonicalPath
+def graphNetworkVersion = fileMd5(graphNetworkScriptFile) + ":" + fileMd5(new File(graphNetworkScriptFile.parentFile, "network_layout.py"))
 def networkTopologyScriptFile = new File("${projectDir}/processes/network_topology/network_topology_stats.py")
 if( !networkTopologyScriptFile.exists() ) {
     exit 1, "network_topology_stats.py not found in project directory"
@@ -6663,6 +6664,7 @@ process GRAPH_NETWORK {
 set -euo pipefail
 mkdir -p "${spieceasiOutputDirAbs}"
 
+echo "Network renderer: ${graphNetworkVersion}"
 python "${graphNetworkScriptPath}" \\
   --data-dir "${outputDir}" \\
   --outdir "${spieceasiOutputDirAbs}" \\

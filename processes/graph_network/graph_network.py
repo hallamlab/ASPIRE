@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, Tuple, Optional, List
 
+from network_layout import spaced_network_positions
+
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -26,6 +28,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
+from matplotlib.offsetbox import AnchoredOffsetbox, DrawingArea, HPacker, TextArea, VPacker
 import seaborn as sns
 import math
 from collections import Counter
@@ -933,18 +936,28 @@ def plot_degree(G: nx.Graph, pos: Dict, out_svg: str, degree_scale: float, edge_
     def color_fn(_): return 'black'
     draw_nodes_one_by_one(G, pos, color_fn, size_fn, alpha_fn=lambda n: 0.5)
 
-    # legend
-    handles = [ax.scatter([], [], s=degree_marker_area(s, degree_scale), edgecolors='black',
-                          facecolors=NOT_FOCUS_COLOR, alpha=1, label=f'{s}') for s in degree_levels]
-    legend = network_legend(ax, handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
-                       title="Node Degree", frameon=False, scatterpoints=1, labelspacing=1.2,
-                       borderaxespad=0.0)
+    # Give each degree value its own column and draw its marker at the same
+    # physical size as a node of that degree in the graph.
+    radii = [math.sqrt(degree_marker_area(value, degree_scale)) / 2 for value in degree_levels]
+    cell = 2 * max(radii) + 4
+    columns = []
+    for value, radius in zip(degree_levels, radii):
+        symbol = DrawingArea(cell, cell)
+        symbol.add_artist(mpatches.Circle((cell / 2, cell / 2), radius,
+                                          facecolor=NOT_FOCUS_COLOR, edgecolor="black"))
+        columns.append(VPacker(children=[symbol, TextArea(str(value))],
+                               align="center", pad=0, sep=8))
+    row = HPacker(children=columns, align="center", pad=0, sep=20)
+    key = VPacker(children=[TextArea("Node degree (neighbors)"), row], align="center", pad=0, sep=10)
+    legend = AnchoredOffsetbox(loc="upper center", child=key, frameon=False,
+                               bbox_to_anchor=(0.5, -0.02), bbox_transform=ax.transAxes)
+    ax.add_artist(legend)
 
     finalize_network_axes(
         fig, ax, out_svg,
         title="SPIEC-EASI Network\nNode size: Degree | Edges scaled by |weight|",
         legends=[legend],
-        right=0.76,
+        right=0.92,
     )
 
 
@@ -2544,6 +2557,17 @@ def main():
     pos_all = spring_layout_cached(G_all, seed=args.layout_seed,
                                    scale_xy=args.layout_scale,
                                    layout_json=args.layout_json_all)
+    def space_for_markers(graph, positions):
+        # Use one footprint per node across the overlays, including the
+        # betweenness outline and the maximum configured abundance/ISA keys.
+        other_area = max(args.abundance_max_area, isa_marker_area(1, args.isa_scale))
+        radii = {}
+        for node, attrs in graph.nodes(data=True):
+            area = degree_marker_area(attrs.get("Degree", 0), args.degree_scale)
+            radii[node] = math.sqrt(max(1.18 * area, other_area)) / 2 + 1
+        return spaced_network_positions(positions, radii, drawing_span=500, gap=4)
+
+    pos_all = space_for_markers(G_all, pos_all)
     same_graph_structure = (
         set(G_all.nodes()) == set(G_sub.nodes()) and
         {frozenset((u, v)) for u, v in G_all.edges()} == {frozenset((u, v)) for u, v in G_sub.edges()}
@@ -2554,6 +2578,7 @@ def main():
         pos_sub = spring_layout_cached(G_sub, seed=args.layout_seed,
                                        scale_xy=args.layout_scale,
                                        layout_json=args.layout_json_sub)
+        pos_sub = space_for_markers(G_sub, pos_sub)
 
     # -------------------- Choose and render plots -----------------------------
     modes = set(args.modes)

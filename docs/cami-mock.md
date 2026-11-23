@@ -304,7 +304,7 @@ cat network_topology_summary.tsv
 
 ![Published degree plot of the thresholded microbial network](assets/vignette/network-degree.svg)
 
-Each node is an ASV. Larger nodes have more neighbors, and thicker edges have larger absolute weights. Use the degree plot to locate highly connected ASVs. Use `spieceasi_node_features.csv` for an exact value: ASV10 has 13 neighbors in the thresholded graph. In the edge list, ASV10 connects to ASV125 with weight 0.0341. Looking both up in `spieceasi_modules_all.tsv` places ASV10 in M1 and ASV125 in M9. An edge can cross a module boundary.
+Each circle is an ASV. Read the **Node degree** key below the graph for the number of neighbors. The network panels use a shared layout with space between distinct ASVs. Larger nodes have more neighbors, and thicker edges have larger absolute weights. Use the degree plot to locate highly connected ASVs. Use `spieceasi_node_features.csv` for an exact value: ASV10 has 13 neighbors in the thresholded graph. In the edge list, ASV10 connects to ASV125 with weight 0.0341. Looking both up in `spieceasi_modules_all.tsv` places ASV10 in M1 and ASV125 in M9. An edge can cross a module boundary.
 
 ### Interpret the network color panels
 
