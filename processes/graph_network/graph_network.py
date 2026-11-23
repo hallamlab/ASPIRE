@@ -26,7 +26,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
-from matplotlib.offsetbox import AnchoredOffsetbox, DrawingArea, HPacker, TextArea, VPacker
 import seaborn as sns
 import math
 from collections import Counter
@@ -934,22 +933,12 @@ def plot_degree(G: nx.Graph, pos: Dict, out_svg: str, degree_scale: float, edge_
     def color_fn(_): return 'black'
     draw_nodes_one_by_one(G, pos, color_fn, size_fn, alpha_fn=lambda n: 0.5)
 
-    # Give each degree value its own column and draw its marker at the same
-    # physical size as a node of that degree in the graph.
-    radii = [math.sqrt(degree_marker_area(value, degree_scale)) / 2 for value in degree_levels]
-    cell = 2 * max(radii) + 4
-    columns = []
-    for value, radius in zip(degree_levels, radii):
-        symbol = DrawingArea(cell, cell)
-        symbol.add_artist(mpatches.Circle((cell / 2, cell / 2), radius,
-                                          facecolor=NOT_FOCUS_COLOR, edgecolor="black"))
-        columns.append(VPacker(children=[symbol, TextArea(str(value))],
-                               align="center", pad=0, sep=8))
-    row = HPacker(children=columns, align="center", pad=0, sep=20)
-    key = VPacker(children=[TextArea("Node degree (neighbors)"), row], align="center", pad=0, sep=10)
-    legend = AnchoredOffsetbox(loc="upper center", child=key, frameon=False,
-                               bbox_to_anchor=(0.5, -0.02), bbox_transform=ax.transAxes)
-    ax.add_artist(legend)
+    # legend
+    handles = [ax.scatter([], [], s=degree_marker_area(s, degree_scale), edgecolors='black',
+                          facecolors=NOT_FOCUS_COLOR, alpha=1, label=f'{s}') for s in degree_levels]
+    legend = network_legend(ax, handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
+                       title="Node Degree", frameon=False, scatterpoints=1, labelspacing=1.2,
+                       borderaxespad=0.0)
 
     finalize_network_axes(
         fig, ax, out_svg,

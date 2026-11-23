@@ -234,7 +234,7 @@ for ax, (first, second, paired, slug) in zip(axes.flat, contrasts):
                  color=palette["Oral" if slug == "oral-case" else "Airways"])
     ax.legend(handles=[Patch(color=c, label=g) for g,c in [(first,"#181818"),(second,"#858585"),
                                                           ("Background","#c9c9c9")]],
-              loc="lower center", bbox_to_anchor=(0.5,-0.06), ncol=3, frameon=False, fontsize=10)
+              loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, frameon=False, fontsize=10)
     ax.set_aspect("equal")
     ax.axis("off")
 export(pd.concat(cohorts), "indicator-contrast-cohorts")
