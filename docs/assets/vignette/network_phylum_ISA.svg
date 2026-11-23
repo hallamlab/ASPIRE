@@ -5729,7 +5729,7 @@ z
     <g id="text_12">
      <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="792.808191" y="510.220617" transform="rotate(-0 792.808191 510.220617)">Node size</text>
     </g>
-    <g id="PathCollection_173">
+    <g id="PathCollection_173" transform="translate(0.00 0.00)">
      <defs>
       <path id="m3058236b77" d="M 0 4.1833 
 C 1.109424 4.1833 2.173559 3.742521 2.95804 2.95804 
@@ -5747,10 +5747,10 @@ z
       <use xlink:href="#m3058236b77" x="792.4628" y="531.066809" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_13">
+    <g id="text_13" transform="translate(2.43 0.00)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="533.954309" transform="rotate(-0 812.2628 533.954309)">ISA: 0.1</text>
     </g>
-    <g id="PathCollection_174">
+    <g id="PathCollection_174" transform="translate(0.00 0.00)">
      <defs>
       <path id="m053d5c5efb" d="M 0 6.614378 
 C 1.754154 6.614378 3.436698 5.917446 4.677072 4.677072 
@@ -5768,10 +5768,10 @@ z
       <use xlink:href="#m053d5c5efb" x="792.4628" y="554.590051" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_14">
+    <g id="text_14" transform="translate(2.43 0.00)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="557.477551" transform="rotate(-0 812.2628 557.477551)">ISA: 0.25</text>
     </g>
-    <g id="PathCollection_175">
+    <g id="PathCollection_175" transform="translate(0.00 0.45)">
      <defs>
       <path id="m79b2172412" d="M 0 9.354143 
 C 2.480748 9.354143 4.860225 8.368532 6.614378 6.614378 
@@ -5789,10 +5789,10 @@ z
       <use xlink:href="#m79b2172412" x="792.4628" y="578.113293" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_15">
+    <g id="text_15" transform="translate(2.43 0.45)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="581.000793" transform="rotate(-0 812.2628 581.000793)">ISA: 0.5</text>
     </g>
-    <g id="PathCollection_176">
+    <g id="PathCollection_176" transform="translate(0.00 5.73)">
      <defs>
       <path id="m212f7fcb0c" d="M 0 11.456439 
 C 3.038283 11.456439 5.952535 10.249317 8.100926 8.100926 
@@ -5810,10 +5810,10 @@ z
       <use xlink:href="#m212f7fcb0c" x="792.4628" y="601.636535" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_16">
+    <g id="text_16" transform="translate(2.43 5.73)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="604.524035" transform="rotate(-0 812.2628 604.524035)">ISA: 0.75</text>
     </g>
-    <g id="PathCollection_177">
+    <g id="PathCollection_177" transform="translate(0.00 14.89)">
      <defs>
       <path id="m43f75f64d3" d="M 0 13.228757 
 C 3.508307 13.228757 6.873396 11.834891 9.354143 9.354143 
@@ -5831,7 +5831,7 @@ z
       <use xlink:href="#m43f75f64d3" x="792.4628" y="625.159777" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_17">
+    <g id="text_17" transform="translate(2.43 14.89)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="628.047277" transform="rotate(-0 812.2628 628.047277)">ISA: 1.0</text>
     </g>
    </g>

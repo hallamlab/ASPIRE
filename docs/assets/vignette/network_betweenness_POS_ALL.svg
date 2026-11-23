@@ -4715,7 +4715,7 @@ z
     <g id="text_5">
      <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="793.638247" y="295.164448" transform="rotate(-0 793.638247 295.164448)">Node size</text>
     </g>
-    <g id="PathCollection_172">
+    <g id="PathCollection_172" transform="translate(0.00 0.00)">
      <defs>
       <path id="m5d8067643f" d="M 0 1.67332 
 C 0.44377 1.67332 0.869423 1.497008 1.183216 1.183216 
@@ -4733,10 +4733,10 @@ z
       <use xlink:href="#m5d8067643f" x="790.2352" y="313.81064" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_6">
+    <g id="text_6" transform="translate(15.30 0.00)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="316.69814" transform="rotate(-0 810.0352 316.69814)">Degree 0</text>
     </g>
-    <g id="PathCollection_173">
+    <g id="PathCollection_173" transform="translate(0.00 2.96)">
      <defs>
       <path id="m2c81cb41d5" d="M 0 11.394445 
 C 3.021842 11.394445 5.920324 10.193854 8.057089 8.057089 
@@ -4754,10 +4754,10 @@ z
       <use xlink:href="#m2c81cb41d5" x="790.2352" y="335.134097" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_7">
+    <g id="text_7" transform="translate(15.30 2.96)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="338.021597" transform="rotate(-0 810.0352 338.021597)">Degree 10</text>
     </g>
-    <g id="PathCollection_174">
+    <g id="PathCollection_174" transform="translate(0.00 20.14)">
      <defs>
       <path id="m0fa2272434" d="M 0 19.114126 
 C 5.069126 19.114126 9.931315 17.100141 13.515728 13.515728 
@@ -4775,10 +4775,10 @@ z
       <use xlink:href="#m0fa2272434" x="790.2352" y="356.457554" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_8">
+    <g id="text_8" transform="translate(15.30 20.14)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="359.345054" transform="rotate(-0 810.0352 359.345054)">Degree 20</text>
     </g>
-    <g id="PathCollection_175">
+    <g id="PathCollection_175" transform="translate(0.00 52.04)">
      <defs>
       <path id="mfa58196590" d="M 0 26.101675 
 C 6.922245 26.101675 13.561905 23.351437 18.456671 18.456671 
@@ -4796,7 +4796,7 @@ z
       <use xlink:href="#mfa58196590" x="790.2352" y="377.781011" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_9">
+    <g id="text_9" transform="translate(15.30 52.04)">
      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="380.668511" transform="rotate(-0 810.0352 380.668511)">Degree 30</text>
     </g>
    </g>

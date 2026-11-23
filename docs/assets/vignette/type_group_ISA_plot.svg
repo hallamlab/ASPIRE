@@ -688,48 +688,6 @@ z
      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="742.6" y="77.440625" transform="rotate(-0 742.6 77.440625)">not_indicator</text>
     </g>
    </g>
-   <g id="legend_2">
-    <g id="patch_8">
-     <path d="M 712.6 83.545117 
-L 801.85625 83.545117 
-Q 803.85625 83.545117 803.85625 81.545117 
-L 803.85625 25 
-Q 803.85625 23 801.85625 23 
-L 712.6 23 
-Q 710.6 23 710.6 25 
-L 710.6 81.545117 
-Q 710.6 83.545117 712.6 83.545117 
-z
-" style="fill: #ffffff; opacity: 0.8; stroke: #cccccc; stroke-linejoin: miter"/>
-    </g>
-    <g id="text_23">
-     <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="729.713281" y="34.280273" transform="rotate(-0 729.713281 34.280273)">Type_Group</text>
-    </g>
-    <g id="line2d_20">
-     <g>
-      <use xlink:href="#m218273f4ff" x="724.6" y="45.165234" style="fill: #009e73; stroke: #000000; stroke-width: 0.5"/>
-     </g>
-    </g>
-    <g id="text_24">
-     <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="742.6" y="48.665234" transform="rotate(-0 742.6 48.665234)">Airways</text>
-    </g>
-    <g id="line2d_21">
-     <g>
-      <use xlink:href="#m68e0e7e723" x="724.6" y="59.555859" style="fill: #6a3d9a; stroke: #000000; stroke-width: 0.5"/>
-     </g>
-    </g>
-    <g id="text_25">
-     <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="742.6" y="63.055859" transform="rotate(-0 742.6 63.055859)">Oral</text>
-    </g>
-    <g id="line2d_22">
-     <g>
-      <use xlink:href="#mccf5e98020" x="724.6" y="73.940625" style="fill: #d3d3d3; stroke: #000000; stroke-width: 0.5"/>
-     </g>
-    </g>
-    <g id="text_26">
-     <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="742.6" y="77.440625" transform="rotate(-0 742.6 77.440625)">not_indicator</text>
-    </g>
-   </g>
   </g>
  </g>
  <defs>
