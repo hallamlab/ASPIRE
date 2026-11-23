@@ -1,7 +1,6 @@
 """Generate stand-alone SVGs and their display tables from a completed CAMI vignette."""
 import argparse
 import re
-import sys
 from pathlib import Path
 from shutil import copyfile
 
@@ -15,8 +14,6 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "processes" / "graph_network"))
-from network_layout import spaced_network_positions
 from vignette_style import apply_style, heatmap
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.stats import false_discovery_control
@@ -169,8 +166,6 @@ graph=nx.Graph()
 graph.add_nodes_from(nodes)
 graph.add_weighted_edges_from(edges[["Taxon1","Taxon2","Weight"]].itertuples(index=False,name=None))
 pos=nx.spring_layout(graph,seed=42,weight=None)
-# Each contrast uses the same positions, including room for its largest indicator.
-pos = spaced_network_positions(pos, dict.fromkeys(graph, 5.2), drawing_span=180, gap=1.5)
 fig, axes = plt.subplots(2, 2, figsize=(10, 9), layout="constrained")
 cohorts = []
 for ax, (first, second, paired, slug) in zip(axes.flat, contrasts):
