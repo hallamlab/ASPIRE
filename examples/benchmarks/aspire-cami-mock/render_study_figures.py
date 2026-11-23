@@ -307,7 +307,11 @@ for filename in (
 for filename in ("case_ISA_plot", "Combined_ISA_plot", "Combined_ISA_plot_Phylum"):
     source = modules / "indicator_analysis/plots/Type_Group__Case" / (filename + ".svg")
     vignette_svg(source, out / source.name, keep_site=filename == "Combined_ISA_plot")
-copyfile(modules / "sankey/plots/data_loss_sankey.label.html", out / "data_loss_sankey.label.html")
+sankey_dir = modules / "sankey/plots"
+copyfile(sankey_dir / "data_loss_sankey.label.html", out / "data_loss_sankey.label.html")
+all_library_sankey = sankey_dir / "data_loss_sankey_raw.label.html"
+if all_library_sankey.is_file():
+    copyfile(all_library_sankey, out / all_library_sankey.name)
 presence = read("upset", "final_micro_final_venn_presence_table.tsv")
 overlap = presence.groupby("grouping").ASV_ID.nunique().reindex(
     ["Airways", "Airways + Oral", "Oral"], fill_value=0)

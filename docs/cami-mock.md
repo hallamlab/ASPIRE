@@ -85,7 +85,7 @@ cd ~/aspire-vignette/ASPIRE
 
 The configurator writes machine-local paths and selects the CAMI clinical profile. Review the generated YAML for primer trimming, biological and technical control definitions, patient column and VOC table. Its current large-study power settings use 1,000 simulations and 999 permutations. To resume, repeat the launcher with the same YAML and retain the results directory and its hidden runtime cache.
 
-Open `~/aspire-vignette/results/summary/report/ASPIRE_run_report.html`. Use the module links to move between figures, source tables and execution logs. For a remote run, see [report viewing](outputs.md#view-reports-on-a-remote-server). The examples below use the saved Cutadapt run, which completed or reused 931 tasks. Numerical values describe that run and can vary with revisions and analysis settings.
+Open `~/aspire-vignette/results/summary/report/ASPIRE_run_report.html`. Use the module links to move between figures, source tables and execution logs. For a remote run, see [report viewing](outputs.md#view-reports-on-a-remote-server). The report screenshots below come from the completed run in `aspire-vignette.tar.gz`. Its `aspire-revision.txt` records revision `b2ee099`.
 
 ### Read the HTML report
 
@@ -93,11 +93,17 @@ Open `~/aspire-vignette/results/summary/report/ASPIRE_run_report.html`. Use the 
 
 Start with **Data Accounting Summary**. The 125 samples tile counts analyzed libraries. The 50 participants tile counts people. Read the Case table horizontally: 75 case libraries came from 25 cases because each case supplied two airway samples and one oral sample to the analysis. The 17,605,530 input read records count both mates of 8,802,765 pairs.
 
-![First module cards in the HTML output inventory](assets/vignette/report-inventory.png)
+The first figure in the report is the all-library Data-loss Sankey, shown at full size in the read-flow walkthrough below. The next row shows read depth by site, ASV overlap and the collector’s curve. Read the swarmplot vertically for depth differences among libraries. Use the UpSet bars for shared and site-specific features, then follow the collector’s curves to see how quickly each site reaches its observed richness.
 
-Scroll to **Output Inventory**. In the Diversity card, **Plots** opens the published figures and **Tables** opens the numerical results. File counts include multiple export formats. Use the same pair of links in Taxonomy, Network Analysis and VOC Correlation to explore those results. The screenshots show the saved report; the study panels below are drawn from its module tables.
+[![Archived report showing the read-depth swarmplot, ASV overlap UpSet and collector’s curve](assets/vignette/report-plots.png)](assets/vignette/report-plots.png)
+
+![Module cards with table and plot file counts in the archived HTML output inventory](assets/vignette/report-inventory.png)
+
+Scroll to **Output Inventory**. In the Diversity card, **Plots** opens the published figures and **Tables** opens the numerical results. File counts include multiple export formats. Use the same pair of links in Taxonomy, Network Analysis and VOC Correlation to explore those results. The inventory lists the files ASPIRE published under `results/modules/`. The commands below create additional study figures in `study-figures/`.
 
 ## Make the study figures from your run
+
+The native module plots below are exports from the archived run. The additional study panels, including the gallery scripts’ restyled network and ISA copies, and the worked numerical examples were prepared from an earlier CAMI Cutadapt benchmark. For example, the archived sample-level VOC heatmap labels ASV157 as *Delftia*, whereas the earlier benchmark assigned that number to *Treponema*. Use the tables from your own run when following an individual ASV.
 
 After validation, create the plotting environment once. When Mamba asks whether to proceed, enter `y`.
 
@@ -128,9 +134,9 @@ head -n 3 ASV_target.feature_qc.tsv
 
 Read a row in `ASV_target.feature_qc.tsv` before opening a community plot. ASV10 occurred in 56 of 125 eligible libraries (44.8%), reached 18.32% relative abundance in its most abundant library, and passed both filters. Its maximum abundance describes one library; its prevalence describes the cohort.
 
-[![Read-flow Sankey from the mock HTML export](assets/vignette/mock-read-flow.svg)](assets/vignette/mock-read-flow.svg)
+[![Archived all-library read-flow Sankey, including skin controls and blanks](assets/vignette/mock-read-flow.svg)](assets/vignette/mock-read-flow.svg)
 
-Follow one ribbon from left to right through the processing stages. Width encodes the number of reads on that path. Open `data_loss_sankey.label.html` in the study-figures directory and hover over a flow to read its value. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
+Start at **Input pairs**. The four groups contribute 8,802,765 pairs in total, including 2,504,212 from skin and 39,033 from extraction blanks. Follow the ribbons to **Eligible biological cohort**, where only airway and oral libraries continue. The rightmost biological total is 4,074,475. For interactive values, open `results/modules/sankey/plots/data_loss_sankey_raw.label.html`, the file embedded in the archived report. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
 
 **Exclusive intersections**
 
@@ -188,9 +194,9 @@ Read across each row before comparing p-values. The paired contrast tests differ
 
 The paired test detects a small community-composition difference despite similar Shannon medians (2.29 and 2.27). Read `permanova_q` for the adjusted composition test and `alpha_q` for the adjusted within-library diversity test.
 
-How much power does this mock have at its actual size? The archived power curve below stops at 10 cases and 25 controls. The revised CAMI configuration includes 25 cases and explicitly excludes contralateral airway libraries from this case–control comparison. Its paired site grid reaches all 50 participants with both sites.
+How much power does this mock have at its actual size? The archived power curve below extends to 25 cancer patients per site. The run excludes contralateral airway libraries from the case–control comparison. Its separate paired-site grid extends to 50 participants.
 
-A focused rerun on the archived count table used 25 cases and 25 controls per site, 1,000 patient bootstrap simulations, 999 permutations per PERMANOVA test, seed 42 and α = 0.05. “Observed” resamples patients within their original groups. The null scenario pools patients before assigning group labels. Values below are the fraction of simulations rejecting the null.
+A separate focused rerun on the earlier benchmark count table used 25 cases and 25 controls per site, 1,000 patient bootstrap simulations, 999 permutations per PERMANOVA test, seed 42 and α = 0.05. “Observed” resamples patients within their original groups. The null scenario pools patients before assigning group labels. Values below are the fraction of simulations rejecting the null.
 
 | Site | Bray–Curtis, observed | Bray–Curtis, null | Shannon, observed | Shannon, null |
 | --- | ---: | ---: | ---: | ---: |
@@ -208,7 +214,7 @@ Even at the actual cohort size, the overall disease contrasts fall short of 80% 
 [![Mock case-control power curves](assets/vignette/power_curves_cancer_vs_control_simple.svg)](assets/vignette/power_curves_cancer_vs_control_simple.svg)
 
 
-Use the contrast table above to recover the patient denominator for each distance comparison. On the power plot, follow one scenario as sample size changes; the saved mock covers a shorter grid than new runs.
+Use the contrast table above to recover the patient denominator for each distance comparison. On the power plot, follow Observed and True_Null to 25 cancer patients on the horizontal axis. Read the upper panels for Bray–Curtis and the lower panels for Shannon. The horizontal 0.8 line marks 80% power.
 
 ## Trace taxonomic abundance across patients
 
@@ -311,7 +317,7 @@ Each node is an ASV. Larger nodes have more neighbors, and thicker edges have la
 [![B · Case-status ISA](assets/vignette/network_Case_ISA.svg)](assets/vignette/network_Case_ISA.svg)
 
 
-**Which groups do connected ASVs indicate?** A uses green for airway indicators and purple for oral indicators. B uses the grayscale case-status legend. Node size encodes indicator strength. Follow ASV10 from the oral indicator table into A; use the labeled SVG in the run’s plots directory to locate it. For gray nodes in B, consult the case summary to distinguish an assigned control indicator from a background node.
+**Which groups do connected ASVs indicate?** A uses green for airway indicators and purple for oral indicators. In B, orange marks Cancer indicators, medium gray marks Non-Cancer indicators and pale gray marks background nodes. Node size encodes indicator strength. Follow ASV10 from the oral indicator table into A; use the labeled SVG in the run’s plots directory to locate it. For gray nodes in B, consult the case summary to distinguish an assigned control indicator from a background node.
 
 **C · Phylum and indicator strength**
 
@@ -344,7 +350,7 @@ Each node is an ASV. Larger nodes have more neighbors, and thicker edges have la
 [![H · ISA-associated modules, POS_SUB](assets/vignette/network_modules_POS_SUB.svg)](assets/vignette/network_modules_POS_SUB.svg)
 
 
-**Which modules carry an indicator association?** Gray shades identify the highlighted modules in G and H, and degree determines node size. Use the module IDs in the assignment tables for exact membership. In this mock, both graph summaries report 167 nodes, 1,192 edges and 21 modules. The legends list ten highlighted modules. Use `spieceasi_modules_all.tsv` and `spieceasi_modules_sub.tsv` for assignments across the full set. The report also supplies grayscale degree and abundance views and labeled variants for locating individual ASVs.
+**Which modules carry an indicator association?** In G and H, match each node color to a module ID in that panel’s legend. Pale gray marks the background and degree determines node size. Use the module IDs in the assignment tables for exact membership. In this mock, both graph summaries report 167 nodes, 1,192 edges and 21 modules. Each archived legend lists ten highlighted modules. For example, M8 appears in the POS_ALL legend and M6 appears in POS_SUB. Look up membership in `spieceasi_modules_all.tsv` for G and `spieceasi_modules_sub.tsv` for H. The report also supplies grayscale degree and abundance views and labeled variants for locating individual ASVs.
 
 ![Numbers of ASVs in the 21 inferred network modules](assets/vignette/network-modules.svg)
 
