@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="906.461394pt" height="876.856289pt" viewBox="0 0 906.461394 876.856289" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="954pt" height="876.856289pt" viewBox="0 0 954 876.856289" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -5455,10 +5455,10 @@ z
     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(237.503437 58.696289)">Node color: Case ISA | Node size: Indicator Species Strength</text>
    </g>
    <g id="legend_1">
-    <g id="text_2">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="795.667722" y="77.832617" transform="rotate(-0 795.667722 77.832617)">Case ISA</text>
+    <g id="text_2" transform="translate(-11.705 12.168)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="795.667722" y="77.832617" transform="rotate(-0 795.667722 77.832617)">Case ISA</text>
     </g>
-    <g id="patch_2">
+    <g id="patch_2" transform="translate(8.000 27.985)">
      <path d="M 775.9628 99.366309 
 L 797.9628 99.366309 
 L 797.9628 91.666309 
@@ -5466,10 +5466,10 @@ L 775.9628 91.666309
 z
 " style="fill: #8c8c8c; stroke: #8c8c8c; stroke-linejoin: miter"/>
     </g>
-    <g id="text_3">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="99.366309" transform="rotate(-0 806.7628 99.366309)">Non-Cancer</text>
+    <g id="text_3" transform="translate(25.200 29.635)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="99.366309" transform="rotate(-0 806.7628 99.366309)">Non-Cancer</text>
     </g>
-    <g id="patch_3">
+    <g id="patch_3" transform="translate(8.000 39.662)">
      <path d="M 775.9628 120.689551 
 L 797.9628 120.689551 
 L 797.9628 112.989551 
@@ -5477,10 +5477,10 @@ L 775.9628 112.989551
 z
 " style="fill: #d55e00; stroke: #d55e00; stroke-linejoin: miter"/>
     </g>
-    <g id="text_4">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="120.689551" transform="rotate(-0 806.7628 120.689551)">Cancer</text>
+    <g id="text_4" transform="translate(25.200 41.312)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="120.689551" transform="rotate(-0 806.7628 120.689551)">Cancer</text>
     </g>
-    <g id="PathCollection_6">
+    <g id="PathCollection_6" transform="translate(8.000 50.377)">
      <defs>
       <path id="me0ba4ece38" d="M 0 6.195085 
 C 1.642956 6.195085 3.218842 5.542332 4.380587 4.380587 
@@ -5498,10 +5498,10 @@ z
       <use xlink:href="#me0ba4ece38" x="786.9628" y="139.125293" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_5">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="142.012793" transform="rotate(-0 806.7628 142.012793)">ISA: 1</text>
+    <g id="text_5" transform="translate(25.200 52.989)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="142.012793" transform="rotate(-0 806.7628 142.012793)">ISA: 1</text>
     </g>
-    <g id="PathCollection_7">
+    <g id="PathCollection_7" transform="translate(8.000 62.054)">
      <defs>
       <path id="ma34b77484a" d="M 0 5.788368 
 C 1.535093 5.788368 3.00752 5.178469 4.092994 4.092994 
@@ -5519,10 +5519,10 @@ z
       <use xlink:href="#ma34b77484a" x="786.9628" y="160.448535" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_6">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="163.336035" transform="rotate(-0 806.7628 163.336035)">ISA: 0.75</text>
+    <g id="text_6" transform="translate(25.200 64.666)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="163.336035" transform="rotate(-0 806.7628 163.336035)">ISA: 0.75</text>
     </g>
-    <g id="PathCollection_8">
+    <g id="PathCollection_8" transform="translate(8.000 73.731)">
      <defs>
       <path id="m83e77b8eab" d="M 0 5.265348 
 C 1.396387 5.265348 2.735769 4.710558 3.723164 3.723164 
@@ -5540,10 +5540,10 @@ z
       <use xlink:href="#m83e77b8eab" x="786.9628" y="181.771777" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_7">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="184.659277" transform="rotate(-0 806.7628 184.659277)">ISA: 0.5</text>
+    <g id="text_7" transform="translate(25.200 76.343)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="184.659277" transform="rotate(-0 806.7628 184.659277)">ISA: 0.5</text>
     </g>
-    <g id="PathCollection_9">
+    <g id="PathCollection_9" transform="translate(8.000 85.408)">
      <defs>
       <path id="m2fbefbdcfa" d="M 0 4.493277 
 C 1.191631 4.493277 2.334616 4.019837 3.177227 3.177227 
@@ -5561,8 +5561,8 @@ z
       <use xlink:href="#m2fbefbdcfa" x="786.9628" y="203.09502" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_8">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="205.98252" transform="rotate(-0 806.7628 205.98252)">ISA: 0.25</text>
+    <g id="text_8" transform="translate(25.200 88.020)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="806.7628" y="205.98252" transform="rotate(-0 806.7628 205.98252)">ISA: 0.25</text>
     </g>
    </g>
   </g>

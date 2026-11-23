@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="945.754675pt" height="876.86332pt" viewBox="0 0 945.754675 876.86332" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="998pt" height="876.86332pt" viewBox="0 0 998 876.86332" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -6306,10 +6306,10 @@ z
     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(248.513437 58.70332)">Node color: ISA-associated modules | Node size: Degree</text>
    </g>
    <g id="legend_1">
-    <g id="text_2">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="775.9628" y="77.839648" transform="rotate(-0 775.9628 77.839648)">ISA-associated modules</text>
+    <g id="text_2" transform="translate(8.000 12.161)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="775.9628" y="77.839648" transform="rotate(-0 775.9628 77.839648)">ISA-associated modules</text>
     </g>
-    <g id="patch_2">
+    <g id="patch_2" transform="translate(-30.597 30.177)">
      <path d="M 814.560378 97.17334 
 L 836.560378 97.17334 
 L 836.560378 89.47334 
@@ -6317,10 +6317,10 @@ L 814.560378 89.47334
 z
 " style="fill: #1f77b4; stroke: #1f77b4; stroke-linejoin: miter"/>
     </g>
-    <g id="text_3">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="97.17334" transform="rotate(-0 845.360378 97.17334)">M1</text>
+    <g id="text_3" transform="translate(-13.397 31.827)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="97.17334" transform="rotate(-0 845.360378 97.17334)">M1</text>
     </g>
-    <g id="patch_3">
+    <g id="patch_3" transform="translate(-30.597 44.054)">
      <path d="M 814.560378 116.296582 
 L 836.560378 116.296582 
 L 836.560378 108.596582 
@@ -6328,10 +6328,10 @@ L 814.560378 108.596582
 z
 " style="fill: #aec7e8; stroke: #aec7e8; stroke-linejoin: miter"/>
     </g>
-    <g id="text_4">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="116.296582" transform="rotate(-0 845.360378 116.296582)">M2</text>
+    <g id="text_4" transform="translate(-13.397 45.704)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="116.296582" transform="rotate(-0 845.360378 116.296582)">M2</text>
     </g>
-    <g id="patch_4">
+    <g id="patch_4" transform="translate(-30.597 57.931)">
      <path d="M 814.560378 135.419824 
 L 836.560378 135.419824 
 L 836.560378 127.719824 
@@ -6339,10 +6339,10 @@ L 814.560378 127.719824
 z
 " style="fill: #ffbb78; stroke: #ffbb78; stroke-linejoin: miter"/>
     </g>
-    <g id="text_5">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="135.419824" transform="rotate(-0 845.360378 135.419824)">M4</text>
+    <g id="text_5" transform="translate(-13.397 59.581)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="135.419824" transform="rotate(-0 845.360378 135.419824)">M4</text>
     </g>
-    <g id="patch_5">
+    <g id="patch_5" transform="translate(-30.597 71.808)">
      <path d="M 814.560378 154.543066 
 L 836.560378 154.543066 
 L 836.560378 146.843066 
@@ -6350,10 +6350,10 @@ L 814.560378 146.843066
 z
 " style="fill: #2ca02c; stroke: #2ca02c; stroke-linejoin: miter"/>
     </g>
-    <g id="text_6">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="154.543066" transform="rotate(-0 845.360378 154.543066)">M5</text>
+    <g id="text_6" transform="translate(-13.397 73.458)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="154.543066" transform="rotate(-0 845.360378 154.543066)">M5</text>
     </g>
-    <g id="patch_6">
+    <g id="patch_6" transform="translate(-30.597 85.684)">
      <path d="M 814.560378 173.666309 
 L 836.560378 173.666309 
 L 836.560378 165.966309 
@@ -6361,10 +6361,10 @@ L 814.560378 165.966309
 z
 " style="fill: #d62728; stroke: #d62728; stroke-linejoin: miter"/>
     </g>
-    <g id="text_7">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="173.666309" transform="rotate(-0 845.360378 173.666309)">M7</text>
+    <g id="text_7" transform="translate(-13.397 87.334)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="173.666309" transform="rotate(-0 845.360378 173.666309)">M7</text>
     </g>
-    <g id="patch_7">
+    <g id="patch_7" transform="translate(-30.597 99.561)">
      <path d="M 814.560378 192.789551 
 L 836.560378 192.789551 
 L 836.560378 185.089551 
@@ -6372,10 +6372,10 @@ L 814.560378 185.089551
 z
 " style="fill: #ff9896; stroke: #ff9896; stroke-linejoin: miter"/>
     </g>
-    <g id="text_8">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="192.789551" transform="rotate(-0 845.360378 192.789551)">M8</text>
+    <g id="text_8" transform="translate(-13.397 101.211)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="192.789551" transform="rotate(-0 845.360378 192.789551)">M8</text>
     </g>
-    <g id="patch_8">
+    <g id="patch_8" transform="translate(-30.597 113.438)">
      <path d="M 814.560378 211.912793 
 L 836.560378 211.912793 
 L 836.560378 204.212793 
@@ -6383,10 +6383,10 @@ L 814.560378 204.212793
 z
 " style="fill: #c5b0d5; stroke: #c5b0d5; stroke-linejoin: miter"/>
     </g>
-    <g id="text_9">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="211.912793" transform="rotate(-0 845.360378 211.912793)">M10</text>
+    <g id="text_9" transform="translate(-13.397 115.088)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="211.912793" transform="rotate(-0 845.360378 211.912793)">M10</text>
     </g>
-    <g id="patch_9">
+    <g id="patch_9" transform="translate(-30.597 127.315)">
      <path d="M 814.560378 231.036035 
 L 836.560378 231.036035 
 L 836.560378 223.336035 
@@ -6394,10 +6394,10 @@ L 814.560378 223.336035
 z
 " style="fill: #8c564b; stroke: #8c564b; stroke-linejoin: miter"/>
     </g>
-    <g id="text_10">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="231.036035" transform="rotate(-0 845.360378 231.036035)">M11</text>
+    <g id="text_10" transform="translate(-13.397 128.965)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="231.036035" transform="rotate(-0 845.360378 231.036035)">M11</text>
     </g>
-    <g id="patch_10">
+    <g id="patch_10" transform="translate(-30.597 141.192)">
      <path d="M 814.560378 250.159277 
 L 836.560378 250.159277 
 L 836.560378 242.459277 
@@ -6405,10 +6405,10 @@ L 814.560378 242.459277
 z
 " style="fill: #e377c2; stroke: #e377c2; stroke-linejoin: miter"/>
     </g>
-    <g id="text_11">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="250.159277" transform="rotate(-0 845.360378 250.159277)">M13</text>
+    <g id="text_11" transform="translate(-13.397 142.842)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="250.159277" transform="rotate(-0 845.360378 250.159277)">M13</text>
     </g>
-    <g id="patch_11">
+    <g id="patch_11" transform="translate(-30.597 155.069)">
      <path d="M 814.560378 269.28252 
 L 836.560378 269.28252 
 L 836.560378 261.58252 
@@ -6416,8 +6416,8 @@ L 814.560378 261.58252
 z
 " style="fill: #7f7f7f; stroke: #7f7f7f; stroke-linejoin: miter"/>
     </g>
-    <g id="text_12">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="269.28252" transform="rotate(-0 845.360378 269.28252)">M15</text>
+    <g id="text_12" transform="translate(-13.397 156.719)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="845.360378" y="269.28252" transform="rotate(-0 845.360378 269.28252)">M15</text>
     </g>
    </g>
   </g>

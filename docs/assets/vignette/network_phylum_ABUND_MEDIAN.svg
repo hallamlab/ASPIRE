@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="976.809831pt" height="876.856289pt" viewBox="0 0 976.809831 876.856289" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1060pt" height="876.856289pt" viewBox="0 0 1060 876.856289" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -5049,10 +5049,10 @@ z
     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(215.157187 58.696289)">Node color: Phylum | Node size: Median ASV Abundance (log-scaled)</text>
    </g>
    <g id="legend_1">
-    <g id="text_2">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="819.959362" y="83.332617" transform="rotate(-0 819.959362 83.332617)">Phylum</text>
+    <g id="text_2" transform="translate(-30.496 6.669)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="819.959362" y="83.332617" transform="rotate(-0 819.959362 83.332617)">Phylum</text>
     </g>
-    <g id="patch_2">
+    <g id="patch_2" transform="translate(8.000 24.685)">
      <path d="M 781.4628 102.666543 
 L 803.4628 102.666543 
 L 803.4628 94.966543 
@@ -5060,10 +5060,10 @@ L 781.4628 94.966543
 z
 " style="fill: #1f77b4; stroke: #1f77b4; stroke-linejoin: miter"/>
     </g>
-    <g id="text_3">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="102.666543" transform="rotate(-0 812.2628 102.666543)">Actinobacteriota</text>
+    <g id="text_3" transform="translate(26.200 26.335)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="102.666543" transform="rotate(-0 812.2628 102.666543)">Actinobacteriota</text>
     </g>
-    <g id="patch_3">
+    <g id="patch_3" transform="translate(8.000 38.562)">
      <path d="M 781.4628 121.789785 
 L 803.4628 121.789785 
 L 803.4628 114.089785 
@@ -5071,10 +5071,10 @@ L 781.4628 114.089785
 z
 " style="fill: #aec7e8; stroke: #aec7e8; stroke-linejoin: miter"/>
     </g>
-    <g id="text_4">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="121.789785" transform="rotate(-0 812.2628 121.789785)">Bacteroidota</text>
+    <g id="text_4" transform="translate(25.200 40.212)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="121.789785" transform="rotate(-0 812.2628 121.789785)">Bacteroidota</text>
     </g>
-    <g id="patch_4">
+    <g id="patch_4" transform="translate(8.000 52.439)">
      <path d="M 781.4628 140.913027 
 L 803.4628 140.913027 
 L 803.4628 133.213027 
@@ -5082,10 +5082,10 @@ L 781.4628 133.213027
 z
 " style="fill: #ff7f0e; stroke: #ff7f0e; stroke-linejoin: miter"/>
     </g>
-    <g id="text_5">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="140.913027" transform="rotate(-0 812.2628 140.913027)">Campilobacterota</text>
+    <g id="text_5" transform="translate(25.200 54.089)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="140.913027" transform="rotate(-0 812.2628 140.913027)">Campilobacterota</text>
     </g>
-    <g id="patch_5">
+    <g id="patch_5" transform="translate(8.000 66.316)">
      <path d="M 781.4628 160.03627 
 L 803.4628 160.03627 
 L 803.4628 152.33627 
@@ -5093,10 +5093,10 @@ L 781.4628 152.33627
 z
 " style="fill: #ffbb78; stroke: #ffbb78; stroke-linejoin: miter"/>
     </g>
-    <g id="text_6">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="160.03627" transform="rotate(-0 812.2628 160.03627)">Deinococcota</text>
+    <g id="text_6" transform="translate(25.200 67.966)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="160.03627" transform="rotate(-0 812.2628 160.03627)">Deinococcota</text>
     </g>
-    <g id="patch_6">
+    <g id="patch_6" transform="translate(8.000 80.193)">
      <path d="M 781.4628 179.159512 
 L 803.4628 179.159512 
 L 803.4628 171.459512 
@@ -5104,10 +5104,10 @@ L 781.4628 171.459512
 z
 " style="fill: #2ca02c; stroke: #2ca02c; stroke-linejoin: miter"/>
     </g>
-    <g id="text_7">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="179.159512" transform="rotate(-0 812.2628 179.159512)">Firmicutes</text>
+    <g id="text_7" transform="translate(25.200 81.843)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="179.159512" transform="rotate(-0 812.2628 179.159512)">Firmicutes</text>
     </g>
-    <g id="patch_7">
+    <g id="patch_7" transform="translate(8.000 94.070)">
      <path d="M 781.4628 198.282754 
 L 803.4628 198.282754 
 L 803.4628 190.582754 
@@ -5115,10 +5115,10 @@ L 781.4628 190.582754
 z
 " style="fill: #98df8a; stroke: #98df8a; stroke-linejoin: miter"/>
     </g>
-    <g id="text_8">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="198.282754" transform="rotate(-0 812.2628 198.282754)">Fusobacteriota</text>
+    <g id="text_8" transform="translate(25.200 95.720)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="198.282754" transform="rotate(-0 812.2628 198.282754)">Fusobacteriota</text>
     </g>
-    <g id="patch_8">
+    <g id="patch_8" transform="translate(8.000 107.947)">
      <path d="M 781.4628 217.405996 
 L 803.4628 217.405996 
 L 803.4628 209.705996 
@@ -5126,10 +5126,10 @@ L 781.4628 209.705996
 z
 " style="fill: #d62728; stroke: #d62728; stroke-linejoin: miter"/>
     </g>
-    <g id="text_9">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="217.405996" transform="rotate(-0 812.2628 217.405996)">Proteobacteria</text>
+    <g id="text_9" transform="translate(25.200 109.597)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="217.405996" transform="rotate(-0 812.2628 217.405996)">Proteobacteria</text>
     </g>
-    <g id="patch_9">
+    <g id="patch_9" transform="translate(8.000 121.824)">
      <path d="M 781.4628 236.529238 
 L 803.4628 236.529238 
 L 803.4628 228.829238 
@@ -5137,15 +5137,15 @@ L 781.4628 228.829238
 z
 " style="fill: #ff9896; stroke: #ff9896; stroke-linejoin: miter"/>
     </g>
-    <g id="text_10">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="236.529238" transform="rotate(-0 812.2628 236.529238)">Spirochaetota</text>
+    <g id="text_10" transform="translate(25.200 123.474)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="236.529238" transform="rotate(-0 812.2628 236.529238)">Spirochaetota</text>
     </g>
    </g>
    <g id="legend_2">
-    <g id="text_11">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="832.256941" y="510.220617" transform="rotate(-0 832.256941 510.220617)">Node size</text>
+    <g id="text_11" transform="translate(-42.794 -95.213)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="832.256941" y="510.220617" transform="rotate(-0 832.256941 510.220617)">Node size</text>
     </g>
-    <g id="PathCollection_172">
+    <g id="PathCollection_172" transform="translate(8.000 -82.559)">
      <defs>
       <path id="m1586b8efdb" d="M 0 1.414214 
 C 0.375054 1.414214 0.734797 1.265203 1 1 
@@ -5163,10 +5163,10 @@ z
       <use xlink:href="#m1586b8efdb" x="792.4628" y="531.066809" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_12">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="533.954309" transform="rotate(-0 812.2628 533.954309)">Median abundance: 1</text>
+    <g id="text_12" transform="translate(25.200 -79.947)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="533.954309" transform="rotate(-0 812.2628 533.954309)">Median abundance: 1</text>
     </g>
-    <g id="PathCollection_173">
+    <g id="PathCollection_173" transform="translate(8.000 -73.082)">
      <defs>
       <path id="m36d920a40f" d="M 0 3.734185 
 C 0.990317 3.734185 1.940207 3.340728 2.640468 2.640468 
@@ -5184,10 +5184,10 @@ z
       <use xlink:href="#m36d920a40f" x="792.4628" y="554.590051" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_13">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="557.477551" transform="rotate(-0 812.2628 557.477551)">Median abundance: 50</text>
+    <g id="text_13" transform="translate(25.200 -70.470)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="557.477551" transform="rotate(-0 812.2628 557.477551)">Median abundance: 50</text>
     </g>
-    <g id="PathCollection_174">
+    <g id="PathCollection_174" transform="translate(8.000 -63.605)">
      <defs>
       <path id="m5027c0d64f" d="M 0 6.864658 
 C 1.820529 6.864658 3.566738 6.141354 4.854046 4.854046 
@@ -5205,10 +5205,10 @@ z
       <use xlink:href="#m5027c0d64f" x="792.4628" y="578.113293" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_14">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="581.000793" transform="rotate(-0 812.2628 581.000793)">Median abundance: 500</text>
+    <g id="text_14" transform="translate(25.200 -60.993)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="581.000793" transform="rotate(-0 812.2628 581.000793)">Median abundance: 500</text>
     </g>
-    <g id="PathCollection_175">
+    <g id="PathCollection_175" transform="translate(8.000 -53.381)">
      <defs>
       <path id="mcdb9e38a55" d="M 0 10.246951 
 C 2.717523 10.246951 5.324109 9.167267 7.245688 7.245688 
@@ -5226,8 +5226,8 @@ z
       <use xlink:href="#mcdb9e38a55" x="792.4628" y="601.636535" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_15">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="604.524035" transform="rotate(-0 812.2628 604.524035)">Median abundance: 5000</text>
+    <g id="text_15" transform="translate(25.200 -50.769)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="604.524035" transform="rotate(-0 812.2628 604.524035)">Median abundance: 5000</text>
     </g>
    </g>
   </g>

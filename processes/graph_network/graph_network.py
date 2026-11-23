@@ -218,6 +218,25 @@ def figure_ax(figsize: Tuple[float, float] = (16, 14)) -> Tuple[plt.Figure, plt.
     return fig, ax
 
 
+def network_legend(ax, handles, labels=None, **kwargs):
+    """Reserve space in points for the largest actual scatter symbol."""
+    diameters = [
+        math.sqrt(float(np.max(handle.get_sizes()))) + max(handle.get_linewidths(), default=0)
+        for handle in handles
+        if isinstance(handle, mpl.collections.PathCollection) and len(handle.get_sizes())
+    ]
+    kwargs["labelspacing"] = max(1.1, kwargs.get("labelspacing", 0))
+    if diameters:
+        font_size = mpl.font_manager.FontProperties(size=mpl.rcParams["legend.fontsize"]).get_size_in_points()
+        diameter = max(diameters) / font_size
+        kwargs.update(handlelength=max(2, diameter + 1), handletextpad=1.5,
+                      labelspacing=max(kwargs.get("labelspacing", 0), diameter + 0.5),
+                      scatteryoffsets=[0.5])
+    if labels is not None:
+        kwargs["labels"] = labels
+    return ax.legend(handles=handles, **kwargs)
+
+
 def finalize_network_axes(
     fig: plt.Figure,
     ax: plt.Axes,
@@ -233,6 +252,14 @@ def finalize_network_axes(
     ax.axis("off")
     fig.subplots_adjust(right=right)
     extra = [lg for lg in (legends or []) if lg is not None]
+    # Place each legend underneath the rendered extent of the preceding one.
+    if len(extra) > 1:
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        for previous, current in zip(extra, extra[1:]):
+            bounds = previous.get_window_extent(renderer).transformed(ax.transAxes.inverted())
+            gap = (16 * fig.dpi / 72) / ax.bbox.height
+            current.set_bbox_to_anchor((1.04, bounds.y0 - gap), transform=ax.transAxes)
     try:
         if not (ax.collections or ax.patches or ax.lines):
             ax.plot([0], [0], alpha=0)
@@ -909,7 +936,7 @@ def plot_degree(G: nx.Graph, pos: Dict, out_svg: str, degree_scale: float, edge_
     # legend
     handles = [ax.scatter([], [], s=degree_marker_area(s, degree_scale), edgecolors='black',
                           facecolors=NOT_FOCUS_COLOR, alpha=1, label=f'{s}') for s in degree_levels]
-    legend = ax.legend(handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
+    legend = network_legend(ax, handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
                        title="Node Degree", frameon=False, scatterpoints=1, labelspacing=1.2,
                        borderaxespad=0.0)
 
@@ -957,7 +984,7 @@ def plot_abundance(
                     alpha=1, label=f"Mean abundance: {_format_legend_num(v)}")
         for v in size_legend_vals
     ]
-    legend = ax.legend(handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
+    legend = network_legend(ax, handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
                        title="Node Attributes", frameon=False, scatterpoints=1, labelspacing=1.2,
                        borderaxespad=0.0)
 
@@ -1006,12 +1033,12 @@ def plot_mag_pairing(
                    alpha=1, label=f"Degree {v}")
         for v in degree_levels
     ]
-    pairing_legend = ax.legend(handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
+    pairing_legend = network_legend(ax, handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
                                title="ASV-to-MAG pairing", frameon=False, borderaxespad=0.0)
     legends = [pairing_legend]
     if size_handles:
         ax.add_artist(pairing_legend)
-        size_legend = ax.legend(handles=size_handles, loc='upper left', bbox_to_anchor=(1.01, 0.82),
+        size_legend = network_legend(ax, handles=size_handles, loc='upper left', bbox_to_anchor=(1.01, 0.82),
                                 title="Node size", frameon=False, borderaxespad=0.0, labelspacing=1.0)
         legends.append(size_legend)
 
@@ -1081,13 +1108,13 @@ def plot_mag_pairing_taxonomy(
         for v in degree_levels
     ]
     legend_ncol = 1 if len(handles) <= 16 else 2 if len(handles) <= 32 else 3
-    tax_legend = ax.legend(handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
+    tax_legend = network_legend(ax, handles=handles, loc='upper left', bbox_to_anchor=(1.01, 1),
                            title="MAG phylum", frameon=False, borderaxespad=0.0,
                            labelspacing=0.8, ncol=legend_ncol)
     legends = [tax_legend]
     if size_handles:
         ax.add_artist(tax_legend)
-        size_legend = ax.legend(handles=size_handles, loc='upper left', bbox_to_anchor=(1.01, 0.55),
+        size_legend = network_legend(ax, handles=size_handles, loc='upper left', bbox_to_anchor=(1.01, 0.55),
                                 title="Node size", frameon=False, borderaxespad=0.0, labelspacing=1.0)
         legends.append(size_legend)
 
@@ -1195,7 +1222,8 @@ def plot_betweenness(
     ]
     if require_mag_pair:
         class_handles.append(mpatches.Patch(color=MAG_UNPAIRED_COLOR, label="No paired MAG"))
-    class_legend = ax.legend(
+    class_legend = network_legend(
+        ax,
         handles=class_handles,
         loc="upper left",
         bbox_to_anchor=(1.01, 1.0),
@@ -1212,7 +1240,8 @@ def plot_betweenness(
     ]
     if size_handles:
         ax.add_artist(class_legend)
-        size_legend = ax.legend(
+        size_legend = network_legend(
+            ax,
             handles=size_handles,
             loc="upper left",
             bbox_to_anchor=(1.01, 0.72),
@@ -1336,7 +1365,8 @@ def plot_group_isa(
                                 label=f"ISA: {_format_legend_float(v, 2)}") for v in size_legend_vals]
 
     legend_handles = class_handles + size_handles
-    legend = ax.legend(
+    legend = network_legend(
+        ax,
         legend_handles,
         [h.get_label() for h in legend_handles],
         loc="upper left",
@@ -1487,7 +1517,8 @@ def plot_phylum(
         size_handles = size_legend_handles(size_vals, size_label + ":", size_scale)
 
     phylum_ncol = 1 if len(color_patches) <= 14 else 2 if len(color_patches) <= 28 else 3
-    leg_phylum = ax.legend(
+    leg_phylum = network_legend(
+        ax,
         handles=color_patches,
         loc='upper left',
         bbox_to_anchor=(1.01, 1.0),
@@ -1498,7 +1529,8 @@ def plot_phylum(
     )
     ax.add_artist(leg_phylum)
 
-    size_legend = ax.legend(
+    size_legend = network_legend(
+        ax,
         handles=size_handles,
         loc='upper left',
         bbox_to_anchor=(1.01, 0.45),
@@ -1999,7 +2031,7 @@ def plot_modules(
     legend = None
     if patches:
         legend_ncol = 1 if len(patches) <= 18 else 2 if len(patches) <= 36 else 3
-        legend = ax.legend(handles=patches, loc='upper left', bbox_to_anchor=(1.01, 1),
+        legend = network_legend(ax, handles=patches, loc='upper left', bbox_to_anchor=(1.01, 1),
                            title=legend_title, frameon=False, labelspacing=0.8,
                            borderaxespad=0.0, ncol=legend_ncol)
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="956.843012pt" height="876.86332pt" viewBox="0 0 956.843012 876.86332" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1045pt" height="876.86332pt" viewBox="0 0 1045 876.86332" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -4685,10 +4685,10 @@ z
     </g>
    </g>
    <g id="legend_1">
-    <g id="text_2">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="779.809419" y="77.839648" transform="rotate(-0 779.809419 77.839648)">Normalized Betweenness</text>
+    <g id="text_2" transform="translate(-7.676 12.157)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="779.809419" y="77.839648" transform="rotate(-0 779.809419 77.839648)">Normalized Betweenness</text>
     </g>
-    <g id="patch_2">
+    <g id="patch_2" transform="translate(8.000 33.473)">
      <path d="M 779.2352 93.87334 
 L 801.2352 93.87334 
 L 801.2352 86.17334 
@@ -4696,10 +4696,10 @@ L 779.2352 86.17334
 z
 " style="fill: #4a4a4a; stroke: #4a4a4a; stroke-linejoin: miter"/>
     </g>
-    <g id="text_3">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="93.87334" transform="rotate(-0 810.0352 93.87334)">Betweenness &gt;= 0.05</text>
+    <g id="text_3" transform="translate(40.302 35.123)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="93.87334" transform="rotate(-0 810.0352 93.87334)">Betweenness &gt;= 0.05</text>
     </g>
-    <g id="patch_3">
+    <g id="patch_3" transform="translate(8.000 50.650)">
      <path d="M 779.2352 109.696582 
 L 801.2352 109.696582 
 L 801.2352 101.996582 
@@ -4707,15 +4707,15 @@ L 779.2352 101.996582
 z
 " style="fill: #d0d0d0; stroke: #d0d0d0; stroke-linejoin: miter"/>
     </g>
-    <g id="text_4">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="109.696582" transform="rotate(-0 810.0352 109.696582)">Betweenness &lt; 0.05</text>
+    <g id="text_4" transform="translate(40.302 52.300)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="109.696582" transform="rotate(-0 810.0352 109.696582)">Betweenness &lt; 0.05</text>
     </g>
    </g>
    <g id="legend_2">
-    <g id="text_5">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="793.638247" y="295.164448" transform="rotate(-0 793.638247 295.164448)">Node size</text>
+    <g id="text_5" transform="translate(-21.504 -78.165)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="793.638247" y="295.164448" transform="rotate(-0 793.638247 295.164448)">Node size</text>
     </g>
-    <g id="PathCollection_172" transform="translate(0.00 0.00)">
+    <g id="PathCollection_172" transform="translate(8.000 -63.311) translate(0.00 0.00)">
      <defs>
       <path id="m5d8067643f" d="M 0 1.67332 
 C 0.44377 1.67332 0.869423 1.497008 1.183216 1.183216 
@@ -4733,10 +4733,10 @@ z
       <use xlink:href="#m5d8067643f" x="790.2352" y="313.81064" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_6" transform="translate(15.30 0.00)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="316.69814" transform="rotate(-0 810.0352 316.69814)">Degree 0</text>
+    <g id="text_6" transform="translate(25.002 -60.698) translate(15.30 0.00)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="316.69814" transform="rotate(-0 810.0352 316.69814)">Degree 0</text>
     </g>
-    <g id="PathCollection_173" transform="translate(0.00 2.96)">
+    <g id="PathCollection_173" transform="translate(8.000 -52.699) translate(0.00 2.96)">
      <defs>
       <path id="m2c81cb41d5" d="M 0 11.394445 
 C 3.021842 11.394445 5.920324 10.193854 8.057089 8.057089 
@@ -4754,10 +4754,10 @@ z
       <use xlink:href="#m2c81cb41d5" x="790.2352" y="335.134097" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_7" transform="translate(15.30 2.96)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="338.021597" transform="rotate(-0 810.0352 338.021597)">Degree 10</text>
+    <g id="text_7" transform="translate(25.002 -50.087) translate(15.30 2.96)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="338.021597" transform="rotate(-0 810.0352 338.021597)">Degree 10</text>
     </g>
-    <g id="PathCollection_174" transform="translate(0.00 20.14)">
+    <g id="PathCollection_174" transform="translate(8.000 -46.694) translate(0.00 20.14)">
      <defs>
       <path id="m0fa2272434" d="M 0 19.114126 
 C 5.069126 19.114126 9.931315 17.100141 13.515728 13.515728 
@@ -4775,10 +4775,10 @@ z
       <use xlink:href="#m0fa2272434" x="790.2352" y="356.457554" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_8" transform="translate(15.30 20.14)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="359.345054" transform="rotate(-0 810.0352 359.345054)">Degree 20</text>
+    <g id="text_8" transform="translate(25.002 -44.082) translate(15.30 20.14)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="359.345054" transform="rotate(-0 810.0352 359.345054)">Degree 20</text>
     </g>
-    <g id="PathCollection_175" transform="translate(0.00 52.04)">
+    <g id="PathCollection_175" transform="translate(8.000 -40.702) translate(0.00 52.04)">
      <defs>
       <path id="mfa58196590" d="M 0 26.101675 
 C 6.922245 26.101675 13.561905 23.351437 18.456671 18.456671 
@@ -4796,8 +4796,8 @@ z
       <use xlink:href="#mfa58196590" x="790.2352" y="377.781011" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_9" transform="translate(15.30 52.04)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="380.668511" transform="rotate(-0 810.0352 380.668511)">Degree 30</text>
+    <g id="text_9" transform="translate(25.002 -38.089) translate(15.30 52.04)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="810.0352" y="380.668511" transform="rotate(-0 810.0352 380.668511)">Degree 30</text>
     </g>
    </g>
    <g id="PathCollection_176">

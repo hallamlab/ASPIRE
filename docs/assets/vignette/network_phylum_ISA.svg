@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="941.317644pt" height="876.856289pt" viewBox="0 0 941.317644 876.856289" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1007pt" height="876.856289pt" viewBox="0 0 1007 876.856289" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -5622,10 +5622,10 @@ z
     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(242.510625 58.696289)">Node color: Phylum | Node size: Indicator Species Strength</text>
    </g>
    <g id="legend_1">
-    <g id="text_2">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="821.183972" y="83.332617" transform="rotate(-0 821.183972 83.332617)">Phylum</text>
+    <g id="text_2" transform="translate(-33.949 6.669)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="821.183972" y="83.332617" transform="rotate(-0 821.183972 83.332617)">Phylum</text>
     </g>
-    <g id="patch_2">
+    <g id="patch_2" transform="translate(8.000 24.685)">
      <path d="M 781.4628 102.666543 
 L 803.4628 102.666543 
 L 803.4628 94.966543 
@@ -5633,10 +5633,10 @@ L 781.4628 94.966543
 z
 " style="fill: #1f77b4; stroke: #1f77b4; stroke-linejoin: miter"/>
     </g>
-    <g id="text_3">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="102.666543" transform="rotate(-0 812.2628 102.666543)">Actinobacteriota</text>
+    <g id="text_3" transform="translate(28.429 26.335)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="102.666543" transform="rotate(-0 812.2628 102.666543)">Actinobacteriota</text>
     </g>
-    <g id="patch_3">
+    <g id="patch_3" transform="translate(8.000 38.562)">
      <path d="M 781.4628 121.789785 
 L 803.4628 121.789785 
 L 803.4628 114.089785 
@@ -5644,10 +5644,10 @@ L 781.4628 114.089785
 z
 " style="fill: #aec7e8; stroke: #aec7e8; stroke-linejoin: miter"/>
     </g>
-    <g id="text_4">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="121.789785" transform="rotate(-0 812.2628 121.789785)">Bacteroidota</text>
+    <g id="text_4" transform="translate(27.429 40.212)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="121.789785" transform="rotate(-0 812.2628 121.789785)">Bacteroidota</text>
     </g>
-    <g id="patch_4">
+    <g id="patch_4" transform="translate(8.000 52.439)">
      <path d="M 781.4628 140.913027 
 L 803.4628 140.913027 
 L 803.4628 133.213027 
@@ -5655,10 +5655,10 @@ L 781.4628 133.213027
 z
 " style="fill: #ff7f0e; stroke: #ff7f0e; stroke-linejoin: miter"/>
     </g>
-    <g id="text_5">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="140.913027" transform="rotate(-0 812.2628 140.913027)">Campilobacterota</text>
+    <g id="text_5" transform="translate(27.429 54.089)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="140.913027" transform="rotate(-0 812.2628 140.913027)">Campilobacterota</text>
     </g>
-    <g id="patch_5">
+    <g id="patch_5" transform="translate(8.000 66.316)">
      <path d="M 781.4628 160.03627 
 L 803.4628 160.03627 
 L 803.4628 152.33627 
@@ -5666,10 +5666,10 @@ L 781.4628 152.33627
 z
 " style="fill: #ffbb78; stroke: #ffbb78; stroke-linejoin: miter"/>
     </g>
-    <g id="text_6">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="160.03627" transform="rotate(-0 812.2628 160.03627)">Deinococcota</text>
+    <g id="text_6" transform="translate(27.429 67.966)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="160.03627" transform="rotate(-0 812.2628 160.03627)">Deinococcota</text>
     </g>
-    <g id="patch_6">
+    <g id="patch_6" transform="translate(8.000 80.193)">
      <path d="M 781.4628 179.159512 
 L 803.4628 179.159512 
 L 803.4628 171.459512 
@@ -5677,10 +5677,10 @@ L 781.4628 171.459512
 z
 " style="fill: #2ca02c; stroke: #2ca02c; stroke-linejoin: miter"/>
     </g>
-    <g id="text_7">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="179.159512" transform="rotate(-0 812.2628 179.159512)">Firmicutes</text>
+    <g id="text_7" transform="translate(27.429 81.843)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="179.159512" transform="rotate(-0 812.2628 179.159512)">Firmicutes</text>
     </g>
-    <g id="patch_7">
+    <g id="patch_7" transform="translate(8.000 94.070)">
      <path d="M 781.4628 198.282754 
 L 803.4628 198.282754 
 L 803.4628 190.582754 
@@ -5688,10 +5688,10 @@ L 781.4628 190.582754
 z
 " style="fill: #98df8a; stroke: #98df8a; stroke-linejoin: miter"/>
     </g>
-    <g id="text_8">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="198.282754" transform="rotate(-0 812.2628 198.282754)">Fusobacteriota</text>
+    <g id="text_8" transform="translate(27.429 95.720)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="198.282754" transform="rotate(-0 812.2628 198.282754)">Fusobacteriota</text>
     </g>
-    <g id="patch_8">
+    <g id="patch_8" transform="translate(8.000 107.947)">
      <path d="M 781.4628 217.405996 
 L 803.4628 217.405996 
 L 803.4628 209.705996 
@@ -5699,10 +5699,10 @@ L 781.4628 209.705996
 z
 " style="fill: #d62728; stroke: #d62728; stroke-linejoin: miter"/>
     </g>
-    <g id="text_9">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="217.405996" transform="rotate(-0 812.2628 217.405996)">Proteobacteria</text>
+    <g id="text_9" transform="translate(27.429 109.597)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="217.405996" transform="rotate(-0 812.2628 217.405996)">Proteobacteria</text>
     </g>
-    <g id="patch_9">
+    <g id="patch_9" transform="translate(8.000 121.824)">
      <path d="M 781.4628 236.529238 
 L 803.4628 236.529238 
 L 803.4628 228.829238 
@@ -5710,10 +5710,10 @@ L 781.4628 228.829238
 z
 " style="fill: #ff9896; stroke: #ff9896; stroke-linejoin: miter"/>
     </g>
-    <g id="text_10">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="236.529238" transform="rotate(-0 812.2628 236.529238)">Spirochaetota</text>
+    <g id="text_10" transform="translate(27.429 123.474)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="236.529238" transform="rotate(-0 812.2628 236.529238)">Spirochaetota</text>
     </g>
-    <g id="patch_10">
+    <g id="patch_10" transform="translate(8.000 135.695)">
      <path d="M 781.4628 255.658711 
 L 803.4628 255.658711 
 L 803.4628 247.958711 
@@ -5721,15 +5721,15 @@ L 781.4628 247.958711
 z
 " style="fill: #d3d3d3; stroke: #d3d3d3; stroke-linejoin: miter"/>
     </g>
-    <g id="text_11">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="255.658711" transform="rotate(-0 812.2628 255.658711)">Unassigned/Other</text>
+    <g id="text_11" transform="translate(27.429 137.345)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="255.658711" transform="rotate(-0 812.2628 255.658711)">Unassigned/Other</text>
     </g>
    </g>
    <g id="legend_2">
-    <g id="text_12">
-     <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="792.808191" y="510.220617" transform="rotate(-0 792.808191 510.220617)">Node size</text>
+    <g id="text_12" transform="translate(-5.574 -62.213)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="792.808191" y="510.220617" transform="rotate(-0 792.808191 510.220617)">Node size</text>
     </g>
-    <g id="PathCollection_173" transform="translate(0.00 0.00)">
+    <g id="PathCollection_173" transform="translate(8.000 -49.559) translate(0.00 0.00)">
      <defs>
       <path id="m3058236b77" d="M 0 4.1833 
 C 1.109424 4.1833 2.173559 3.742521 2.95804 2.95804 
@@ -5747,10 +5747,10 @@ z
       <use xlink:href="#m3058236b77" x="792.4628" y="531.066809" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_13" transform="translate(2.43 0.00)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="533.954309" transform="rotate(-0 812.2628 533.954309)">ISA: 0.1</text>
+    <g id="text_13" transform="translate(24.999 -46.947) translate(2.43 0.00)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="533.954309" transform="rotate(-0 812.2628 533.954309)">ISA: 0.1</text>
     </g>
-    <g id="PathCollection_174" transform="translate(0.00 0.00)">
+    <g id="PathCollection_174" transform="translate(8.000 -40.082) translate(0.00 0.00)">
      <defs>
       <path id="m053d5c5efb" d="M 0 6.614378 
 C 1.754154 6.614378 3.436698 5.917446 4.677072 4.677072 
@@ -5768,10 +5768,10 @@ z
       <use xlink:href="#m053d5c5efb" x="792.4628" y="554.590051" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_14" transform="translate(2.43 0.00)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="557.477551" transform="rotate(-0 812.2628 557.477551)">ISA: 0.25</text>
+    <g id="text_14" transform="translate(24.999 -37.470) translate(2.43 0.00)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="557.477551" transform="rotate(-0 812.2628 557.477551)">ISA: 0.25</text>
     </g>
-    <g id="PathCollection_175" transform="translate(0.00 0.45)">
+    <g id="PathCollection_175" transform="translate(8.000 -31.055) translate(0.00 0.45)">
      <defs>
       <path id="m79b2172412" d="M 0 9.354143 
 C 2.480748 9.354143 4.860225 8.368532 6.614378 6.614378 
@@ -5789,10 +5789,10 @@ z
       <use xlink:href="#m79b2172412" x="792.4628" y="578.113293" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_15" transform="translate(2.43 0.45)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="581.000793" transform="rotate(-0 812.2628 581.000793)">ISA: 0.5</text>
+    <g id="text_15" transform="translate(24.999 -28.443) translate(2.43 0.45)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="581.000793" transform="rotate(-0 812.2628 581.000793)">ISA: 0.5</text>
     </g>
-    <g id="PathCollection_176" transform="translate(0.00 5.73)">
+    <g id="PathCollection_176" transform="translate(8.000 -24.902) translate(0.00 5.73)">
      <defs>
       <path id="m212f7fcb0c" d="M 0 11.456439 
 C 3.038283 11.456439 5.952535 10.249317 8.100926 8.100926 
@@ -5810,10 +5810,10 @@ z
       <use xlink:href="#m212f7fcb0c" x="792.4628" y="601.636535" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_16" transform="translate(2.43 5.73)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="604.524035" transform="rotate(-0 812.2628 604.524035)">ISA: 0.75</text>
+    <g id="text_16" transform="translate(24.999 -22.289) translate(2.43 5.73)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="604.524035" transform="rotate(-0 812.2628 604.524035)">ISA: 0.75</text>
     </g>
-    <g id="PathCollection_177" transform="translate(0.00 14.89)">
+    <g id="PathCollection_177" transform="translate(8.000 -18.900) translate(0.00 14.89)">
      <defs>
       <path id="m43f75f64d3" d="M 0 13.228757 
 C 3.508307 13.228757 6.873396 11.834891 9.354143 9.354143 
@@ -5831,8 +5831,8 @@ z
       <use xlink:href="#m43f75f64d3" x="792.4628" y="625.159777" style="fill: #d3d3d3; stroke: #000000"/>
      </g>
     </g>
-    <g id="text_17" transform="translate(2.43 14.89)">
-     <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="628.047277" transform="rotate(-0 812.2628 628.047277)">ISA: 1.0</text>
+    <g id="text_17" transform="translate(24.999 -16.287) translate(2.43 14.89)">
+     <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="812.2628" y="628.047277" transform="rotate(-0 812.2628 628.047277)">ISA: 1.0</text>
     </g>
    </g>
   </g>
