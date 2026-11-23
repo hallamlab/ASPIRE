@@ -4644,10 +4644,6 @@ z
      <use xlink:href="#m2e81f7ecb0" x="579.822214" y="307.150156" style="fill: #d0d0d0; fill-opacity: 0.95; stroke: #000000; stroke-opacity: 0.95; stroke-width: 0.25"/>
     </g>
    </g>
-   <g id="text_1">
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(312.065625 45.642539)">SPIEC-EASI Network (POS_ALL)</text>
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(263.47125 58.70332)">Node color: Betweenness class | Node size: Degree</text>
-   </g>
    <g id="PathCollection_170">
     <defs>
      <path id="m351fc58112" d="M 0 19.165621 

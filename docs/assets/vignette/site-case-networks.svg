@@ -3790,9 +3790,6 @@ z
      <use xlink:href="#m497875a925" x="246.756615" y="281.261045" style="fill: #c9c9c9; stroke: #ffffff; stroke-width: 0.25"/>
     </g>
    </g>
-   <g id="text_1">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #009e73" x="163.004687" y="16.318125" transform="rotate(-0 163.004687 16.318125)">Tumor-side vs healthy · 0 network indicators</text>
-   </g>
    <g id="legend_1" transform="translate(-8 0)">
     <g id="patch_2" transform="translate(205.380469 -273.315375)">
      <path d="M 24.619531 318.315375
@@ -7578,9 +7575,6 @@ L 547.862379 155.198479
      <use xlink:href="#m497875a925" x="514.19494" y="122.0634" style="fill: #c9c9c9; stroke: #ffffff; stroke-width: 0.25"/>
      <use xlink:href="#m497875a925" x="607.356375" y="281.261045" style="fill: #c9c9c9; stroke: #ffffff; stroke-width: 0.25"/>
     </g>
-   </g>
-   <g id="text_5">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #009e73" x="523.604447" y="16.318125" transform="rotate(-0 523.604447 16.318125)">Contralateral vs healthy · 0 network indicators</text>
    </g>
    <g id="legend_2" transform="translate(-8 0)">
     <g id="patch_5" transform="translate(210.401021 -273.315375)">
@@ -11404,9 +11398,6 @@ L 139.030394 422.495798
 z
 " clip-path="url(#p72cb7eaeda)" style="fill: #181818; stroke: #ffffff; stroke-width: 0.25"/>
    </g>
-   <g id="text_9">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #009e73" x="163.004687" y="340.557885" transform="rotate(-0 163.004687 340.557885)">Tumor-side vs contralateral · 5 network indicators</text>
-   </g>
    <g id="legend_3" transform="translate(-8 0)">
     <g id="patch_8" transform="translate(218.800000 -273.555135)">
      <path d="M 11.2 642.555135
@@ -15209,9 +15200,6 @@ z
     <g clip-path="url(#pffb383ca04)">
      <use xlink:href="#ma58075861a" x="541.331124" y="427.535808" style="fill: #858585; stroke: #ffffff; stroke-width: 0.25"/>
     </g>
-   </g>
-   <g id="text_13">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #6a3d9a" x="523.604447" y="340.557885" transform="rotate(-0 523.604447 340.557885)">Oral case vs control · 1 network indicators</text>
    </g>
    <g id="legend_4" transform="translate(-8 0)">
     <g id="patch_11" transform="translate(193.904146 -273.555135)">

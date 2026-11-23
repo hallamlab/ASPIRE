@@ -14,6 +14,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
+from vignette_typography import style_svg
 from vignette_style import apply_style, heatmap
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.stats import false_discovery_control
@@ -33,7 +34,9 @@ def read(module, name):
 
 
 def save(fig, name):
-    fig.savefig(out / (name + ".svg"), metadata={"Date": None}, bbox_inches="tight")
+    target = out / (name + ".svg")
+    fig.savefig(target, metadata={"Date": None}, bbox_inches="tight")
+    target.write_text(style_svg(target.read_text(), name))
     plt.close(fig)
 
 
@@ -278,7 +281,7 @@ def vignette_svg(source, target, keep_site=False):
     svg = re.sub(r"font-size: ([0-9.]+)px",
                  lambda m: f"font-size: {min(12, max(10, round(float(m[1]))))}px", svg)
     svg = re.sub(r'font-family: [^;"]+', "font-family: 'DejaVu Sans', sans-serif", svg)
-    target.write_text(svg)
+    target.write_text(style_svg(svg, target.stem))
 
 # Collect the matching native exports without modifying the published run.
 for module, plot in [

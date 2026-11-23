@@ -7532,7 +7532,7 @@ L 0 3.5
      </g>
     </g>
     <g id="text_8">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="387.498947" y="323.158281" transform="rotate(-0 387.498947 323.158281)">Library position in the clustered matrix</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="387.498947" y="323.158281" transform="rotate(-0 387.498947 323.158281)">Library position in the clustered matrix</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
@@ -9213,7 +9213,7 @@ L 929.52 128.939687
      </g>
     </g>
     <g id="text_20">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="967.336781" y="177.16" transform="rotate(-90 967.336781 177.16)">log₁₀(count + 1)</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="967.336781" y="177.16" transform="rotate(-90 967.336781 177.16)">log₁₀(count + 1)</text>
     </g>
    </g>
    <g id="LineCollection_3"/>

@@ -40,17 +40,17 @@ z
    <g id="matplotlib.axis_1">
     <g id="xtick_1">
      <g id="text_1">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(69.087209 402.414302) rotate(-12)">A: TumorSide vs Contralateral</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(69.087209 402.414302) rotate(-12)">A: TumorSide vs Contralateral</text>
      </g>
     </g>
     <g id="xtick_2">
      <g id="text_2">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(262.859333 399.11026) rotate(-12)">B: Contralateral vs Healthy</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(262.859333 399.11026) rotate(-12)">B: Contralateral vs Healthy</text>
      </g>
     </g>
     <g id="xtick_3">
      <g id="text_3">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(453.348114 397.202021) rotate(-12)">C: TumorSide vs Healthy</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(453.348114 397.202021) rotate(-12)">C: TumorSide vs Healthy</text>
      </g>
     </g>
     <g id="text_4">
@@ -60,47 +60,47 @@ z
    <g id="matplotlib.axis_2">
     <g id="ytick_1">
      <g id="text_5">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="351.610253" transform="rotate(-0 37.751953 351.610253)">0.0</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="351.610253" transform="rotate(-0 37.751953 351.610253)">0.0</text>
      </g>
     </g>
     <g id="ytick_2">
      <g id="text_6">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="314.030555" transform="rotate(-0 37.751953 314.030555)">0.1</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="314.030555" transform="rotate(-0 37.751953 314.030555)">0.1</text>
      </g>
     </g>
     <g id="ytick_3">
      <g id="text_7">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="276.450858" transform="rotate(-0 37.751953 276.450858)">0.2</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="276.450858" transform="rotate(-0 37.751953 276.450858)">0.2</text>
      </g>
     </g>
     <g id="ytick_4">
      <g id="text_8">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="238.87116" transform="rotate(-0 37.751953 238.87116)">0.3</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="238.87116" transform="rotate(-0 37.751953 238.87116)">0.3</text>
      </g>
     </g>
     <g id="ytick_5">
      <g id="text_9">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="201.291463" transform="rotate(-0 37.751953 201.291463)">0.4</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="201.291463" transform="rotate(-0 37.751953 201.291463)">0.4</text>
      </g>
     </g>
     <g id="ytick_6">
      <g id="text_10">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="163.711765" transform="rotate(-0 37.751953 163.711765)">0.5</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="163.711765" transform="rotate(-0 37.751953 163.711765)">0.5</text>
      </g>
     </g>
     <g id="ytick_7">
      <g id="text_11">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="126.132068" transform="rotate(-0 37.751953 126.132068)">0.6</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="126.132068" transform="rotate(-0 37.751953 126.132068)">0.6</text>
      </g>
     </g>
     <g id="ytick_8">
      <g id="text_12">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="88.55237" transform="rotate(-0 37.751953 88.55237)">0.7</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="88.55237" transform="rotate(-0 37.751953 88.55237)">0.7</text>
      </g>
     </g>
     <g id="ytick_9">
      <g id="text_13">
-      <text style="font-size: 11px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="50.972673" transform="rotate(-0 37.751953 50.972673)">0.8</text>
+      <text style="font-size: 10px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: end; fill: #262626" x="37.751953" y="50.972673" transform="rotate(-0 37.751953 50.972673)">0.8</text>
      </g>
     </g>
     <g id="text_14">
@@ -1521,9 +1521,6 @@ z
      <use xlink:href="#m6e409312cb" x="530.008884" y="183.799147" style="fill-opacity: 0.4"/>
      <use xlink:href="#m6e409312cb" x="529.780415" y="276.643067" style="fill-opacity: 0.4"/>
     </g>
-   </g>
-   <g id="text_15">
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: middle; fill: #262626" x="326.251953" y="15.936328" transform="rotate(-0 326.251953 15.936328)">Bray-Curtis Distances Across Planned Contrasts (A/B/C)</text>
    </g>
   </g>
  </g>

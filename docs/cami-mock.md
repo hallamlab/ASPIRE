@@ -103,7 +103,7 @@ Scroll to **Output Inventory**. In the Diversity card, **Plots** opens the publi
 
 ## Make the study figures from your run
 
-The native module plots below are exports from the archived run. The additional study panels, including the gallery scripts’ restyled network and ISA copies, and the worked numerical examples were prepared from an earlier CAMI Cutadapt benchmark. For example, the archived sample-level VOC heatmap labels ASV157 as *Delftia*, whereas the earlier benchmark assigned that number to *Treponema*. Use the tables from your own run when following an individual ASV.
+The native module plots below come from the archived run. Figure descriptions appear in the walkthrough, and the standalone SVGs use consistent label sizes. The additional study panels, including the gallery scripts’ restyled network and ISA copies, and the worked numerical examples were prepared from an earlier CAMI Cutadapt benchmark. For example, the archived sample-level VOC heatmap labels ASV157 as *Delftia*, whereas the earlier benchmark assigned that number to *Treponema*. Use the tables from your own run when following an individual ASV.
 
 After validation, create the plotting environment once. When Mamba asks whether to proceed, enter `y`.
 
@@ -136,7 +136,7 @@ Read a row in `ASV_target.feature_qc.tsv` before opening a community plot. ASV10
 
 [![Archived all-library read-flow Sankey, including skin controls and blanks](assets/vignette/mock-read-flow.svg)](assets/vignette/mock-read-flow.svg)
 
-Start at **Input pairs**. The four groups contribute 8,802,765 pairs in total, including 2,504,212 from skin and 39,033 from extraction blanks. Follow the ribbons to **Eligible biological cohort**, where only airway and oral libraries continue. The rightmost biological total is 4,074,475. For interactive values, open `results/modules/sankey/plots/data_loss_sankey_raw.label.html`, the file embedded in the archived report. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
+Start at **Input pairs**. Ribbon widths represent counts in read pairs or merged-read equivalents. The four groups contribute 8,802,765 pairs in total, including 2,504,212 from skin and 39,033 from extraction blanks. Follow the ribbons to **Eligible biological cohort**, where only airway and oral libraries continue. The rightmost biological total is 4,074,475. For interactive values, open `results/modules/sankey/plots/data_loss_sankey_raw.label.html`, the file embedded in the archived report. Next, inspect the [read-depth plot by control class](assets/vignette/read_depth_by_class.svg). It helps explain why the four extraction blanks can contribute control evidence even though biological libraries must pass a depth threshold.
 
 **Exclusive intersections**
 
@@ -168,7 +168,7 @@ Start with Shannon diversity within libraries. Read the case and control distrib
 
 ![Shannon boxplots across case and site groups alongside a Bray–Curtis UMAP of individual libraries](assets/vignette/community.svg)
 
-Green represents airways and purple represents oral libraries in both panels. On the left, hatched boxes identify cases. The center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. [Original Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.svg)
+Green represents airways and purple represents oral libraries in both panels. On the left, hatched boxes identify cases. The center line marks median Shannon diversity and the box spans the middle half of libraries. On the right, each point is a library, circles are airway samples and triangles are oral samples. Nearby points have similar profiles in this embedding. Locate a point by its coordinates in `modules/diversity/tables/umap_coordinates_bray.tsv`, then follow its `Participant_ID` across sites. Use the PERMANOVA table below for the patient-level test. In the archived Shannon figure, airways are on the left and oral libraries are on the right. [Shannon plot](assets/vignette/alpha_faceted_Shannon_Case.svg)
 
 ```bash
 cd ~/aspire-vignette/results/modules/diversity/tables/patient_aware
@@ -214,7 +214,7 @@ Even at the actual cohort size, the overall disease contrasts fall short of 80% 
 [![Mock case-control power curves](assets/vignette/power_curves_cancer_vs_control_simple.svg)](assets/vignette/power_curves_cancer_vs_control_simple.svg)
 
 
-Use the contrast table above to recover the patient denominator for each distance comparison. On the power plot, follow Observed and True_Null to 25 cancer patients on the horizontal axis. Read the upper panels for Bray–Curtis and the lower panels for Shannon. The horizontal 0.8 line marks 80% power.
+Use the contrast table above to recover the patient denominator for each distance comparison. On the power plot, follow Observed and True_Null to 25 cancer patients on the horizontal axis. Read the upper panels for Bray–Curtis and the lower panels for Shannon. Airways are on the left and oral libraries are on the right. The red dotted line marks α = 0.05 and the dashed gray line marks 80% power.
 
 ## Trace taxonomic abundance across patients
 
@@ -362,7 +362,7 @@ Select an edge, locate both ASVs in the module table, and inspect their position
 
 [![Three anatomical airway contrasts and the oral case–control comparison drawn on the same network layout](assets/vignette/site-case-networks.svg)](assets/vignette/site-case-networks.svg)
 
-Green titles identify the three airway contrasts and the purple title identifies the oral contrast. Start at the top left for the primary airway comparison. Each panel uses the same network edges and layout. Dark triangles identify indicators of the first group, medium-gray circles identify indicators of the second, and small pale-gray circles mark background nodes. Highlighted node area scales with squared indicator strength.
+The top row compares tumor-side airways (left) and contralateral airways (right) with healthy airways. The bottom row compares the two airway sides within cases (left) and oral cases with controls (right). Each panel uses the same network edges and layout. Dark triangles identify indicators of the first group, medium-gray circles identify indicators of the second, and small pale-gray circles mark background nodes. Highlighted node area scales with squared indicator strength.
 
 | Panel | Comparison | Patients | Highlighted network ASVs |
 | --- | --- | --- | --- |

@@ -5044,10 +5044,6 @@ z
      <use xlink:href="#m8a717ba0d5" x="698.068093" y="524.171174" style="fill: #2ca02c; stroke: #000000; stroke-width: 0.25"/>
     </g>
    </g>
-   <g id="text_1">
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(342.79125 45.635742)">SPIEC-EASI Network</text>
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(215.157187 58.696289)">Node color: Phylum | Node size: Median ASV Abundance (log-scaled)</text>
-   </g>
    <g id="legend_1">
     <g id="text_2" transform="translate(-30.496 6.669)">
      <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="819.959362" y="83.332617" transform="rotate(-0 819.959362 83.332617)">Phylum</text>

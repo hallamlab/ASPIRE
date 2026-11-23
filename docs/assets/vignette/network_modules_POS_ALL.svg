@@ -6301,10 +6301,6 @@ z
      <use xlink:href="#mea343650b5" x="698.068093" y="524.178205" style="fill: #c5b0d5; fill-opacity: 0.985294; stroke: #000000; stroke-opacity: 0.985294; stroke-width: 0.25"/>
     </g>
    </g>
-   <g id="text_1">
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(310.445625 45.642539)">SPIEC-EASI Network (POS_ALL)</text>
-    <text style="font-size: 12px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; fill: #262626" transform="translate(248.513437 58.70332)">Node color: ISA-associated modules | Node size: Degree</text>
-   </g>
    <g id="legend_1">
     <g id="text_2" transform="translate(8.000 12.161)">
      <text style="font-size: 17px; font-family: 'Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', sans-serif; text-anchor: start; fill: #262626" x="775.9628" y="77.839648" transform="rotate(-0 775.9628 77.839648)">ISA-associated modules</text>

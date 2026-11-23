@@ -144,7 +144,7 @@ L -3.5 0
      </g>
     </g>
     <g id="text_10">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="19.158281" y="128.958823" transform="rotate(-90 19.158281 128.958823)">Shannon diversity</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="19.158281" y="128.958823" transform="rotate(-90 19.158281 128.958823)">Shannon diversity</text>
     </g>
    </g>
    <g id="patch_3">
@@ -326,9 +326,6 @@ L 48.703984 25.918125
     <path d="M 48.703984 231.99952
 L 296.980418 231.99952
 " style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
-   <g id="text_11">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #292929" x="172.842201" y="19.918125" transform="rotate(-0 172.842201 19.918125)">Within-library diversity</text>
    </g>
   </g>
   <g id="axes_2">
@@ -565,7 +562,7 @@ z
      </g>
     </g>
     <g id="text_19">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="463.861303" y="261.356942" transform="rotate(-0 463.861303 261.356942)">UMAP 1</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="463.861303" y="261.356942" transform="rotate(-0 463.861303 261.356942)">UMAP 1</text>
     </g>
    </g>
    <g id="matplotlib.axis_4">
@@ -660,7 +657,7 @@ z
      </g>
     </g>
     <g id="text_29">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="311.33832" y="128.958823" transform="rotate(-90 311.33832 128.958823)">UMAP 2</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="311.33832" y="128.958823" transform="rotate(-90 311.33832 128.958823)">UMAP 2</text>
     </g>
    </g>
    <g id="patch_10">
@@ -672,9 +669,6 @@ L 339.723086 25.918125
     <path d="M 339.723086 231.99952
 L 587.99952 231.99952
 " style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
-   <g id="text_30">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #292929" x="463.861303" y="19.918125" transform="rotate(-0 463.861303 19.918125)">Bray–Curtis ordination</text>
    </g>
    <g id="legend_1">
     <g id="PathCollection_3">

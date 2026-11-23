@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from vignette_typography import style_svg
 from vignette_style import apply_style, heatmap
 
 modules = Path(sys.argv[1]) / "modules"
@@ -21,7 +22,9 @@ def table(module, filename):
 
 
 def save(fig, name):
-    fig.savefig(destination / (name + ".svg"), metadata={"Date": None}, bbox_inches="tight", pad_inches=0.15)
+    target = destination / (name + ".svg")
+    fig.savefig(target, metadata={"Date": None}, bbox_inches="tight", pad_inches=0.15)
+    target.write_text(style_svg(target.read_text(), name))
     plt.close(fig)
 
 

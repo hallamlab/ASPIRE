@@ -170,7 +170,7 @@ L 0 3.5
      </g>
     </g>
     <g id="text_7">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="246.351752" y="261.356942" transform="rotate(-0 246.351752 261.356942)">ASV295 mean relative abundance (%)</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="246.351752" y="261.356942" transform="rotate(-0 246.351752 261.356942)">ASV295 mean relative abundance (%)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
@@ -250,7 +250,7 @@ L -3.5 0
      </g>
     </g>
     <g id="text_15">
-     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="19.158281" y="128.958393" transform="rotate(-90 19.158281 128.958393)">Mean acetone (synthetic units)</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="19.158281" y="128.958393" transform="rotate(-90 19.158281 128.958393)">Mean acetone (synthetic units)</text>
     </g>
    </g>
    <g id="patch_3">
@@ -262,9 +262,6 @@ L 48.703984 25.918125
     <path d="M 48.703984 231.998661
 L 443.99952 231.998661
 " style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
-   <g id="text_16">
-    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #292929" x="246.351752" y="19.918125" transform="rotate(-0 246.351752 19.918125)">Airway indicator and acetone across 50 patients</text>
    </g>
   </g>
  </g>
